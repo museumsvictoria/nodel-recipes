@@ -1,0 +1,108 @@
+Control Parameters
+Type of module: InAnlg_0
+Module Type#: 0
+Param ID: 1
+Device Name: NEUTRINO-......
+Module Name: Input
+Module Number: 11 (\x0b)
+Channel ID: 0
+Aux ID: 0
+
+\x04\x00\x24\x00\x01\x00\x00\x00\x00\x00\x00\xxx\xxx\xxx\xxx\xxx\xxx\x00\x00\x49\x6E\x41\x6E\x6C\x67\x5F\x30\x00\x80\x0B\x00\x00\x01\x00\x00\x00\x01\x05
+
+MAC:
+\x00\x60\x35\x12\x7c\x79
+      <------------------------------- packet header --------------------------------------------->
+START|LENGTH  |CRC |TYPE|Source MAC              |Dest MAC                |Payload type|Result code|Module name                     |Type|R/W & Module#|Channel#|Aux#|Parameter#|Value           |STOP
+\x04  \x00\x24 \x00 \x01 \x00\x00\x00\x00\x00\x00 \x00\x60\x35\x12\x7c\x79 \x00         \x00        \x49\x6E\x41\x6E\x6C\x67\x5F\x30 \x00 \x80\x0B      \x00     \x00 \x01       \x00\x00\x00\x01 \x05
+
+Preset 67 (\x43):
+\x04  \x00\x24 \x00 \x01 \x00\x00\x00\x00\x00\x00 \xxx\xxx\xxx\xxx\xxx\xxx   00           00          43  50  55  5F  5F  5F  5F  30   07   80  01        FF       00   00         00  00  00  42  05
+
+
+TYPE:
+* 0: Serial
+* 1: TCP
+* 2: UDP
+* 3: UDP_METER
+
+Result code:
+* 0: No error
+
+Payload type:
+* 0: control
+* 1: CPU
+* 2: multiple control
+
+Type
+* 0 Read from External MEM; Write to DSP
+* 1 Read from DSP
+* 2 Read form External MEM; Write to ANALOG
+* 3 Reserved
+* 4 Read from External MEM; Mute IO before writing to ANALOG
+* 5 Read from DSP when Data changed; Write to DSP
+* 6 Read from External MEM; Write to External MEM
+* 7 Read from External MEM; Write to External MEM but bypassed by Preset Recall
+
+
+
+
+
+Type: MatrixM0 (\x4D\x61\x74\x72\x69\x78\x4D\x30)
+Module type: 0
+Param ID: 5
+Device name: NETUR....
+Module Name: Matrix Mixer
+Module Number: 17 (\x11)
+Channel ID: 3
+Aux ID: 3
+
+START|LENGTH  |CRC |TYPE|Source MAC              |Dest MAC                |Payload type|Result code|Module name                     |Type|R/W & Module#|Channel#|Aux#|Parameter#|Value           |STOP
+\x04  \x00\x24 \x00 \x01 \x00\x00\x00\x00\x00\x00 \x00\x60\x35\x12\x7c\x79 \x00         \x00        \x4D\x61\x74\x72\x69\x78\x4D\x30 \x00 \x80\x11      \x03     \x03 \x05       \x00\x00\x00\x00 \x05
+
+\x04  \x00\x24 \x00 \x01 \x00\x00\x00\x00\x00\x00 \x00\x60\x35\x12\x7c\x79 \x00         \x00        \x4D\x61\x74\x72\x69\x78\x4D\x30 \x00 \x80\x11      \x01     \x00 \x05       \x00\x00\x00\x01 \x05
+
+
+
+START|LENGTH  |CRC |TYPE|Source MAC              |Dest MAC                |Payload type|Result code|Module name                     |Type|R/W & Module#|Channel#|Aux#|Parameter#|Value           |STOP
+04    00:24:   4a:  01:  00:00:00:00:00:00:       00:60:35:12:7c:79:       00:          00:         4d:61:74:72:69:78:4d:30:         00:  80:11:        00:      00:   05:       00:00:00:01:     05
+04:   00:24:   56:  01:  00:00:00:00:00:00:       00:60:35:12:7c:79:       00:          00:         4d:61:74:72:69:78:4d:30:         00:  80:11:        06:      06:   05:       00:00:00:01:     05
+
+off:
+04:   00:24:   58:  01:  00:00:00:00:00:00:       00:60:35:12:7c:79:       00:          00:         4d:61:74:72:69:78:4d:30:         00:  80:11:        07:      07:   05:       00:00:00:01:     05
+04:   00:24:   57:  01:  00:00:00:00:00:00:       00:60:35:12:7c:79:       00:          00:         4d:61:74:72:69:78:4d:30:         00:  80:11:        07:      07:   05:       00:00:00:00:     05
+
+04:   00:12:   af:  01  :00:60:35:12:7c:79:       00:00:00:00:00:00:       00:          00:05
+UDP
+04:   00:26:   98:  03:  00:60:35:12:7c:79:       ff:ff:ff:ff:ff:ff:       02           :00:00:01:  49:6e:41:6e:6c:67:5f:30:         00:  00:0b:        03      :00    :00:      00:00:00:00:      05
+04:   00:18:   31:  02:  00:60:35:12:7c:79:       ff:ff:ff:ff:ff:ff:       01:           00: 80:00:00:00:00:00:05
+
+04:   00:26:   bb:  03:  00:60:35:12:7c:79:       ff:ff:ff:ff:ff:ff:       02:           00: 00:01: 4f:75:74:4c:6f:67:5f:30:         00:  00:0e:        00:      00:    01:      00:00:00:01:      05
+TODO
+
+Broadcast data:
+      <------------------------------- packet header --------------------------------------------->
+START|LENGTH  |CRC |TYPE|Source MAC              |Dest MAC                |Payload type|Result code|Module name                     |Type|R/W & Module#|Channel#|Aux#|Parameter#|Value           |STOP
+\x04  \x00\x24 \x00 \x01 \x00\x00\x00\x00\x00\x00 \x00\x60\x35\x12\x7c\x79 \x00         \x00        \x49\x6E\x41\x6E\x6C\x67\x5F\x30 \x00 \x80\x0B      \x00     \x00 \x01       \x00\x00\x00\x01 \x05
+
+  04   :04 :16  :24  :03  :00 :60 :35 :12 :7c :79   ff :ff :ff :ff :ff :ff  :02          :00  :00:39  53 :59 :53 :54 :45 :4d  :5f   :30:01       :00      :03  :ff        :00 :09 :00 :00  :5f:f4:49:6e:41:6e:6c:67:5f:30:01:00:0b:00:00:05:ff:fe:ab:20:49:6e:41:6e:6c:67:5f:30:01:00:0b:01:00:05:ff:fe:b0:7b:49:6e:41:6e:6c:67:5f:30:01:00:0b:02:00:05:ff:fe:b6:25:49:6e:41:6e:6c:67:5f:30:01:00:0b:03:00:05:ff:fe:c6:5e:49:6e:41:6e:6c:67:5f:30:01:00:0b:04:00:05:ff:fe:ab:48:49:6e:41:6e:6c:67:5f:30:01:00:0b:05:00:05:ff:fe:b9:b9:49:6e:41:6e:6c:67:5f:30:01:00:0b:06:00:05:ff:fe:ae:ee:49:6e:41:6e:6c:67:5f:30:01:00:0b:07:00:05:ff:fe:b0:50:4f:75:74:41:6e:6c:67:30:01:00:0c:00:00:03:ff:fe:ab:2c:4f:75:74:41:6e:6c:67:30:01:00:0c:01:00:03:ff:fe:b0:85:4f:75:74:41:6e:6c:67:30:01:00:0c:02:00:03:ff:fe:b6:44:4f:75:74:41:6e:6c:67:30:01:00:0c:03:00:03:ff:fe:c6:75:4f:75:74:41:6e:6c:67:30:01:00:0c:04:00:03:ff:fe:ab:66:4f:75:74:41:6e:6c:67:30:01:00:0c:05:00:03:ff:fe:b9:b0:4f:75:74:41:6e:6c:67:30:01:00:0c:06:00:03:ff:fe:ae:f1:4f:75:74:41:6e:6c:67:30:01:00:0c:07:00:03:ff:fe:79:60:4f:75:74:41:6e:6c:67:30:01:00:0c:08:00:03:ff:fe:ab:2f:4f:75:74:41:6e:6c:67:30:01:00:0c:09:00:03:ff:fe:b0:96:4f:75:74:41:6e:6c:67:30:01:00:0c:0a:00:03:ff:fe:b6:76:4f:75:74:41:6e:6c:67:30:01:00:0c:0b:00:03:ff:fe:c6:89:4f:75:74:41:6e:6c:67:30:01:00:0c:0c:00:03:ff:fe:ab:6f:4f:75:74:41:6e:6c:67:30:01:00:0c:0d:00:03:ff:fe:b9:ee:4f:75:74:41:6e:6c:67:30:01:00:0c:0e:00:03:ff:fe:ae:cf:4f:75:74:41:6e:6c:67:30:01:00:0c:0f:00:03:ff:fe:b0:1d:49:6e:4e:65:74:5f:5f:30:01:00:0f:00:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:01:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:02:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:03:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:04:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:05:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:06:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:07:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:08:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:09:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:0a:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:0b:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:0c:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:0d:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:0e:00:05:ff:fe:79:60:49:6e:4e:65:74:5f:5f:30:01:00:0f:0f:00:05:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:00:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:01:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:02:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:03:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:04:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:05:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:06:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:07:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:08:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:09:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:0a:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:0b:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:0c:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:0d:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:0e:00:03:ff:fe:79:60:4f:75:74:4e:65:74:5f:30:01:00:10:0f:00:03:ff:fe:79:60:05]
+
+
+Response to control:
+START|LENGTH  |CRC |TYPE|Source MAC              |Dest MAC                |Payload type|Result code|Module name                     |Type|R/W & Module#|Channel#|Aux#|Parameter#|Value           |STOP
+\x04  \x00\x24 \x00 \x01 \x00\x00\x00\x00\x00\x00 \x00\x60\x35\x12\x7c\x79 \x00         \x00        \x4D\x61\x74\x72\x69\x78\x4D\x30 \x00 \x80\x11      \x03     \x03 \x05       \x00\x00\x00\x00 \x05
+                 af   01                           :00 :60 :35 :12 :7c :79  :00          :00 :00:00:00:00:00:00
+				 
+Read mixer reading
+START|LENGTH  |CRC |TYPE|Source MAC              |Dest MAC                |Payload type|Result code|Module name                     |Type|R/W & Module#|Channel#|Aux#|Parameter#|Value           |STOP
+\x04  \x00\x24 \x00 \x01 \x00\x00\x00\x00\x00\x00 \x00\x60\x35\x12\x7c\x79 \x00         \x00        \x4D\x61\x74\x72\x69\x78\x4D\x30 \x00 \x80\x11      \x03     \x03 \x05       \x00\x00\x00\x00 \x05
+\x04  \x00\x?? \x00 \x01 \x00\x00\x00\x00\x00\x00 \x00\x60\x35\x12\x7c\x79 \x00         \x00        \x4D\x61\x74\x72\x69\x78\x4D\x30 \x01 \x00\x0B      \x03     \x00 \x05       \x05
+
+Read system CPU
+START|LENGTH  |CRC |TYPE|Source MAC              |Dest MAC                |Payload type|Result code|Module name                     |Type|R/W & Module#|Channel#|Aux#|Parameter#|Value           |STOP
+\x04  \x00\x20 \x00 \x01 \x00\x00\x00\x00\x00\x00 \x00\x60\x35\x12\x7c\x79 \x00         \x00        \x53\x59\x53\x54\x45\x4D\x5F\x30 \x01 \x00\x03      \xFF     \x00 \x09                        \x05
+
+print hexDump(buildReadPacket(param_mac, 'SYSTEM_0', 3, 255, 0, 9)):
+\x04  \x00\x20 \x00 \x01 \x00\x00\x00\x00\x00\x00 \x00\x60\x35\x12\x7c\x79 \x00         \x00        \x53\x59\x53\x54\x45\x4d\x5f\x30 \x01 \x00\x03      \xff      \x00\x09                         \x05
+ 
+
