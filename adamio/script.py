@@ -40,7 +40,7 @@ class ModbusPoll(threading.Thread):
       lock.acquire()
       try:
         result = self.client.read_coils(0,6, unit=UNIT)
-        for num in range(0,6):
+        for num in range(0,5):
           if (result.bits[num] != self.current[num]):
             func = globals()['local_event_Input'+str(num+1)+('On' if self.current[num] else 'Off')]
             func.emit()
@@ -111,40 +111,40 @@ def local_action_Relay2Off(arg):
 
 def local_action_Relay3On(arg):
   '''{"title":"Relay 3 On","desc":"Turns Relay 3 On.", "group":"Relay 3"}'''
-  th.on(17)
+  th.on(18)
   print 'Action Relay3On requested.'
 
 def local_action_Relay3Off(arg):
   '''{"title":"Relay 3 Off","desc":"Turns Relay 3 Off.", "group":"Relay 3"}'''
-  th.off(17)
+  th.off(18)
   print 'Action Relay3Off requested.'
 
 def local_action_Relay4On(arg):
   '''{"title":"Relay 4 On","desc":"Turns Relay 4 On.", "group":"Relay 4"}'''
-  th.on(17)
+  th.on(19)
   print 'Action Relay4On requested.'
 
 def local_action_Relay4Off(arg):
   '''{"title":"Relay 4 Off","desc":"Turns Relay 4 Off.", "group":"Relay 4"}'''
-  th.off(17)
+  th.off(19)
   print 'Action Relay4Off requested.'
 
 def local_action_Relay5On(arg):
   '''{"title":"Relay 5 On","desc":"Turns Relay 5 On.", "group":"Relay 5"}'''
-  th.on(17)
+  th.on(20)
   print 'Action Relay5On requested.'
 
 def local_action_Relay5Off(arg):
   '''{"title":"Relay 5 Off","desc":"Turns Relay 5 Off.", "group":"Relay 5"}'''
-  th.off(17)
+  th.off(20)
   print 'Action Relay5Off requested.'
 
 def local_action_Relay6On(arg):
   '''{"title":"Relay 6 On","desc":"Turns Relay 6 On.", "group":"Relay 6"}'''
-  th.on(17)
+  th.on(21)
   print 'Action Relay6On requested.'
 
 def local_action_Relay6Off(arg):
   '''{"title":"Relay 6 Off","desc":"Turns Relay 6 Off.", "group":"Relay 6"}'''
-  th.off(17)
+  th.off(21)
   print 'Action Relay6Off requested.'
