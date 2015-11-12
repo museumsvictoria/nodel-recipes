@@ -1,4 +1,5 @@
-== Default username and passwords ==
+Default username and passwords
+------------------------------
 
 * **root** (root2root)
    * Used for Telnet / serial console access on development builds.
