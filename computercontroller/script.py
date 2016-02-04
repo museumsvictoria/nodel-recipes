@@ -1,7 +1,11 @@
-# Copyright (c) 2014Museum Victoria
+# Copyright (c) 2014 Museum Victoria
 # This software is released under the MIT license (see license.txt for details)
 
 '''This node provides mac/pc controls.'''
+
+# TODO:
+#  * emit volume & muting signal states
+#  * emit disk usage statistics
 
 import java.lang.System
 import subprocess
@@ -10,7 +14,7 @@ system = java.lang.System.getProperty('os.name')
 arch = java.lang.System.getProperty('sun.arch.data.model').lower()
 
 def shutdown():
-  if((system=="Windows 7") or (system=="Windows 8")):
+  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
     # shutdown WIN
     returncode = subprocess.call("shutdown -s -f -t 0", shell=True)
   elif(system=="Mac OS X"):
@@ -21,7 +25,7 @@ def shutdown():
     print 'unknown system: ' + system
 
 def mute():
-  if((system=="Windows 7") or (system=="Windows 8")):
+  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
     returncode = subprocess.call("nircmd"+arch+".exe mutesysvolume 1", shell=True)
   elif(system=="Mac OS X"):
     returncode = subprocess.call("osascript -e 'set volume output muted true'", shell=True)
@@ -29,7 +33,7 @@ def mute():
     print 'unknown system: ' + system
 
 def unmute():
-  if((system=="Windows 7") or (system=="Windows 8")):
+  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
     returncode = subprocess.call("nircmd"+arch+".exe mutesysvolume 0", shell=True)
     print returncode
   elif(system=="Mac OS X"):
@@ -38,7 +42,7 @@ def unmute():
     print 'unknown system: ' + system
 
 def set_volume(vol):
-  if((system=="Windows 7") or (system=="Windows 8")):
+  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
     winvol = (65535/100)*vol
     returncode = subprocess.call("nircmd"+arch+".exe setsysvolume "+str(winvol), shell=True)
   elif(system=="Mac OS X"):
