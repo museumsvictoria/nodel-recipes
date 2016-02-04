@@ -22,8 +22,15 @@ param_relay6Label = Parameter({"title": "Relay 6 label", "order": 6, "schema": {
 
 local_event_Error = LocalEvent({"title": "Error", "order": 9999, "schema": { "type": "string"}})
 
+def timer_keepAlive():
+  # dummy coil read prompts a response
+  tcp.send('\x00\x15\x00\x00\x00\x06\x01\x01\x00\x00\x00\x06')
+  
+timer = Timer(timer_keepAlive, 15.0)
+
 def connected():
   console.info('TCP connected')
+  timer.start()
 
 def received(data):
   # print 'received: [%s]' % data.encode('hex')
@@ -35,6 +42,7 @@ def sent(data):
   
 def disconnected():
   console.info('TCP disconnected')
+  timer.stop()
   
 def timeout():
   console.warn('TCP timeout!')
@@ -53,8 +61,6 @@ def main(arg = None):
   if param_bounceTime == None or param_bounceTime == 0:
     param_bounceTime = DEFAULT_BOUNCE
 
-  tcp.setDest('%s:%s' % (param_ipAddress, TCP_PORT))
-  
   bindRelay(1, param_relay1Label, 
                '\x00\x01\x00\x00\x00\x06\x01\x05\x00\x10\xff\x00', 
                '\x00\x02\x00\x00\x00\x06\x01\x05\x00\x10\x00\x00')
@@ -73,6 +79,9 @@ def main(arg = None):
   bindRelay(6, param_relay6Label, 
                '\x00\x0b\x00\x00\x00\x06\x01\x05\x00\x15\xff\x00', 
                '\x00\x0c\x00\x00\x00\x06\x01\x05\x00\x15\x00\x00')
+  
+  timer.stop()
+  tcp.setDest('%s:%s' % (param_ipAddress, TCP_PORT))
   
 def bindRelay(num, label, onCmd, offCmd):
   defaultGroup = 'Relay %s' % num
@@ -154,3 +163,5 @@ def bindRelay(num, label, onCmd, offCmd):
     
     name = '"%s" bounce' % group
     action = Action(name, bounce, { 'title': name, 'order': next_seq(), 'group': group } )
+    
+  
