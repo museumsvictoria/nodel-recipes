@@ -7,10 +7,10 @@ TCP_PORT = 502
 
 DEFAULT_BOUNCE = 1.2 # the default bounce time (1200 ms)
 
-param_ipAddress = Parameter({ "title":"IP address", "value": "192.168.100.1", "order":0, "schema": { "type":"string" }
+param_ipAddress = Parameter({ "title":"IP address", "order":0, "schema": { "type":"string" },
                               "desc": "The IP address of the unit."})
 
-param_bounceTime = Parameter({"title": "Bounce time", "order": 1, "schema": { "type": "string" },
+param_bounceTime = Parameter({"title": "Bounce time", "order": 1, "schema": { "type": "string", "hint": DEFAULT_BOUNCE },
                               "desc": "The bounce time in seconds (default %s)" % DEFAULT_BOUNCE})
 
 param_relay1Label = Parameter({"title": "Relay 1 label", "order": 1, "schema": { "type": "string" } } )
@@ -19,6 +19,8 @@ param_relay3Label = Parameter({"title": "Relay 3 label", "order": 3, "schema": {
 param_relay4Label = Parameter({"title": "Relay 4 label", "order": 4, "schema": { "type": "string" } } )
 param_relay5Label = Parameter({"title": "Relay 5 label", "order": 5, "schema": { "type": "string" } } )
 param_relay6Label = Parameter({"title": "Relay 6 label", "order": 6, "schema": { "type": "string" } } )
+
+local_event_Error = LocalEvent({"title": "Error", "order": 9999, "schema": { "type": "string"}})
 
 def connected():
   console.info('TCP connected')
@@ -36,6 +38,7 @@ def disconnected():
   
 def timeout():
   console.warn('TCP timeout!')
+  local_event_Error.emit('TCP timeout')
 
 tcp = TCP(connected=connected, 
           received=received, 
@@ -75,7 +78,7 @@ def bindRelay(num, label, onCmd, offCmd):
   defaultGroup = 'Relay %s' % num
   
   if label == None or label == '':
-    group = defaultGroup
+    group = 'Relay %s custom label' % num
   else:
     group = label
   
@@ -151,5 +154,3 @@ def bindRelay(num, label, onCmd, offCmd):
     
     name = '"%s" bounce' % group
     action = Action(name, bounce, { 'title': name, 'order': next_seq(), 'group': group } )
-    
-  
