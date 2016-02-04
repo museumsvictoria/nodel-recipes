@@ -1,6 +1,9 @@
 # Copyright (c) 2014 Museum Victoria
 # This software is released under the MIT license (see license.txt for details)
 
+# DEPRECATED
+# Please use "Advantech ADAM 6060 relay module" recipe instead as this can cause excessive CPU usage
+
 '''This is ADAM IO node.'''
 
 from pymodbus.client.sync import ModbusTcpClient
