@@ -16,8 +16,8 @@ controlSummaryPath = 'gc2/gv-ctlsum_1_user.xml'
 
 urlBase = ""
 
-// TODO: convert this to a param:
-reservedNamesByPortNum = { '1': 'Device on Extron port 1'}
+# TODO: convert this to a param:
+reservedNamesByPortNum = {'1': 'Left Wall', '3': 'Interactive', '4': 'Right Wall', '5': 'Rear Left', '6': 'Rear Right', '7': 'Control'}
 
 ports = set()
 
@@ -152,6 +152,7 @@ ping_timer = Timer(lambda: local_action_RequestFirmware(), 60, stopped=True)
 eventCallbacks = {}
 
 def bindPort(url):
+    console.info('Binding port against URL "%s"' % url)
     port = ExtronPort(url)
     name = url
 
@@ -402,10 +403,20 @@ class ExtronPort:
                 tcp.request(retrieve_cmd, lambda data: handleFeedback(data, events))
                 
             name = 'Refresh ' + commandLabel
-            retriever = self.subnode.addAction(name, actionHandler, { 'title': 'Refresh', 
-                                                                      'desc': "Refreshes '%s' state." % commandLabel, 
-                                                                      'group': commandLabel,
-                                                                      'order': nextSeqNum() })
+            
+            try:
+                retriever = self.subnode.addAction(name, actionHandler, { 'title': 'Refresh', 
+                                                                          'desc': "Refreshes '%s' state." % commandLabel, 
+                                                                          'group': commandLabel,
+                                                                          'order': nextSeqNum() })
+            except:
+                # TODO: better error feedback for multiple duplicates (beyond ' (2)' suffix)
+                console.warn('Action "%s.%s" could not be created. Trying different name...' % (self.name, name))
+                
+                retriever = self.subnode.addAction(name + " (2)", actionHandler, { 'title': 'Refresh', 
+                                                                          'desc': "Refreshes '%s' state." % commandLabel, 
+                                                                          'group': commandLabel,
+                                                                          'order': nextSeqNum() })
 
         # action
         
