@@ -4,7 +4,7 @@ u"Global Caché iTachIP2IR"
 # * http://www.globalcache.com/products/itach/ip2irspecs/
 # * http://www.globalcache.com/files/docs/API-iTach.pdf
 
-# param_ipAddress = Parameter({"title":u"IP addréss", "group":"Comms", "schema":{"type":"string", "description":"The IP description.", "desc":"The IP address to connect to.", "hint":"192.168.100.1"}})
+# param_ipAddress = Parameter({"title":u"IP address", "group":"Comms", "schema":{"type":"string", "description":"The IP description.", "desc":"The IP address to connect to.", "hint":"192.168.100.1"}})
 param_disabled = Parameter({"title":"Disabled", "group":"Comms", "schema":{"type":"boolean"}})
 
 # the IP address to connect to
@@ -100,10 +100,44 @@ def sendIR(portAddress, data):
       
     tcp.send('sendir,%s,%s' % (portAddress, data))
     
+
+def bindLEDPortControls(port):
+  
+  group = 'LED control (PWM)'
+  
+  def handler(arg=None):
+    intesity = arg['intensity']
+    time = arg.get('time') or 10
+    tcp.send('set_LED_LIGHTING,1:%s,%s,%s' % (port, intesity, time))
+    
+  Event('LEDPort%s' % port, {"title": "Port %s Intensity" % port, "group": group, "schema": {"type": "integer"}})
+    
+  Action('LEDPort%s' % port, handler, { "title": "Set", "group": group, "schema": { "type": "object", "title": "Port %s" % port, "properties": { 
+              "intensity": { "type": "integer", "max": 100, "min": 0, "format": "range" },
+              "time": { "type": "integer", "max": 10, "min": 1, "format": "range" } } } })
+  
+bindLEDPortControls(1)
+bindLEDPortControls(2)
+bindLEDPortControls(3)
+    
 def parseMessage(data):
     # check for errors
     if data.startswith('ERR'):
         parseErrorMessage(data)
+        
+    elif data.startswith('LED_LIGHTING'):
+        parseLEDLightingResponse(data)
+        
+# e.g. LED_LIGHTING,1:1,27,100
+def parseLEDLightingResponse(data):
+    # LED_LIGHTING,ADDRESS,CURRENT_INTENSITY,FINAL_INTENSITY
+    parts = data.split(',') # all 
+    intensityPart = parts[-1:][0]
+    addrParts = parts[1].split(':')
+    portPart = addrParts[-1:]
+        
+    event = lookup_local_event('LEDPort%s' % int(portPart[0]))
+    event.emit(int(intensityPart))
 
 # Parses an error message, e.g.
 # ERR_1:1,008
