@@ -111,8 +111,26 @@ def bindDSPMute(addr, label):
   # poller
   Timer(lambda: tcp.request('%sM%sAU' % (ESC, addr), parseMutingResp), 5.33 + (next_seq() % 10)/3)
 
+def bindDSPLevel(addr, label):
+  group, schema = label, {'type': 'number'}
+  
+  event = Event('%s Level' % label, {'title': 'Level', 'group': group, 'order': next_seq(), 'schema': schema})
+  
+  def parseLevelResp(resp):
+    # e.g. DsG600002*105 or
+    #      DsG600002*-140
+    event.emit(int(resp[resp.rfind('*')+1:])/10.0)
+  
+  Action('%s Level' % label, lambda arg: tcp.request('%sG%s*%sAU' % (ESC, addr, int(arg*10)), parseLevelResp), 
+             {'title': 'Gain', 'group': group, 'order': next_seq(), 'schema': schema})
+  
+  # poller
+  Timer(lambda: tcp.request('%sG%sAU' % (ESC, addr), parseLevelResp), 5.33 + (next_seq() % 10)/3)  
+  
 bindDSPMute('60002', 'Fixed Out L')
+bindDSPLevel('60002', 'Fixed Out L')
 bindDSPMute('60003', 'Fixed Out R')
+bindDSPLevel('60003', 'Fixed Out R')
   
 # Comms related events for diagnostics ----
 
@@ -141,18 +159,3 @@ def timeout():
   local_event_Timeout.emit()
 
 tcp = TCP(connected=connected, received=received, sent=sent, disconnected=disconnected, sendDelimiters='\r', receiveDelimiters='\r\n', timeout=timeout)
-
-
-# customisation ------
-def afterMain():
-  # create stereo action and event
-  event = Event('Fixed Out Muting', {'schema': {'type': 'boolean'}})
-  
-  # bind to R muting state
-  lookup_local_event('Fixed Out R Muting').addEmitHandler(lambda arg: event.emit(arg))
-  
-  action1 = lookup_local_action('Fixed Out L Muting')
-  action2 = lookup_local_action('Fixed Out R Muting')
-  Action('Fixed Out Muting', lambda arg: (action1.call(arg), action2.call(arg)), {'schema': {'type': 'boolean'}})
-
-  
