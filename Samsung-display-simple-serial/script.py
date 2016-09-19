@@ -8,7 +8,10 @@ param_id = Parameter({"value":"1","title":"ID","order":0, "schema":{"type":"inte
 local_event_DebugShowLogging = LocalEvent({'group': 'Debug', 'schema': {'type': 'boolean'}})
 
 # general device status
-local_event_Status = LocalEvent({'order': -100, 'schema': {'type': 'string', 'enum': ['Missing', 'OK']}})
+local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'type': 'object', 'title': 'Status', 'properties': {
+        'level': {'type': 'integer', 'title': 'Value'},
+        'message': {'type': 'string', 'title': 'String'}
+      }}})
 
 local_event_Power = LocalEvent({'order': 0, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 local_event_Volume = LocalEvent({'schema': {'type': 'integer'}})
@@ -30,6 +33,7 @@ local_event_InputCode = LocalEvent({'schema': {'type': 'string'}})
 def handle_displayStatusTimer():
   lookup_local_action('GetDisplayStatus').call()
 
+# poll every 30s
 timer_deviceStatus = Timer(handle_displayStatusTimer, 30)
 
 
@@ -41,13 +45,13 @@ def main(arg = None):
 local_event_TCPStatus = LocalEvent({'schema': {'type': 'string', 'enum': ['Connected', 'Disconnected', 'Timeout']}})  
   
 def connected():
-  local_event_Status.emit('OK')
   local_event_TCPStatus.emitIfDifferent('Connected')
   
   # wait a second and poll
   timer_deviceStatus.setDelay(1.0)
   
 def received(data):
+  lastReceive[0] = system_clock()
   if local_event_DebugShowLogging.getArg():
     print 'RECV: [%s]' % data.encode('hex')
   
@@ -57,11 +61,9 @@ def sent(data):
   
 def disconnected():
   local_event_TCPStatus.emitIfDifferent('Disconnected')
-  local_event_Status.emit('Missing')
   
 def timeout():
   local_event_TCPStatus.emitIfDifferent('Timeout')
-  local_event_Status.emit('Missing')
   
 tcp = TCP(connected=connected, received=received, sent=sent, disconnected=disconnected, 
           timeout=timeout, 
@@ -154,4 +156,32 @@ def checkHeader(arg, onSuccess=None):
   if onSuccess:
     onSuccess()
     
+# for status checks
+lastReceive = [0]
+
+# roughly, the last contact  
+local_event_LastContactDetect = LocalEvent({'group': 'Status', 'title': 'Last contact detect', 'schema': {'type': 'string'}})
   
+def statusCheck():
+  diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
+  now = date_now()
+  
+  if diff > status_check_interval+15:
+    previousContactValue = local_event_LastContactDetect.getArg()
+    
+    if previousContactValue == None:
+      message = 'Always been missing.'
+      
+    else:
+      previousContact = date_parse(previousContactValue)
+      roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
+      message = 'Missing for approx. %s minutes' % roughDiff
+      
+    local_event_Status.emit({'level': 2, 'message': message})
+    
+  else:
+    local_event_LastContactDetect.emit(str(now))
+    local_event_Status.emit({'level': 0, 'message': 'OK'})
+    
+status_check_interval = 75
+status_timer = Timer(statusCheck, status_check_interval)
