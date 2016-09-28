@@ -9,6 +9,12 @@ param_port = Parameter({'title': 'Port', 'desc': 'Use "0" for any port (recommen
 param_nodelRelease = Parameter({'title': 'Nodel release', 'desc': 'The full path to the Nodel release.', 
                                 'schema': {'type': 'string', 'hint': DEFAULT_NODELRELEASE}})
 param_interface = Parameter({'title': 'Interface', 'desc': 'The interface to bind to.', 'schema': {'type': 'string'}})
+param_nodesRoot = Parameter({'title': 'Nodes root', 'schema': {'type': 'string'}})
+
+param_nodeFilters = Parameter({'title': 'Node filtering', 'schema': { 'type': 'array', 'items': {
+        'type': 'object', 'properties': {
+          'type':   {'title': 'Type', 'type': 'string', 'enum': ['Include', 'Exclude'], 'order': 1},
+          'filter': {'title': 'Filter', 'type': 'string', 'order': 2}}}}})
 
 local_event_Disabled = LocalEvent({'schema': {'type': 'boolean'}})
 
@@ -35,6 +41,29 @@ def main():
   if param_interface != None:
     params.extend(['-i', param_interface])
     
+  if param_nodesRoot != None:
+    params.extend(['-r', param_nodesRoot])
+    
+  inclList = list()
+  exclList = list()
+  
+  if param_nodeFilters != None:
+    for nodeFilter in param_nodeFilters:
+      typee = nodeFilter['type']
+      filterr = nodeFilter['filter']
+      
+      if typee == 'Include':
+        inclList.append(filterr)
+      
+      elif typee == 'Exclude':
+        exclList.append(filterr)
+        
+    for incl in inclList:
+      params.extend(['-I', incl])
+      
+    for excl in exclList:
+      params.extend(['-X', excl])
+    
   global process
   process = Process(params,
                     stderr=lambda line: console.warn('err: %s' % line),
@@ -47,4 +76,4 @@ def main():
 def local_action_Disable(arg=None):
   """{"schema": {"type": "boolean"}}"""
   local_event_Disabled.emit(True)
-  process.close()  
+  process.close()
