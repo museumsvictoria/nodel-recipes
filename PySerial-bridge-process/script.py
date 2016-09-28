@@ -1,4 +1,7 @@
 # See https://github.com/pyserial/pyserial
+#
+# TODO:
+# * Beyond BAUD parameters, see others in https://github.com/pyserial/pyserial/blob/master/examples/tcp_serial_redirect.py
 
 DEFAULT_WORKINGDIR = '/opt/git/pyserial/examples'
 DEFAULT_TCPPORT = 2001
