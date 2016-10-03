@@ -1,16 +1,28 @@
 # coding=utf-8
-u"Global Caché iTachIP2IR"
+u"Global Caché iTachIP2IR - please see example 'Yamaha BD-S677B Blu-ray player via Global Caché IP2IR' node and contribute to IR library"
+
 # Handy reference:
 # * http://www.globalcache.com/products/itach/ip2irspecs/
 # * http://www.globalcache.com/files/docs/API-iTach.pdf
 
-# param_ipAddress = Parameter({"title":u"IP addréss", "group":"Comms", "schema":{"type":"string", "description":"The IP description.", "desc":"The IP address to connect to.", "hint":"192.168.100.1"}})
+param_ipAddress = Parameter('title': 'IP address override (discovery via AMX beacon receiver node bindings is preferred)', 'group': 'Comms')
 param_disabled = Parameter({"title":"Disabled", "group":"Comms", "schema":{"type":"boolean"}})
 
 # the IP address to connect to
 ipAddress = None
 
 ITACH_TCPCONTROL = 4998
+
+def main():
+  if param_disabled:
+    console.warn('Node has been disabled')
+    return
+
+  if param_ipAddress != None and len(param_ipAddress)>0:
+    console.info('Using IP address override: %s' % param_ipAddress)
+    tcp.setDest('%s:%s' % (ipAddress, ITACH_TCPCONTROL))
+  else:
+    console.info('Using AMX Beacon Receiver signals to determine address; ensure remote bindings are set.')
 
 def local_action_RequestVersion(arg = None):
     '{"title": "Request version" }'
