@@ -3,6 +3,7 @@
 
 '''This node demonstrates a simple projetion designs controller.'''
 
+
 # Libraries required by this node
 import socket
 import struct
@@ -18,10 +19,12 @@ def send_cmd(cmd, arg=None):
     if(arg): packet += " "+arg
     packet+="\r"
     sock.send(packet)
+    if(param_debug): print 'Sent', packet
     data = sock.recv(1024)
+    if(param_debug): print 'Received', data
     rcvpack = struct.unpack("<xxxxx4sx6sx", data[0:17])
     assert cmd in rcvpack[0]
-    if(arg): assert arg in rcvpack[1]
+    # if(arg): assert arg in rcvpack[1] # packet 1 contains response code, not send arg
     return rcvpack[1]
   except socket.error, e:
     print "socket error: %s\n" % e
@@ -44,18 +47,18 @@ def local_action_PowerOff(arg = None):
   send_cmd('POWR', '0')
 
 def local_action_GetPower(arg = None):
-  """{"title":"Get Power","desc":"Get current power state","group":"Power"}"""
+  """{"title":"GetPower","desc":"GetPower","group":"Power"}"""
   print 'Action GetPower requested'
-  result = send_cmd('POST')
-  if(result=='!00005' or result=='!00006'): 
+  result = send_cmd('POST', '?')
+  if(result=='000005' or result=='000006'):
     print 'critical power off'
     local_event_PowerOff.emit()
-  if(result=='!00004'): print 'powering down'
-  if(result=='!00003'): 
+  if(result=='000004'): print 'powering down'
+  if(result=='000003'):
     print 'power is on'
     local_event_PowerOn.emit()
-  if(result=='!00002'): print 'powering up'
-  if(result=='!00000' or result=='!00001'): 
+  if(result=='000002'): print 'powering up'
+  if(result=='000000' or result=='000001'):
     print 'power is off'
     local_event_PowerOff.emit()
 
@@ -72,7 +75,7 @@ local_event_PowerOff = LocalEvent('{"title":"PowerOff","desc":"Power is Off","gr
 
 # Parameters used by this Node
 param_ipAddress = Parameter('{"desc":"The IP address to connect to.","schema":{"type":"string"},"value":"192.168.100.1"}')
-
+param_debug = Parameter('{"title":"Debug Mode","schema":{"type":"boolean"}}')
 param_port = Parameter('{"desc":"The Port to connect to.","schema":{"type":"integer"},"value":"1025"}')
 
 def main(arg = None):
