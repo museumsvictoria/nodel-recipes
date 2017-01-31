@@ -297,6 +297,18 @@ def local_action_XVolMutingToggle(ignore=None):
     
   
 # ---- vol ]
+
+# [ error status
+
+local_event_ErrorState = LocalEvent({'group': 'Raw', 'schema': {'type': 'string'}})
+
+def local_action_PollErrorState(ignore=None):
+  '''{"group": "Raw", "order": 2.1}'''
+  tcp.request('ERR?', lambda resp: handleValueReq(resp, 'ERR', lambda value: local_event_ErrorState.emit(value)))
+
+
+# --- error status ]
+
   
 # [ TCP ----
 
@@ -423,4 +435,8 @@ def statusCheck():
   local_event_Status.emit({'level': 0, 'message': 'OK'})
   
 status_check_interval = 75
-status_timer = Timer(statusCheck, status_check_interval)
+status_timer = Timer(statusCheck, status_check_interval)  
+
+# for slave operation
+def remote_event_PowerSlave(arg=None):
+  lookup_local_action('Power').call(arg)
