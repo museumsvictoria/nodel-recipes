@@ -1,6 +1,7 @@
 '''Epson (see script for links to manual, input codes, etc.)'''
-
-# -  http://download.epson.com.sg/manuals/User%20manual-EB-GG6170-G6070W-G6270W-G6450WU-G6570WU-G6770WU.pdf
+# Manual: http://download.epson.com.sg/manuals/User%20manual-EB-GG6170-G6070W-G6270W-G6450WU-G6570WU-G6770WU.pdf
+#
+# Revision 2
 
 SOURCES_BY_CODE = { 
   '1F': 'Computer (Auto)',
