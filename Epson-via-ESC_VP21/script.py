@@ -1,7 +1,6 @@
-'''Epson (see script for links to manual, input codes, etc.)'''
-# Manual: http://download.epson.com.sg/manuals/User%20manual-EB-GG6170-G6070W-G6270W-G6450WU-G6570WU-G6770WU.pdf
-#
-# Revision 2
+'''Epson (see script for links to manual, etc.)'''
+
+# -  http://download.epson.com.sg/manuals/User%20manual-EB-GG6170-G6070W-G6270W-G6450WU-G6570WU-G6770WU.pdf
 
 SOURCES_BY_CODE = { 
   '1F': 'Computer (Auto)',
@@ -25,6 +24,14 @@ MAX_VOL = 243
 param_disabled = Parameter({ "title":"Disabled?", "order": next_seq(), "schema": { "type":"boolean" }})
 param_ipAddress = Parameter({ "title":"IP address", "order": next_seq(), "schema": { "type":"string" }})
 
+DEFAULT_LAMPHOURUSE = 1800
+param_warningThresholds = Parameter({'title': 'Warning thresholds', 'schema': {'type': 'object', 'properties': {
+           'lampUseHours': {'title': 'Lamp use (hours)', 'type': 'integer', 'hint': str(DEFAULT_LAMPHOURUSE), 'order': 1}
+        }}})
+
+lampUseHoursThreshold = DEFAULT_LAMPHOURUSE
+
+
 GREETING = 'ESC/VP.net\x10\x03\x00\x00\x00\x00'
 
 local_event_ShowLog = LocalEvent({'title': 'Show log', 'order': 9998, 'group': 'Debug', 'schema': {'type': 'boolean'}})
@@ -40,6 +47,10 @@ def main(arg = None):
   
   # clear state
   local_event_DesiredPower.emit(None)
+  
+  # set up warning
+  global lampUseHoursThreshold
+  lampUseHoursThreshold = (param_warningThresholds or {}).get('lampUseHours') or lampUseHoursThreshold
   
   tcp.setDest('%s:%s'% (param_ipAddress, TCP_PORT))
 
@@ -298,7 +309,7 @@ def local_action_XVolMutingToggle(ignore=None):
     
   
 # ---- vol ]
-
+  
 # [ error status
 
 local_event_ErrorState = LocalEvent({'group': 'Raw', 'schema': {'type': 'string'}})
@@ -307,8 +318,21 @@ def local_action_PollErrorState(ignore=None):
   '''{"group": "Raw", "order": 2.1}'''
   tcp.request('ERR?', lambda resp: handleValueReq(resp, 'ERR', lambda value: local_event_ErrorState.emit(value)))
 
-
 # --- error status ]
+
+# [ lamp hours status
+
+local_event_LampUseHours = LocalEvent({'group': 'Info', 'schema': {'type': 'integer'}})
+
+def local_action_PollLampUseHours(ignore=None):
+  '''{"group": "Info", "order": 2.1}'''
+  tcp.request('LAMP?', lambda resp: handleValueReq(resp, 'LAMP', lambda value: local_event_LampUseHours.emit(int(value))))
+  
+# poll every 24 hours, 30s first time.
+poller_lampHours = Timer(lambda: lookup_local_action('PollLampUseHours').call(), 24*3600, 30)
+
+  
+# --- lamp hours status ]
 
   
 # [ TCP ----
@@ -415,6 +439,8 @@ lastReceive = [0]
 local_event_LastContactDetect = LocalEvent({'group': 'Status', 'title': 'Last contact detect', 'schema': {'type': 'string'}})
   
 def statusCheck():
+  lampUseHours = local_event_LampUseHours.getArg() or 0
+  
   diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
   now = date_now()
   
@@ -431,12 +457,19 @@ def statusCheck():
       
     local_event_Status.emit({'level': 2, 'message': message})
     return
+  
+  elif lampUseHours >= lampUseHoursThreshold:
+    local_event_Status.emit({'level': 1, 
+                             'message': 'Lamp usage is high (%s hours above threshold of %s). It may need replacement soon.' % 
+                               (1+lampUseHours-lampUseHoursThreshold, lampUseHoursThreshold)})
     
-  local_event_LastContactDetect.emit(str(now))
-  local_event_Status.emit({'level': 0, 'message': 'OK'})
+  else:
+    local_event_Status.emit({'level': 0, 'message': 'OK'})
+  
+  local_event_LastContactDetect.emit(str(now))  
   
 status_check_interval = 75
-status_timer = Timer(statusCheck, status_check_interval)  
+status_timer = Timer(statusCheck, status_check_interval)
 
 # for slave operation
 def remote_event_PowerSlave(arg=None):
