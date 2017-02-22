@@ -10,7 +10,7 @@ DEFAULT_BOUNCE = 1.2 # the default bounce time (1200 ms)
 param_ipAddress = Parameter({ "title":"IP address", "order":0, "schema": { "type":"string" },
                               "desc": "The IP address of the unit."})
 
-param_bounceTime = Parameter({"title": "Bounce time", "order": 1, "schema": { "type": "string", "hint": DEFAULT_BOUNCE },
+param_bounceTime = Parameter({"title": "Bounce time", "order": 1, "schema": { "type": "string", "hint": str(DEFAULT_BOUNCE) },
                               "desc": "The bounce time in seconds (default %s)" % DEFAULT_BOUNCE})
 
 param_relay1Label = Parameter({"title": "Relay 1 label", "order": 1, "schema": { "type": "string" } } )
