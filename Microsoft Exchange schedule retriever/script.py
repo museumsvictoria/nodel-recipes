@@ -1,3 +1,5 @@
+from java.io import IOException
+
 DEFAULT_CONN_ENDPOINT = 'https://outlook.office365.com/EWS/Exchange.asmx'
 
 param_connector = Parameter({'title': 'Connector', 'schema': {'type': 'object', 'properties': {
@@ -18,6 +20,11 @@ local_event_RawItems = LocalEvent({'title': 'Raw Items', 'group': 'Raw', 'schema
           'location': {'type': 'string', 'order': 2},
           'start': {'type': 'string', 'order': 3},
           'end': {'type': 'string', 'order': 4}
+  }}}})
+
+local_event_RawFolders = LocalEvent({'title': 'Raw Folders', 'group': 'Raw', 'schema': {'type': 'array', 'items': {
+        'type': 'object', 'properties': {
+          'displayName': {'type': 'string', 'order': 1}
   }}}})
 
 # Booking / raw mappings
@@ -199,8 +206,7 @@ def query_ews(start, end):
       folderElement = resolvedFolderElements.get(folderName)
 
       if folderElement == None:
-        console.warn('At least one named-calendar has not been located yet; (folder name is "%s")' % folderName)
-        continue
+        raise Exception('At least one named-calendar has not been located yet; (folder name is "%s")' % folderName)
 
       folderElements.append(folderElement)
 
@@ -213,11 +219,14 @@ def query_ews(start, end):
   
   console.info('Requesting... request:%s' % xmlRequest)
   
-  response = get_url(connector['ewsEndPoint'],
-                     username=connector['username'],
-                     password=connector['password'],
-                     contentType='text/xml',
-                     post=xmlRequest)
+  try:
+    response = get_url(connector['ewsEndPoint'],
+                       username=connector['username'],
+                       password=connector['password'],
+                       contentType='text/xml',
+                       post=xmlRequest)
+  except IOException, exc:
+    raise Exception(exc.getMessage)
   
   console.info('Got response. data:%s' % response)
   
@@ -301,6 +310,8 @@ def local_action_PollFolders(arg=None):
 
 def updateFolderMap():
   folderItems = find_folders()
+  
+  local_event_RawFolders.emit(folderItems)
 
   # set up the lookup map
   for item in folderItems:
@@ -313,11 +324,14 @@ def find_folders():
   xmlRequest = ET.tostring(request)
   console.info('find_folders requesting... data:%s' % xmlRequest)
   
-  response = get_url(connector['ewsEndPoint'], 
-                     username=connector['username'],
-                     password=connector['password'],
-                     contentType='text/xml',
-                     post=xmlRequest)
+  try:
+    response = get_url(connector['ewsEndPoint'], 
+                       username=connector['username'],
+                       password=connector['password'],
+                       contentType='text/xml',
+                       post=xmlRequest)
+  except IOException, exc:
+    raise Exception(exc.getMessage)
   
   console.info('find_folders. got response. data:%s' % response)
   
