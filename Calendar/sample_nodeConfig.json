@@ -1,0 +1,140 @@
+{
+    "remoteBindingValues": {
+        "actions": {},
+        "events": {}
+    },
+    "paramValues": {
+        "members": [{
+            "name": "Museum Victoria",
+            "members": [
+                {
+                    "name": "Melbourne Museum",
+                    "members": [
+                        {
+                            "name": "MM Lower West",
+                            "members": [
+                                {"name": "MM LW Dinosaur Walk"},
+                                {"name": "MM LW 600 Millions Years"},
+                                {"name": "MM LW Dynamic Earth"},
+                                {"name": "MM LW Marine Life"},
+                                {
+                                    "name": "MM LW Wild",
+                                    "members": [{"name": "MM LW W Darwin to DNA"}]
+                                },
+                                {"name": "MM LW Bugs Alive"}
+                            ]
+                        },
+                        {
+                            "name": "MM Upper West",
+                            "members": [
+                                {"name": "MM UW Mind"},
+                                {"name": "MM UW Body"},
+                                {"name": "MM UW World War 1"}
+                            ]
+                        },
+                        {
+                            "name": "MM Lower East",
+                            "members": [{"name": "MM LE First Peoples"}]
+                        },
+                        {
+                            "name": "MM Upper East",
+                            "members": [
+                                {
+                                    "name": "MM UE Melbourne Story",
+                                    "members": [{"name": "MM UE MS Te Pasifika"}]
+                                },
+                                {"name": "MM UE Biomedical Breakthroughs"}
+                            ]
+                        },
+                        {
+                            "name": "MM Central",
+                            "members": [
+                                {"name": "MM C Galleria"},
+                                {"name": "MM C Forest"}
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "Scienceworks",
+                    "members": [
+                        {
+                            "name": "SW Gound Level",
+                            "members": [
+                                {"name": "SW Planetarium Foyer"},
+                                {"name": "SW Think Ahead"},
+                                {"name": "SW Sportsworks"},
+                                {"name": "SW Test Lab"},
+                                {"name": "SW Down"}
+                            ]
+                        },
+                        {
+                            "name": "SW Upper Level",
+                            "members": [
+                                {"name": "SW Nitty Gritty Super City"},
+                                {"name": "SW Up"}
+                            ]
+                        },
+                        {
+                            "name": "SW Outdoor",
+                            "members": [{"name": "SW Pumping Station"}]
+                        }
+                    ]
+                },
+                {
+                    "name": "Immigration Museum",
+                    "members": [
+                        {
+                            "name": "IM Level 1",
+                            "members": [
+                                {"name": "IM Community"},
+                                {"name": "IM Leaving Home"},
+                                {"name": "IM Immigrant Stories"},
+                                {"name": "IM Long Room"},
+                                {"name": "IM Getting In"}
+                            ]
+                        },
+                        {
+                            "name": "IM Level 2",
+                            "members": [{"name": "IM Identity"}]
+                        },
+                        {
+                            "name": "IM Temporary Spaces",
+                            "members": [{"name": "IM Lustre"}]
+                        },
+                        {"name": "EWG Lustre"}
+                    ]
+                }
+            ]
+        }],
+        "signalTypes": [
+            {
+                "name": "Power",
+                "activeState": "On",
+                "nonactiveState": "Off"
+            }
+        ],
+        "scheduleSources": [
+            {
+                "name": "MM",
+                "defaultMember": "Melbourne Museum",
+                "defaultSignal": "Power"
+            },
+            {
+                "name": "IM",
+                "defaultMember": "Immigration Museum",
+                "defaultSignal": "Power"
+            },
+            {
+                "name": "SW",
+                "defaultMember": "Scienceworks",
+                "defaultSignal": "Power"
+            },
+            {
+                "name": "MV",
+                "defaultMember": "Museum Victoria",
+                "defaultSignal": "Power"
+            }
+        ]
+    }
+}
