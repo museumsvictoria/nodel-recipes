@@ -1,0 +1,30 @@
+{ 
+  "pills": {
+      "type": "string"
+  },
+  
+  "select": {
+    "type": "string"
+  },
+  
+  "status_signal": { 
+    "type": "object", 
+    "properties": {
+      "level": {"type": "integer", "title": "Level", "order": 1},
+      "message": {"type": "string", "title": "Message", "order": 2}
+    }
+  },
+  
+  "meter": {
+    "type": "number"
+  },
+  
+  "badge": {
+    "type": "boolean"
+  },
+  
+  "range": {
+    "type": "number"
+  }
+ 
+}

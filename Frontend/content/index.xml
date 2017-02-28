@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="index.xsl" ?>
+<pages title='Status Page' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="index.xsd">
+  <page title='Control'>
+    <row>
+      <column sm="3">
+        <title>Source</title>
+        <pills event="Preset" action="Preset">
+          <pill value="PresetChromecast">Chromecast</pill>
+          <pill value="PresetTV">TV</pill>
+          <pill value="PresetButler">Signage</pill>
+          <pill value="PresetSpare1"><badge event="Status2"></badge>HDMI 1</pill>
+          <pill value="PresetSpare2"><badge event="Status2"></badge>HDMI 2</pill>
+        </pills>
+      </column>
+      <column sm="3">
+        <title>Source select</title>
+        <select class="btn-default" event="Preset" action="Preset">
+          <item value="PresetChromecast">Chromecast</item>
+          <item value="PresetTV">TV</item>
+          <item value="PresetButler">Signage</item>
+          <item value="PresetSpare1">HDMI 1</item>
+          <item value="PresetSpare2">HDMI 2</item>
+        </select>
+      </column>
+      <column sm="4">
+        <title>Testing status</title>
+        <status event="Status1"><badge event="Status2"></badge>Example status box with badge</status>
+        <status event="Status2">Example status box</status>
+      </column>
+      <column sm="2">
+        <title>Meters</title>
+        <meter event="Meter1"></meter>
+        <meter event="Meter2"></meter>
+        <meter event="Meter3"></meter>
+      </column>
+    </row>
+    <row class="gap">
+      <column sm="12">
+        <title>Testing button groups</title>
+        <buttongroup>
+          <button action='PresetChromecast' class='btn-default'>Chromecast</button>
+          <button action='PresetTV' class='btn-default'>TV</button>
+          <button action='PresetButler' class='btn-default'>Signage</button>
+          <button action='PresetSpare1' class='btn-default'>HDMI 1<badge event="Status2"></badge></button>
+          <button action='PresetSpare2' class='btn-default'>HDMI 2<badge event="Status2"></badge></button>
+        </buttongroup>
+      </column>
+    </row>
+    <row class="gap">
+      <column sm="4">
+        <title>Volume</title>
+        <button action='VolumeDown' class='btn-success'>? Down</button>
+        <button action='VolumeUp' class='btn-success'>Up ?</button>
+      </column>
+      <column sm="8">
+        <title>Range</title>
+        <range action='none'></range>
+      </column>
+    </row>
+  </page>
+</pages>
