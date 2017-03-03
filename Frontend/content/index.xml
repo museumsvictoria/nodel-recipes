@@ -64,8 +64,8 @@
     <row class="gap">
       <column sm="4">
         <title>Volume</title>
-        <button action='VolumeDown' class='btn-success'>▼ Down</button>
-        <button action='VolumeUp' class='btn-success'>Up ▲</button>
+        <button action='VolumeDown' class='btn-success'>Down</button>
+        <button action='VolumeUp' class='btn-success'>Up</button>
       </column>
       <column sm="8">
         <title>Range</title>
