@@ -1,10 +1,14 @@
 { 
   "pills": {
-      "type": "string"
+    "type": "string"
   },
   
   "select": {
     "type": "string"
+  },
+  
+  "switch": {
+    "type": "boolean"
   },
   
   "status_signal": { 
@@ -19,12 +23,20 @@
     "type": "number"
   },
   
-  "badge": {
-    "type": "boolean"
-  },
+  "badge": { 
+    "type": "object", 
+    "properties": {
+      "level": {"type": "integer", "title": "Level", "order": 1},
+      "message": {"type": "string", "title": "Message", "order": 2}
+    }
+  }
   
-  "range": {
-    "type": "number"
+  "status_signal": { 
+    "type": "object", 
+    "properties": {
+      "level": {"type": "integer", "title": "Level", "order": 1},
+      "message": {"type": "string", "title": "Message", "order": 2}
+    }
   }
  
 }
