@@ -30,13 +30,4 @@
       "message": {"type": "string", "title": "Message", "order": 2}
     }
   }
-  
-  "status_signal": { 
-    "type": "object", 
-    "properties": {
-      "level": {"type": "integer", "title": "Level", "order": 1},
-      "message": {"type": "string", "title": "Message", "order": 2}
-    }
-  }
- 
 }

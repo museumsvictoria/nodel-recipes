@@ -36,16 +36,16 @@ def main():
   [localOnlyActions.add(SimpleName(name)) for name in (param_localOnlyActions or '').split(',')]
   
   # parse the index
-  indexFile = File(workingDir, 'content\\index.xml')
-  if not indexFile.exists():
-    console.warn('No "content/index.xml" file exists; cannot continue')
+  indexFile = os.path.join(workingDir, 'content', 'index.xml')
+  if not os.path.exists(indexFile):
+    console.warn('No "%s" file exists; cannot continue' % indexFile)
     return
   
-  schemasFile = File(workingDir, 'content\\schemas.json')
-  if schemasFile.exists():
-    loadSchemas(Stream.readFully(schemasFile))
+  schemasFile = os.path.join(workingDir, 'content', 'schemas.json')
+  if os.path.exists(schemasFile):
+    loadSchemas(Stream.readFully(File(schemasFile)))
   
-  loadIndexFile(Stream.readFully(indexFile))
+  loadIndexFile(indexFile)
   
 def loadSchemas(json):
   schemas = json_decode(json)
@@ -61,8 +61,8 @@ def loadSchemas(json):
   else:
     console.warn('(no schema mapping info was present)')
 
-def loadIndexFile(xml):
-  xml = ET.fromstring(xml)
+def loadIndexFile(xmlFile):
+  xml = ET.parse(xmlFile)
   
   def explore(group, e):
     eType = e.tag
@@ -120,7 +120,7 @@ def loadIndexFile(xml):
     for i in e:
       explore(thisGroup, i)
   
-  explore('', xml)
+  explore('', xml.getroot())
 
 
 # customisation
