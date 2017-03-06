@@ -148,7 +148,10 @@ def initStatusSupport(memberInfo):
     for memberName in members['slaves'] + members['controlled']:
       memberStatus = lookup_local_event('Member %s Status' % memberName).getArg() or EMPTY_SET
       
-      memberLevel = memberStatus.get('level') or 99
+      memberLevel = memberStatus.get('level')
+      if memberLevel == None: # as opposed to the value '0'
+        memberLevel = 99
+
       if memberLevel > aggregateLevel:
         # raise the level
         aggregateLevel = memberLevel
