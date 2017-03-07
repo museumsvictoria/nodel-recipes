@@ -26,21 +26,24 @@
             </select>
           </column>
         </row>
-        <row class="gap">
+        <row>
           <column sm="12">
             <dynamicselect class="btn-default" data="DynamicList" event="Dynamic" action="Dynamic"/>
           </column>
         </row>
-        <row class="gap">
-          <column sm="12">
+        <row>
+          <column sm="6">
             <switch class="btn-default" event="Switch" action="Switch"/>
+          </column>
+          <column sm="6">
+            <multiswitch class="btn-default" event="MultiSwitch" action="MultiSwitch"/>
           </column>
         </row>
       </column>
       <column sm="4">
         <title>Testing status</title>
         <status event="Status1"><badge event="Status2"/>Example status box with badge</status>
-        <status event="Status2">Example status box</status>
+        <status event="Status2"><multiswitch class="btn-default" event="MultiSwitch" action="MultiSwitch"/>Example status box with a long title</status>
       </column>
       <column sm="2">
         <title>Meters</title>
@@ -49,7 +52,7 @@
         <meter event="Meter3"></meter>
       </column>
     </row>
-    <row class="gap">
+    <row>
       <column sm="12">
         <title>Testing button groups</title>
         <buttongroup>
@@ -61,7 +64,7 @@
         </buttongroup>
       </column>
     </row>
-    <row class="gap">
+    <row>
       <column sm="4">
         <title>Volume</title>
         <button action='VolumeDown' class='btn-success'>Down</button>

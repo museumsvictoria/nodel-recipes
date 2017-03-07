@@ -6794,35 +6794,58 @@ body {
 .nav-pills > li > a > span.label {
   margin-left: 5px;
 }
+.alert .btn-default,
 .alert > span.label.label-default,
 .btn > span.label.label-default,
 .nav-pills > li > a > span.label.label-default {
-  background: #342b2b;
+  background-color: #342b2b;
+  border-color: #342b2b;
 }
+.alert .btn-primary,
 .alert > span.label.label-primary,
 .btn > span.label.label-primary,
 .nav-pills > li > a > span.label.label-primary {
-  background: #0048f0;
+  background-color: #0048f0;
+  border-color: #0048f0;
 }
+.alert .btn-success,
 .alert > span.label.label-success,
 .btn > span.label.label-success,
 .nav-pills > li > a > span.label.label-success {
-  background: #1e9111;
+  background-color: #1e9111;
+  border-color: #1e9111;
 }
+.alert .btn-info,
 .alert > span.label.label-info,
 .btn > span.label.label-info,
 .nav-pills > li > a > span.label.label-info {
-  background: #098db4;
+  background-color: #098db4;
+  border-color: #098db4;
 }
+.alert .btn-warning,
 .alert > span.label.label-warning,
 .btn > span.label.label-warning,
 .nav-pills > li > a > span.label.label-warning {
-  background: #ba7900;
+  background-color: #ba7900;
+  border-color: #ba7900;
 }
+.alert .btn-danger,
 .alert > span.label.label-danger,
 .btn > span.label.label-danger,
 .nav-pills > li > a > span.label.label-danger {
-  background: #c11600;
+  background-color: #c11600;
+  border-color: #c11600;
+}
+.alert a.btn {
+  text-decoration: none;
+}
+.alert > .btn,
+.alert > .btn-group {
+  float: right;
+}
+.alert-mini {
+  min-height: 55px;
+  margin-bottom: 20px;
 }
 .btn-select,
 .btn-select > button,
@@ -6947,6 +6970,11 @@ input[type=range]::-ms-fill-lower {
 input[type=range]::-ms-fill-upper {
   background: #424242;
   border-radius: 4px;
+}
+div.row > div > .btn,
+div.row > div > .btn-group,
+div.row > div > .nav-pills {
+  margin-bottom: 20px;
 }
 @media (min-width: 768px) {
   input[type=range]::-ms-thumb {

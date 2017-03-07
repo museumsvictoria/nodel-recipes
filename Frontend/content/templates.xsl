@@ -76,6 +76,24 @@
     </div>
   </xsl:template>
   <!-- switch -->
+  <!-- multiswitch -->
+  <xsl:template match="multiswitch">
+    <div class="btn-group btn-mswitch" role="group" data-event="{@event}" data-arg-action="{@action}" data-class-off="btn-danger" data-class-on="btn-success">
+      <a href="#" class="btn btn-default" data-arg="Off">
+        <xsl:choose>
+          <xsl:when test="off"><xsl:value-of select="off"/></xsl:when>
+          <xsl:otherwise>Off</xsl:otherwise>
+        </xsl:choose>
+      </a>
+      <a href="#" class="btn btn-default" data-arg="On">
+         <xsl:choose>
+          <xsl:when test="on"><xsl:value-of select="on"/></xsl:when>
+          <xsl:otherwise>On</xsl:otherwise>
+        </xsl:choose>
+      </a>
+    </div>
+  </xsl:template>
+  <!-- multiswitch -->
   <!-- pills -->
   <xsl:template match="pills">
     <ul class="nav nav-pills nav-stacked" data-event="{@event}" data-arg-action="{@action}">
@@ -112,7 +130,7 @@
   <!-- select -->
   <!-- status -->
   <xsl:template match="status">
-    <div class="alert alert-mini label-default" data-status="{@event}"><xsl:apply-templates select="badge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span></div>
+    <div class="alert alert-mini label-default" data-status="{@event}"><xsl:apply-templates select="swich|multiswitch"/><xsl:apply-templates select="badge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span></div>
   </xsl:template>
   <!-- status -->
   <!-- badge -->
@@ -140,9 +158,4 @@
     </div>
   </xsl:template>
   <!-- meter -->
-  <!-- special status -->
-  <xsl:template match="special_status">
-    <div data-template="ministatustemplate" data-event="{@event}"></div>
-  </xsl:template>
-  <!-- special status -->
 </xsl:stylesheet>

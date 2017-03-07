@@ -242,16 +242,38 @@ var parseLog = function(log){
               } else if($(ele).is("input")) $(ele).not(':active').val(log.arg);
               break;
             case "string":
-              if ($(ele).is("span")) $(ele).text(log.arg);
-              // lists
-              $(ele).children('li').has('a[data-arg]').removeClass('active');
-              $(ele).children('li').has('a[data-arg="' + log.arg + '"]').addClass('active');
-              // button select
-              $(ele).parents('.btn-select').children('button').children('span:first-child').text($(ele).children('li').has('a[data-arg="' + log.arg + '"]').text());
-              // pages
-              $("[data-page]").hide();
-              $('[data-page="' + log.arg + '"]').show();
-              if($(ele).is("input")) $(ele).not(':active').val(log.arg);
+              if($(ele).hasClass('btn-mswitch')){
+                var arg = log.arg.toLowerCase().replace(/[^a-z]+/gi, "");
+                switch (arg) {
+                  case "on":
+                    $(ele).children('[data-arg="On"]').removeClass('active').addClass($(ele).data('class-on')).removeClass('btn-default').removeClass('btn-warning');
+                    $(ele).children('[data-arg="Off"]').addClass('active').addClass('btn-default').removeClass($(ele).data('class-off')).removeClass('btn-warning');
+                    break
+                  case "off":
+                    $(ele).children('[data-arg="Off"]').removeClass('active').addClass($(ele).data('class-off')).removeClass('btn-default').removeClass('btn-warning');
+                    $(ele).children('[data-arg="On"]').addClass('active').addClass('btn-default').removeClass($(ele).data('class-on')).removeClass('btn-warning');
+                    break;
+                  case "partiallyon":
+                    $(ele).children('[data-arg="On"]').removeClass('active').addClass('btn-warning').removeClass('btn-default').removeClass($(ele).data('class-on'));
+                    $(ele).children('[data-arg="Off"]').addClass('active').addClass('btn-default').removeClass($(ele).data('class-off')).removeClass('btn-warning');
+                    break
+                  case "partiallyoff":
+                    $(ele).children('[data-arg="Off"]').removeClass('active').addClass('btn-warning').removeClass('btn-default').removeClass($(ele).data('class-off'));
+                    $(ele).children('[data-arg="On"]').addClass('active').addClass('btn-default').removeClass($(ele).data('class-on')).removeClass('btn-warning');
+                    break;
+                }
+              } else {
+                if ($(ele).is("span")) $(ele).text(log.arg);
+                // lists
+                $(ele).children('li').has('a[data-arg]').removeClass('active');
+                $(ele).children('li').has('a[data-arg="' + log.arg + '"]').addClass('active');
+                // button select
+                $(ele).parents('.btn-select').children('button').children('span:first-child').text($(ele).children('li').has('a[data-arg="' + log.arg + '"]').text());
+                // pages
+                $("[data-page]").hide();
+                $('[data-page="' + log.arg + '"]').show();
+                if($(ele).is("input")) $(ele).not(':active').val(log.arg);
+              }
               break;
             case "boolean":
               if($(ele).hasClass('btn-switch')){
