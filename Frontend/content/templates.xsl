@@ -138,6 +138,16 @@
     <span class="label label-default status" data-status="{@event}"><xsl:value-of select="text()"/></span>
   </xsl:template>
   <!-- badge -->
+  <!-- panel -->
+  <xsl:template match="panel">
+    <div class="panel panel-default">
+      <div class="panel-body">
+        <div data-event="{@event}" class="panel{@height}px scrollbar-inner"></div>
+      </div>
+    </div>
+    <style>.panel<xsl:value-of select="@height"/>px {height: <xsl:value-of select="@height"/>px; overflow: hidden;}</style>
+  </xsl:template>
+  <!-- panel -->
   <!-- range -->
   <xsl:template match="range">
     <div><form><input data-arg-source="this" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" /></form></div>

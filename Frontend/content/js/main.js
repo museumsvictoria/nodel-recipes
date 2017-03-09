@@ -59,6 +59,7 @@ var updatemeter = function(ele, arg) {
 }
 
 var node = host = opts = '';
+var converter = new Markdown.Converter();
 
 $(function() {
   host = document.location.hostname + ':' + window.document.location.port;
@@ -74,7 +75,9 @@ $(function() {
     checkReload();
   }
   // selecct first page
-  $('*[data-nav]')[0].click()
+  $('*[data-nav]')[0].click();
+  // init scrollable divs
+  $('.scrollbar-inner').scrollbar();
 });
 
 var checkReload = function(){
@@ -262,6 +265,9 @@ var parseLog = function(log){
                     $(ele).children('[data-arg="On"]').addClass('active').addClass('btn-default').removeClass($(ele).data('class-on')).removeClass('btn-warning');
                     break;
                 }
+              } else if ($(ele).hasClass('scrollbar-inner')) {
+                var arg = converter.makeHtml(log.arg);
+                $(ele).html(arg);
               } else {
                 if ($(ele).is("span")) $(ele).text(log.arg);
                 // lists

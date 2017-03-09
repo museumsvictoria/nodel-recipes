@@ -7,6 +7,11 @@
     "type": "string"
   },
   
+  "panel": {
+    "type": "string",
+    "format": "long"
+  },
+  
   "switch": {
     "type": "boolean"
   },
@@ -20,6 +25,10 @@
   },
   
   "meter": {
+    "type": "number"
+  },
+  
+  "range": {
     "type": "number"
   },
   
