@@ -43,6 +43,11 @@ local_event_ActiveFuture = LocalEvent({'title': 'Active Future', 'schema': {'typ
             'warning': {'type': 'string', 'order': 5}
         }}}}}}})
 
+# loose, text-based agent
+local_event_Agenda = LocalEvent({'group': 'Info', 'schema': {'type': 'string', 'format': 'long'}})
+
+local_event_Debug = LocalEvent({'title': 'Debug level', 'group': 'Debug', 'schema': {'type': 'integer'}})
+
 # signal types by name
 signalTypes = {}
 
@@ -124,7 +129,6 @@ def applyStateList(states, force=False):
     stateTree = stateTrees[signalName]
     
     # DEBUG: dump the all the trees
-    print '(%s)' % signalName
     dumpTree(stateTree)
     
     # state tree is ready, now go through all affected members and call the actions
@@ -165,9 +169,10 @@ def applyStateList(states, force=False):
     lastTrees[signalName] = stateTree
       
 def dumpTree(tree):
-  for name in tree:
-    value = tree[name]
-    print '[%s]: state:[%s] locked:[%s]' % (name, value['state'], value['locked'])
+  if local_event_Debug.getArg() > 0:
+    for name in tree:
+      value = tree[name]
+      print '[%s]: state:[%s] locked:[%s]' % (name, value['state'], value['locked'])
   
 def createNewTree():
   stateTree = {}
@@ -235,7 +240,9 @@ def main():
   startingIn = quantisePollNow()
   
   console.info('Scheduler started! (polling on half-minute boundaries first in %.1f seconds)' % (startingIn/1000.0))
-
+  
+  # check the active future ones every 5 mins (after 30s at first)
+  Timer(lambda: lookup_local_action('ProcessActiveFuture'), 30, 5*60)
 
 # attempts to trigger the poll on the minute edge
 def quantisePollNow():
@@ -297,7 +304,9 @@ def handleScheduleSourceFeed(sourceInfo, items):
   lookup_local_action('ProcessActiveNow').call()
 
 def local_action_ProcessActiveNow(arg=None):
-  items = processAllActiveItems(date_now())
+  warnings = []
+  
+  items = processAllActiveItems(date_now(), warnings)
 
   local_event_ActiveNow.emit(items)
 
@@ -306,7 +315,9 @@ def local_action_ProcessActiveNow(arg=None):
   quantisePollNow()
   
 def local_action_ForceActiveNow(arg=None):
-  items = processAllActiveItems(date_now())
+  warnings = []
+  
+  items = processAllActiveItems(date_now(), warnings)
 
   local_event_ActiveNow.emit(items)
 
@@ -330,18 +341,69 @@ def local_action_ProcessActiveFuture(arg=None):
   instantsList.sort()
 
   result = list()
+  
+  warnings = list()
 
   for instant in instantsList:
     result.append({ 'instant': str(instant), 
-                    'items': processAllActiveItems(instant) })
+                    'items': processAllActiveItems(instant, warnings) })
 
+  if len(warnings) > 0:
+    message = ', '.join(['["%s" when:%s, title:"%s", calendar:%s]' % (warning['message'], 
+                                                                warning['start'].toString('d-MMM HH:mm'),
+                                                                warning['title'],
+                                                                warning['calendar']) for warning in warnings])
+    
+    local_event_Status.emit({'level': 2, 'message': "%s booking%s could not be properly interpreted: %s" % ((len(warnings), '', message) if len(warnings)==1 else (len(warnings), 's', message))})
+    
+  else:
+    local_event_Status.emit({'level': 0, 'message': 'OK'})
+  
   local_event_ActiveFuture.emit(result)
+  
+  emitAgenda(result)
+  
+def emitAgenda(fullList):
+  "Where 'fullList' contains {'instant': '...', 'items' : [ ... ]}"
+  lines = list()
+  
+  currentDay = ''
+  
+  for instantItem in fullList:
+    instant = date_parse(instantItem['instant'])
+    items = instantItem['items']
+    
+    for item in items:
+      day = instant.toString('E d-MMM')
+      
+      # group by day
+      if day != currentDay:
+        if len(lines) > 0:
+          lines.append('')
+          
+        lines.append(day)
+        
+        currentDay = day
+        
+      # example:
+      # At 3:30 PM, Power On in ASDF "longer title" 
+      # INVALID: At 3:30 PM Power On in ASDF "longer title" 
+      
+      line = '%sAt %s, %s %s in %s ("%s")' % ('INVALID: ' if item.get('warning') else '',
+                                       instant.toString('h:mm a'),
+                                       item['signal'],
+                                       item['state'],
+                                       item['member'],
+                                       item['title'])
+      lines.append(line)
+  
+  local_event_Agenda.emit('\r\n'.join(lines))
 
-def processAllActiveItems(instant):
+def processAllActiveItems(instant, warnings):
   instantMillis = instant.getMillis()
 
   activeItems = list()
-
+  
   # consolidates all available calendar sources
   for sourceInfo in param_scheduleSources:
     items = lookup_local_event('Source %s Items' % sourceInfo['name']).getArg()
@@ -357,6 +419,9 @@ def processAllActiveItems(instant):
         continue
       
       activeItem = {}
+      
+      warning = None
+      
       for key in item:
         activeItem[key] = item[key]
 
@@ -366,7 +431,7 @@ def processAllActiveItems(instant):
 
       # validate member
       if members.get(activeItem['member']) == None:
-        activeItem['warning'] = 'Unknown member: %s' % activeItem['member']
+        warning = 'Unknown member: %s' % activeItem['member']
 
       # resolve signal type
       signal = item['signal']
@@ -376,16 +441,32 @@ def processAllActiveItems(instant):
 
       # validate signal type
       if signal not in signalTypes:
-        activeItem['warning'] = 'Ignoring unmanaged signal type: %s' % signal
+        warning = 'Ignoring unmanaged signal type: %s' % signal
 
       # resolve signal state
       elif item['state'] == None:
         # safe to look up signal type to get active state
         activeItem['state'] = signalTypes[activeItem['signal']]['activeState']
+        
+      if warning != None:
+        activeItem['warning'] = warning
+        warnings.append({'start': instant,
+                         'calendar': sourceInfo['name'], 
+                         'title': item['title'],
+                         'message': warning})
 
       activeItems.append(activeItem)
-
+  
   return activeItems
+
+
+# <!--- status
+
+local_event_Status = LocalEvent({'group': 'Status', 'schema': {'type': 'object', 'properties': {
+        'level': {'type': 'integer', 'order': 1},
+        'message': {'type': 'string', 'format': 'long', 'order': 2}}}})
+
+# -->
 
 # <!--- convenience functions    
     

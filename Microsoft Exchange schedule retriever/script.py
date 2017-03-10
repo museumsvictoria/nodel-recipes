@@ -199,7 +199,7 @@ def query_ews(start, end):
 
   # prepare named folder elements if in use
   folderElements = list()
-  for calendar in param_calendars:
+  for calendar in param_calendars or '':
     folderName = calendar['folderName']
     if not isEmpty(folderName):
       # lookup the folder by display name
