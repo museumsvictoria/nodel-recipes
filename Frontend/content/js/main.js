@@ -245,7 +245,7 @@ var parseLog = function(log){
               } else if($(ele).is("input")) $(ele).not(':active').val(log.arg);
               break;
             case "string":
-              if($(ele).hasClass('btn-mswitch')){
+              if($(ele).hasClass('btn-pswitch')){
                 var arg = log.arg.toLowerCase().replace(/[^a-z]+/gi, "");
                 switch (arg) {
                   case "on":
@@ -263,6 +263,26 @@ var parseLog = function(log){
                   case "partiallyoff":
                     $(ele).children('[data-arg="Off"]').removeClass('active').addClass('btn-warning').removeClass('btn-default').removeClass($(ele).data('class-off'));
                     $(ele).children('[data-arg="On"]').addClass('active').addClass('btn-default').removeClass($(ele).data('class-on')).removeClass('btn-warning');
+                    break;
+                }
+              } else if ($(ele).hasClass('label-pbadge')) {
+                var arg = log.arg.toLowerCase().replace(/[^a-z]+/gi, "");
+                switch (arg) {
+                  case "on":
+                    $(ele).text($(ele).data('on'));
+                    $(ele).addClass($(ele).data('class-on')).removeClass('label-default').removeClass('label-warning').removeClass($(ele).data('class-off'));
+                    break;
+                  case "off":
+                    $(ele).text($(ele).data('off'));
+                    $(ele).addClass($(ele).data('class-off')).removeClass('label-default').removeClass('label-warning').removeClass($(ele).data('class-on'));
+                    break;
+                  case "partiallyon":
+                    $(ele).text($(ele).data('on'));
+                    $(ele).addClass('label-warning').removeClass('label-default').removeClass($(ele).data('class-on')).removeClass($(ele).data('class-off'));
+                    break;
+                  case "partiallyoff":
+                    $(ele).text($(ele).data('off'))
+                    $(ele).addClass('label-warning').removeClass('label-default').removeClass($(ele).data('class-on')).removeClass($(ele).data('class-off'));
                     break;
                 }
               } else if ($(ele).hasClass('scrollbar-inner')) {

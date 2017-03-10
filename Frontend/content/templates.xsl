@@ -76,9 +76,9 @@
     </div>
   </xsl:template>
   <!-- switch -->
-  <!-- multiswitch -->
-  <xsl:template match="multiswitch">
-    <div class="btn-group btn-mswitch" role="group" data-event="{@event}" data-arg-action="{@action}" data-class-off="btn-danger" data-class-on="btn-success">
+  <!-- partialswitch -->
+  <xsl:template match="partialswitch">
+    <div class="btn-group btn-pswitch" role="group" data-event="{@event}" data-arg-action="{@action}" data-class-off="btn-danger" data-class-on="btn-success">
       <a href="#" class="btn btn-default" data-arg="Off">
         <xsl:choose>
           <xsl:when test="off"><xsl:value-of select="off"/></xsl:when>
@@ -93,7 +93,7 @@
       </a>
     </div>
   </xsl:template>
-  <!-- multiswitch -->
+  <!-- partialswitch -->
   <!-- pills -->
   <xsl:template match="pills">
     <ul class="nav nav-pills nav-stacked" data-event="{@event}" data-arg-action="{@action}">
@@ -130,7 +130,7 @@
   <!-- select -->
   <!-- status -->
   <xsl:template match="status">
-    <div class="alert alert-mini label-default" data-status="{@event}"><xsl:apply-templates select="swich|multiswitch"/><xsl:apply-templates select="badge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span></div>
+    <div class="alert alert-mini label-default" data-status="{@event}"><xsl:apply-templates select="swich|multiswitch"/><xsl:apply-templates select="badge|partialbadge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span></div>
   </xsl:template>
   <!-- status -->
   <!-- badge -->
@@ -138,6 +138,25 @@
     <span class="label label-default status" data-status="{@event}"><xsl:value-of select="text()"/></span>
   </xsl:template>
   <!-- badge -->
+  <!-- partialbadge -->
+  <xsl:template match="partialbadge">
+    <span class="label label-default label-pbadge" data-event="{@event}" data-class-off="label-danger" data-class-on="label-success">
+    <xsl:value-of select="text()"/>
+    <xsl:attribute name="data-off">
+      <xsl:choose>
+        <xsl:when test="off"><xsl:value-of select="off"/></xsl:when>
+        <xsl:otherwise>Off</xsl:otherwise>
+      </xsl:choose>
+    </xsl:attribute>
+    <xsl:attribute name="data-on">
+      <xsl:choose>
+        <xsl:when test="on"><xsl:value-of select="on"/></xsl:when>
+        <xsl:otherwise>On</xsl:otherwise>
+      </xsl:choose>
+    </xsl:attribute>
+    </span>
+  </xsl:template>
+  <!-- partialbadge -->
   <!-- panel -->
   <xsl:template match="panel">
     <div class="panel panel-default">

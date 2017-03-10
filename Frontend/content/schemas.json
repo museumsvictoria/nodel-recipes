@@ -15,6 +15,16 @@
   "switch": {
     "type": "boolean"
   },
+
+  "partialswitch": {
+    "type": "string",
+    "enum": ["Off", "PartiallyOff", "PartiallyOn", "On"]
+  },
+  
+  "partialbadge": {
+    "type": "string",
+    "enum": ["Off", "PartiallyOff", "PartiallyOn", "On"]
+  },
   
   "status_signal": { 
     "type": "object", 
