@@ -148,7 +148,6 @@
   <!-- partialbadge -->
   <xsl:template match="partialbadge">
     <span class="label label-default label-pbadge" data-event="{@event}" data-class-off="label-danger" data-class-on="label-success">
-    <xsl:value-of select="text()"/>
     <xsl:attribute name="data-off">
       <xsl:choose>
         <xsl:when test="off"><xsl:value-of select="off"/></xsl:when>
@@ -161,6 +160,7 @@
         <xsl:otherwise>On</xsl:otherwise>
       </xsl:choose>
     </xsl:attribute>
+    <xsl:value-of select="text()"/>
     </span>
   </xsl:template>
   <!-- partialbadge -->
