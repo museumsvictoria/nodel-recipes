@@ -130,7 +130,14 @@
   <!-- select -->
   <!-- status -->
   <xsl:template match="status">
-    <div class="alert alert-mini label-default" data-status="{@event}"><xsl:apply-templates select="swich|multiswitch"/><xsl:apply-templates select="badge|partialbadge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span></div>
+    <div class="alert alert-mini label-default" data-status="{@event}">
+    <xsl:if test="@page">
+      <xsl:attribute name="data-nav">
+        <xsl:value-of select="translate(@page,translate(@page,$allowedSymbols,''),'')"/>
+      </xsl:attribute>
+    </xsl:if>
+    <xsl:apply-templates select="swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
+    </div>
   </xsl:template>
   <!-- status -->
   <!-- badge -->

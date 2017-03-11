@@ -6841,6 +6841,9 @@ body {
   min-height: 55px;
   margin-bottom: 20px;
 }
+.alert-mini[data-nav] {
+  cursor: pointer;
+}
 .nav-pills > li > a.active > span.label.label-primary {
   background-color: #0048f0;
   border-color: #0048f0;
