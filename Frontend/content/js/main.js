@@ -154,7 +154,7 @@ var setEvents = function(){
 };
 
 var callAction = function(action, arg) {
-  $.postJSON('http://' + host + '/REST/nodes/' + node + '/actions/' + action + '/call', arg, function () {
+  $.postJSON('http://' + host + '/REST/nodes/' + node + '/actions/' + encodeURIComponent(action) + '/call', arg, function () {
     console.log(action + " - Success");
   }).fail(function (e, s) {
     errtxt = s;
