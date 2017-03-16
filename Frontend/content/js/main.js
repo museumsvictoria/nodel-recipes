@@ -60,6 +60,7 @@ var updatemeter = function(ele, arg) {
 
 var node = host = opts = '';
 var converter = new Markdown.Converter();
+var unicodematch = new XRegExp("[^\\p{L}\\p{N}]", "gi")
 
 $(function() {
   host = document.location.hostname + ':' + window.document.location.port;
@@ -224,7 +225,9 @@ var parseLog = function(log){
         $('#clock').data('time',time).text(time.format('h:mm:ss a'));
         break;
       default:
-        var eles = $("[data-event=" + log.alias + "]");
+        var eles = $("[data-event]").filter(function() {
+          return log.alias.toUpperCase() === $(this).data('event').replace(unicodematch,'').toUpperCase();
+        });
         $.each(eles, function (i, ele) {
           if($.type(log.arg)== "object") log.arg = log.arg[$(ele).data('event-arg')];
           if($(ele).hasClass('dynamic')) {
@@ -314,7 +317,9 @@ var parseLog = function(log){
               break;
           }
         });
-        var eles = $("[data-status=" + log.alias + "]");
+        var eles = $("[data-status]").filter(function() {
+          return log.alias.toUpperCase() === $(this).data('status').replace(unicodematch,'').toUpperCase();
+        });
         $.each(eles, function (i, ele) {
           var ele = $(ele);
           if(!_.isUndefined(log.arg) && !_.isUndefined(log.arg['level']) && _.isNumber(log.arg['level'])){
@@ -340,7 +345,9 @@ var parseLog = function(log){
             }
           }
         });
-        var eles = $("[data-render=" + log.alias + "]");
+        var eles = $("[data-render]").filter(function() {
+          return log.alias.toUpperCase() === $(this).data('render').replace(unicodematch,'').toUpperCase();
+        });
         $.each(eles, function (i, ele) {
           if($(ele).data('render-template')) {
             try {
