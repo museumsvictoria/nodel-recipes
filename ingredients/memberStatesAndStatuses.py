@@ -53,13 +53,13 @@ def initMember(memberInfo):
   name = mustNotBeBlank('name', memberInfo['name'])
 
   if memberInfo.get('hasStatus'):
-    initStatusSupport(memberInfo)
+    initStatusSupport(name)
 
   if (memberInfo.get('power') or {}).get('mode') in MODES:
-    initSignalSupport(memberInfo, memberInfo['power']['mode'], 'Power', ['On', 'Off'])
+    initSignalSupport(name, memberInfo['power']['mode'], 'Power', ['On', 'Off'])
     
   if (memberInfo.get('muting') or {}).get('mode') in MODES:
-    initSignalSupport(memberInfo, memberInfo['muting']['mode'], 'Muting', ['On', 'Off'])
+    initSignalSupport(name, memberInfo['muting']['mode'], 'Muting', ['On', 'Off'])
 
 membersBySignal = {}
     
