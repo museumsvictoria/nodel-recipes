@@ -25,8 +25,12 @@ def sendMagicPacket(dst_mac_addr):
 
 ### Local actions this Node provides
 def local_action_PowerOn(arg = None):
-  """{"title":"PowerOn","desc":"PowerOn","group":"Power"}"""
-  print 'Action PowerOn requested'
+  """{"group": "Power"}"""
+  lookup_local_action('Power').call('On')
+
+def local_action_SendWOL(arg = None):
+  """{"group": "Power"}"""
+  print 'Sending WOL magic packet'
   sendMagicPacket(param_macAddress)
   
 remote_action_PowerOff = RemoteAction()
@@ -64,7 +68,7 @@ def local_action_Power(arg=None):
   local_event_DesiredPower.emit(arg)
   
   if arg == 'On':
-    lookup_local_action('PowerOn').call()
+    lookup_local_action('SendWOL').call()
     
   elif arg == 'Off':
     lookup_remote_action('PowerOff').call()
@@ -124,7 +128,7 @@ def updateStatus():
     last = 0 if timestamp == None else timestamp.getMillis()
     diff = now - last
     
-    if diff < 30000:
+    if diff < 180000: # give it at least 3 minutes before determining it's off
       local_event_Power.emit('Partially Off')
       
     else:
