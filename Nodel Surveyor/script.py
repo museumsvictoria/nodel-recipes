@@ -1,12 +1,87 @@
-from java.net import URLEncoder # For generating the node's REST end-points
-from org.nodel import SimpleName # For loose matching
-from java.lang import Exception as JavaException # For non-Python exception details
+'''See console and script for detailed usage instructions and detailed feedback.'''
 
-param_ScriptTypes = Parameter({'schema': {'type': 'array', 'items': {
+console.warn('''
+
+
+
+NOTE: 
+        Due to the intensive CPU and memory requirements, it
+        is highly recommended this node only execute within its 
+        own independent process space e.g. run directly from
+        the command-line of a workstation:
+        
+        > java -jar nodelhost.jar -p 0
+
+
+STEPS:
+
+
+Step 1: Place all recipe collections in the 'recipes' folder 
+        of this node and their signatures will be loaded for 
+        matching.
+        
+        Ensure there is at least one node running the versions
+        of the scripts you want deployed to other nodes.
+        
+        
+Step 2: Use the 'Probe' operation to determine which node 
+        hosts are running on the network.
+        
+        WAIT... 
+        
+        (give at least 10s to allow all node hosts to answer)
+        
+
+Step 3: Use 'Begin Survey' to interrogate the nodes in one 
+        sequential sweep.
+        
+        WAIT...
+        
+        (monitor the console and wait until operation completes)
+        
+        
+Step 4: Refresh the Node page to show up additional actions and signals.
+
+        WAIT...
+        
+        (the browser will take some time to render the page fully 
+        depending on the speed of the browser/CPU.)
+       
+
+Step 5: Compose a list of node names (one per line) and use
+        the 'Push' actions group to push scripts out to a 
+        collection of nodes.
+
+
+
+''')
+
+
+
+# For generating the node's REST end-points
+from java.net import URLEncoder 
+
+# For loose matching
+from org.nodel import SimpleName 
+
+# For non-Python exception details
+from java.lang import Exception as JavaException 
+
+# for loading files
+from java.io import File 
+
+# for reading unicode
+from org.nodel.io import Stream 
+
+# to determine working directory
+import os 
+
+param_ScriptTypes = Parameter({'title': 'Custom script types', 'schema': {'type': 'array', 'items': {
         'type': 'object', 'properties': {
           'type':      { 'type': 'string', 'order': 1},
           'signature': { 'type': 'string', 'order': 2}}
         }}})
+
 
 scriptTypes_bySignature = {}
 scripts_bySignature = {}
@@ -14,14 +89,54 @@ scripts_bySignature = {}
 def main():
   for scriptTypeInfo in param_ScriptTypes or []:
     scriptTypes_bySignature[scriptTypeInfo['signature']] = scriptTypeInfo
+    
+  items = load_existing_scripts()
+  console.info('loaded %s scripts' % len(items))
+  for item in items:
+    scriptTypes_bySignature[item['signature']] = {'type': item['path'], 'signature': item['signature']}
   
   global udp
   udp = UDP(source='0.0.0.0:0', dest='224.0.0.252:5354', ready=udp_ready, received=udp_received, 
-            #intf='136.154.24.165'
+            # intf='136.154.24.165' - 
            )
   
+def load_existing_scripts():
+  items = list() # e.g. [{'path':       'recipes/pjlink', 
+                 #        'scriptFile':  PATH_OF_SCRIPT,
+                 #        'signature':   ___,
+                 #       }]
+  
+  traverse('', File(os.getcwd(), 'recipes'), items)
+  
+  return items
+  
+def traverse(path, pathFile, items):
+  for f in pathFile.listFiles():
+    if f.isHidden():
+      continue
+      
+    name = f.getName()
+      
+    if name.startswith('_') or name.startswith('.'):
+      continue
+      
+    newPath = path + "/" + name if len(path) > 0 else name
+    
+    if f.isDirectory():
+      traverse(newPath, f, items)
+      
+    if f.isFile() and name.lower() == 'script.py':
+      signature = getSignature(Stream.readFully(f))
+                                 
+      items.append({'path': path, 
+                    'scriptFile': f,
+                    'signature': signature})
+      return
+    
+    # otherwise, keep traversing
+  
 def udp_ready():
-  console.info('udp_ready')
+  console.info('udp is ready. Can probe now.')
   
 nodeAddressesByName = {} # (by SimpleName)
 
@@ -32,7 +147,7 @@ NODESINFO_SCHEMA = {'type': 'object', 'properties': {
                    }}
   
 def udp_received(src, data):
-  console.info('udp_recieved: src:[%s] data:[%s]' % (src, data))
+  console.info('probe response from:[%s] data:[%s]' % (src, data))
   
   packet = json_decode(data)
   
@@ -42,7 +157,10 @@ def udp_received(src, data):
   
   for nodeName in present:
     if nodeName in nodeAddressesByName:
-      # node already exists
+      # node already exists, so warn and continue
+      
+      console.warn('Node "%s" already exists' % nodeName)
+      
       continue
       
     httpAddress = None
@@ -59,11 +177,23 @@ def udp_received(src, data):
     nodeAddressesByName[SimpleName(nodeName)] = httpAddress
 
 def local_action_Probe(arg=None):
+  '''{"title": "1. Probe", "group": "Operations", "order": 1}'''
+  
   udp.send(json_encode({"discovery": "*", "types": ["tcp", "http"]}))
   
+surveyed = False
   
-def local_action_ProcessAll(arg=None):
+def local_action_BeginSurvey(arg=None):
+  '''{"title": "2. Begin survey", "group": "Operations", "order": 2}'''
+  
   errors = list()
+  
+  global surveyed
+  if surveyed:
+    console.warn('Can only survey once per session. Restart node to repeat.')
+    return
+  
+  surveyed = True
   
   for nodeName in nodeAddressesByName:
     try:
@@ -78,21 +208,19 @@ def local_action_ProcessAll(arg=None):
   for error in errors:
     console.warn('("%s" failed)' % error)
     
-  console.info('%s nodes detected (%s with errors)' % (len(nodeAddressesByName), len(errors)))
-  console.info('%s signatures' % len(signatures))
+  console.info('> %s nodes detected (%s with errors)' % (len(nodeAddressesByName), len(errors)))
+  console.info('> %s signatures' % len(signatures))
   
   types = [t for t in countByType]
   types.sort()
   
   for t in types:
-    console.info('%s of type "%s"' % (countByType[t], t))
+    console.info('> %s of type "%s"' % (countByType[t], t))
     
 SCRIPT_SCHEMA = {'type': 'object', 'properties': {
                     'type':  { 'type': 'string', 'title': 'Type', 'order': 1 },
                     'signature': { 'type': 'string', 'title': 'Signature', 'order': 2 },
-                    'nodes':     { 'type': 'array', 'title': 'Nodes', 'order': 3, 'items': { 
-                                     'type': 'object', 'properties': {
-                                       'name': {'type': 'string', 'order': 1}}}},
+                    'nodes':     { 'type': 'string', 'title': 'Nodes', 'format': 'long', 'order': 3},
                     'notes':     { 'type': 'string', 'order': 10}
                 }}
 
@@ -139,16 +267,21 @@ def queryNode(nodeName):
     signatureEvent = lookup_local_event('Script %s' % signature)
     if signatureEvent is None:
       signatureEvent = Event('Script %s' % signature, {'group': '"%s" scripts' % ttype, 'title': signature, 'schema': SCRIPT_SCHEMA})
-      arg = {'signature': signature, 'nodes': []}
+      arg = {'signature': signature, 'nodes': ''}
       signatureEvent.emit(arg)
       
     arg = signatureEvent.getArg()
       
     # add another node (need to do reconstruction instead of a direct '.append' in case of a locked list (from persistence)
-    newNodes = [x for x in arg['nodes'] or []]
-    newNodes.append({'name': nodeName})
-    arg['nodes'] = newNodes
+    newNodes = arg['nodes'] or ''
     
+    if len(newNodes) == 0:
+      newNodes = str(nodeName)
+      
+    else:
+      newNodes = newNodes + "\r\n" + str(nodeName)
+      
+    arg['nodes'] = newNodes
     arg['type'] = ttype
     
     typeCount = countByType.get(ttype)
@@ -170,7 +303,7 @@ def queryNode(nodeName):
 def createPusher(ttype, script):
   
   def handler(arg):
-    nodes = [x['node'] for x in arg]
+    nodes = [x.strip() for x in arg.splitlines() if len(x.strip())>0]
     
     console.info('Pushing to %s...' % nodes)
     
@@ -183,9 +316,7 @@ def createPusher(ttype, script):
       console.info('result: %s' % result)
   
   Action('Push script type %s' % ttype, handler, 
-         {'group': 'Push', 'schema': {'caution': 'Are you sure?', 'type': 'array', 'items': {
-            'type': 'object', 'properties': {
-              'node': {'type': 'string'}}}}})
+         {'title': 'Push "%s"' % ttype, 'group': 'Push', 'caution': 'Are you sure?', 'schema': {'type': 'string', 'format': 'long'}})
   
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
