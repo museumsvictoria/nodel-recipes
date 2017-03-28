@@ -75,7 +75,7 @@ def initSignalSupport(name, mode, signalName, states):
     localResultantSignal = lookup_local_event(signalName)
     
   # establish a remote action
-  if mode is 'Action & Signal':
+  if mode == 'Action & Signal':
     create_remote_action('Member %s %s' % (name, signalName), {'group': 'Members (%s)' % signalName, 'schema': {'type': 'string', 'enum': states}},
                          suggestedNode=name, suggestedAction=signalName)
   
@@ -99,10 +99,15 @@ def initSignalSupport(name, mode, signalName, states):
   localDesiredSignal.addEmitHandler(lambda arg: aggregateMemberSignals())
   
   def handleRemoteEvent(arg):
+    if arg == True or arg == 1:
+      arg = 'On'
+    elif arg == False or arg == 0:
+      arg = 'Off'
+    
     localMemberSignal.emit(arg)
   
   create_remote_event('Member %s %s' % (name, signalName), handleRemoteEvent, {'group': 'Members (%s)' % signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}},
-                     suggestedNode=name, suggestedEvent=signalName)
+                      suggestedNode=name, suggestedEvent=signalName)
 
 def initSignal(signalName, mode, states):
   resultantStates = states + ['Partially %s' % s for s in states]
@@ -111,7 +116,10 @@ def initSignal(signalName, mode, states):
   
   localResultantSignal = Event('%s' % signalName, {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}})
   
-  def adjust(state, propagate):
+  def handler(complexArg):
+    state = complexArg['state']
+    noPropagate = complexArg.get('noPropagate')
+    
     localDesiredSignal.emit(state)
     
     # for convenience, just emit the state as the status if no members are configured
@@ -119,14 +127,21 @@ def initSignal(signalName, mode, states):
       localResultantSignal.emit(state)
     
     else:
-      if propagate:
-        # propagation requested so can call normal signal action
-        for memberName in membersBySignal[signalName]:
-          remoteAction = lookup_remote_action('Member %s %s' % (memberName, signalName))
-          if remoteAction != None:
-            remoteAction.call(state)
+      if noPropagate:
+        return
+      
+      for memberName in membersBySignal[signalName]:
+        remoteAction = lookup_remote_action('Member %s %s' % (memberName, signalName))
+        if remoteAction != None:
+          remoteAction.call(state)
           
-  localAction = Action('%s' % signalName, lambda arg: adjust(arg, True), {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': states}})
+  # create normal action (propagates)
+  Action('%s' % signalName, lambda arg: handler({'state': arg}), {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': states}})
+  
+  # create action with options (e.g. 'noPropagate')
+  Action('%s Extended' % signalName, handler, {'group': '(extended)', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+           'state': {'type': 'string', 'enum': states, 'order': 3},
+           'noPropagate': {'type': 'boolean', 'order': 2}}}})
   
   return localDesiredSignal, localResultantSignal
 
@@ -192,11 +207,6 @@ def initStatusSupport(name):
   memberStatusSignal.addEmitHandler(lambda arg: aggregateMemberStatus())
   
   def handleRemoteEvent(arg):
-    if arg == True or arg == 1:
-      arg = 'On'
-    elif arg == False or arg == 0:
-      arg = 'Off'
-
     memberStatusSignal.emit(arg)
   
   create_remote_event('Member %s Status' % name, handleRemoteEvent, {'group': 'Members (Status)', 'order': next_seq(), 'schema': STATUS_SCHEMA},
@@ -220,8 +230,5 @@ def isBlank(s):
 def isEmpty(o):
   if o == None or len(o) == 0:
     return True
-  
-def safely(o):
-  return o if o != None else ''
 
 # convenience functions ---!>
