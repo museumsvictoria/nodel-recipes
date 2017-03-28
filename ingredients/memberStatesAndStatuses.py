@@ -171,8 +171,13 @@ def initStatusSupport(name):
   if selfStatusSignal == None:
     selfStatusSignal = Event('Status', {'group': 'Status', 'order': next_seq(), 'schema': STATUS_SCHEMA})
     
-  # create the status for the member
+  # status for the member
   memberStatusSignal = Event('Member %s Status' % name, {'title': '"%s" Status' % name, 'group': '(advanced)', 'order': 9999+next_seq(), 'schema': STATUS_SCHEMA})
+  
+  # suppression flag?
+  memberStatusSuppressedSignal = Event('Member %s Status Suppressed' % name, {'title': 'Suppress "%s" Status' % name, 'group': '(advanced)', 'order': 9999+next_seq(), 'schema': {'type': 'boolean'}})
+  
+  Action('Member %s Status Suppressed' % name, lambda arg: memberStatusSuppressedSignal.emit(arg), {'title': 'Suppress "%s" Status' % name, 'group': '(advanced)', 'order': 9999+next_seq(), 'schema': {'type': 'boolean'}})
   
   def aggregateMemberStatus():
     aggregateLevel = 0
@@ -181,15 +186,27 @@ def initStatusSupport(name):
     # for composing the aggegate message at the end
     msgs = []
     
+    activeSuppression = False
+    
     for memberName in members:
+      suppressed = lookup_local_event('Member %s Status Suppressed' % memberName).getArg()
+      
       memberStatus = lookup_local_event('Member %s Status' % memberName).getArg() or EMPTY_SET
       
       memberLevel = memberStatus.get('level')
       if memberLevel == None: # as opposed to the value '0'
+        if suppressed:
+          activeSuppression = True
+          continue
+          
         memberLevel = 99
 
       if memberLevel > aggregateLevel:
-        # raise the level
+        # raise the level (if not suppressed)
+        if suppressed:
+          activeSuppression = True
+          continue
+        
         aggregateLevel = memberLevel
       
       memberMessage = memberStatus.get('message') or 'Has never been seen'
@@ -202,9 +219,13 @@ def initStatusSupport(name):
     if len(msgs) > 0:
       aggregateMessage = ', '.join(msgs)
       
+    if activeSuppression:
+      aggregateMessage = '%s (*)' % aggregateMessage
+      
     selfStatusSignal.emitIfDifferent({'level': aggregateLevel, 'message': aggregateMessage})
       
   memberStatusSignal.addEmitHandler(lambda arg: aggregateMemberStatus())
+  memberStatusSuppressedSignal.addEmitHandler(lambda arg: aggregateMemberStatus())
   
   def handleRemoteEvent(arg):
     memberStatusSignal.emit(arg)
