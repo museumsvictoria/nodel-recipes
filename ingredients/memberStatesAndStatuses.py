@@ -1,8 +1,34 @@
-'''A node that groups members for control propagation and status monitoring.'''
+'''Groups members for control propagation and status monitoring.'''
 
-def main(arg=None):
-  console.info('Started!')
-  
+from nodetoolkit import *
+
+# Use "from memberStatesAndStatuses import *" to expose Parameters OR
+# Use extend script.py directly:
+#
+# (within script.py)
+#
+# from memberStatesAndStatuses import *
+# 
+# @after_main
+# def extendMyNode():
+#   for device in ['RP', 'PJ']:
+#     initStatusSupport(device)
+#   
+#   initSignalSupport('RP', 'Read-Only', 'Power', ['On', 'Off'])
+#   initSignalSupport('PJ', 'Read-Only', 'Power', ['On', 'Off'])
+#
+#  lookup_local_action('Enable').addCallHandler(lambda arg: lookup_local_event('Desired Power').emit('On'))
+#  lookup_local_action('Disable').addCallHandler(lambda arg: lookup_local_event('Desired Power').emit('Off'))
+#
+#  def handlePower(arg):
+#    if arg == 'On':
+#      lookup_local_action('Enable').call()
+#    elif arg == 'Off':
+#      lookup_local_action('Disable').call()
+#  
+#  lookup_local_action('Power').addCallHandler(handlePower)
+
+
 # <!--- members and status support  
 
 @after_main
