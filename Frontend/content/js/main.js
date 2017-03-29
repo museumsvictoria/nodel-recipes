@@ -114,7 +114,7 @@ var setEvents = function(){
     $(ele).data('throttle')(action, arg);
   });
   $('body').on('click','*[data-arg], *[data-action], *[data-actionon]*[data-actionoff]', function (e) {
-    e.preventDefault();
+    e.stopPropagation(); e.preventDefault();
     if(!$('body').hasClass('touched')) {
       var arg = '';
       var action = '';
