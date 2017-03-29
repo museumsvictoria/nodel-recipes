@@ -32,13 +32,12 @@
               </button>
               <xsl:choose>
               <xsl:when test="/pages/@logo">
-                <a class="navbar-left" href="#"><img id="logo" src="{/pages/@logo}"/></a>
+                <a class="navbar-brand" id="title" href="#"><img src="{/pages/@logo}"/><xsl:value-of select="/pages/@title"/></a>
               </xsl:when>
               <xsl:otherwise>
-                <a class="navbar-left" href="#"><img id="logo" src="img/logo.png"/></a>
+                <a class="navbar-brand" id="title" href="#"><img src="img/logo.png"/><xsl:value-of select="/pages/@title"/></a>
               </xsl:otherwise>
               </xsl:choose>
-              <a class="navbar-brand" id="title" href="#"><xsl:value-of select="/pages/@title"/></a>
             </div>
             <!-- Collect the nav links, forms, and other content for toggling -->
             <div class="collapse navbar-collapse" id="nodel-navbar" role="navigation">
