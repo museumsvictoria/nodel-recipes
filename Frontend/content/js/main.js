@@ -166,9 +166,30 @@ var callAction = function(action, arg) {
 
 var updateLogs = function(){
   if(!("WebSocket" in window)){
-    console.log('no websockets');
-  }else{
-    $.getJSON('http://'+host+'/REST/nodes/' + node, function(data){
+    console.log('using poll');
+    var url;
+    if (typeof $('body').data('seq') === "undefined") url = 'http://' + host + '/REST/nodes/' + encodeURIComponent(node) + '/activity?from=-1';
+    else url = 'http://' + host + '/REST/nodes/' + encodeURIComponent(node) + '/activity?from=' + $('body').data('seq');
+    $.getJSON(url, function (data) {
+      if (typeof $('body').data('seq') === "undefined") {
+        $('body').data('seq', -1);
+      }
+      data.sort(function (a, b) {
+        return a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0;
+      });
+      $.each(data, function (key, value) {
+        if (value.seq != 0) {
+          $('body').data('seq', value.seq + 1);
+          parseLog(value);
+        }
+      });
+    }).always(function () {
+      $('body').data('logs', setTimeout(function () {
+        updateLogs();
+      }, 1000));
+    });
+  } else {
+    $.getJSON('http://'+host+'/REST/nodes/' + encodeURIComponent(node), function(data){
       var wshost = "ws://"+document.location.hostname+":"+data['webSocketPort']+"/nodes/"+node;
       try{
         var socket = new WebSocket(wshost);
