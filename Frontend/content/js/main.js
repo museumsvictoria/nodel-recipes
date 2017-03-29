@@ -60,7 +60,7 @@ var updatemeter = function(ele, arg) {
 
 var node = host = opts = '';
 var converter = new Markdown.Converter();
-var unicodematch = new XRegExp("[^\\p{L}\\p{N}]", "gi")
+var unicodematch = new XRegExp("[^\\p{L}\\p{N}]", "gi");
 
 $(function() {
   host = document.location.hostname + ':' + window.document.location.port;

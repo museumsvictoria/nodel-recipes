@@ -6772,6 +6772,11 @@ body {
   -webkit-touch-callout: none;
    -khtml-user-select:      none;
 }
+#logo {
+  height: 45px;
+  max-height: 45px;
+  padding: 5px 12px 0 0;
+}
 .page {
   display: none;
 }
@@ -6788,7 +6793,9 @@ body {
   margin-top: 20px;
 }
 .alert > span.label {
-  margin-right: 5px;
+  float: right;
+  margin-bottom: 5px;
+  margin-left: 5px;
 }
 .btn > span.label,
 .nav-pills > li > a > span.label {
@@ -6836,6 +6843,8 @@ body {
 .alert > .btn,
 .alert > .btn-group {
   float: right;
+  margin-bottom: 5px;
+  margin-left: 15px;
 }
 .alert-mini {
   min-height: 55px;
