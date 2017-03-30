@@ -76,7 +76,7 @@ $(function() {
     checkReload();
   }
   // selecct first page
-  $('*[data-nav]')[0].click();
+  $('*[data-nav]').first().trigger('click');
   // init scrollable divs
   $('.scrollbar-inner').scrollbar();
 });
