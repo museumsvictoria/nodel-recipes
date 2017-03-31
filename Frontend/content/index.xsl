@@ -48,13 +48,13 @@
                   <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><xsl:value-of select="@title"/><span class="caret"></span></a>
                   <ul class="dropdown-menu">
                     <xsl:for-each select="page">
-                      <li><a href="#" data-nav="{translate(@title,translate(@title,$allowedSymbols,''),'')}"><xsl:value-of select="@title"/></a></li>
+                      <li><a href="#" data-nav="{translate(@title,translate(@title,$allowedSymbols,''),'')}" data-toggle="collapse" data-target="#nodel-navbar.in"><xsl:value-of select="@title"/></a></li>
                     </xsl:for-each>
                   </ul>
                 </li>
                 </xsl:if>
                 <xsl:if test="self::page">
-                <li><a href="#" data-nav="{translate(@title,translate(@title,$allowedSymbols,''),'')}"><xsl:value-of select="@title"/></a></li>
+                <li><a href="#" data-nav="{translate(@title,translate(@title,$allowedSymbols,''),'')}" data-toggle="collapse" data-target="#nodel-navbar.in"><xsl:value-of select="@title"/></a></li>
                 </xsl:if>
                 </xsl:for-each>
               <!--<xsl:for-each select="/pages/page[not(page)]">
