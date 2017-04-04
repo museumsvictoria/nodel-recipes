@@ -13,7 +13,7 @@ param_password = Parameter({"schema": {"type": "string"}})
 
 local_event_PowerState = LocalEvent({'title': 'Power State (legacy)', "group": "Power","schema": {"type": "string", "enum": ["off", "on", "cooling", "warm-up"]}})
 local_event_InputState = LocalEvent({'title': 'Input State (legacy)', "group": "Inputs"})
-local_event_Error = LocalEvent({"title": "Error", "schema": {"type": "string"}})
+local_event_LastCommsError = LocalEvent({"title": "Last Comms Error", "group": "Status", "schema": {"type": "string"}})
 
 local_event_Power = LocalEvent({'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off', 'Partially On', 'Partially Off']}})
 local_event_DesiredPower = LocalEvent({'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
@@ -27,6 +27,18 @@ local_event_DesiredInput = LocalEvent({'group': 'Inputs', 'schema': {'type': 'ob
         'source': { 'type': 'string', 'order': 2, 'enum': ['RGB', 'VIDEO', 'DIGITAL', 'STORAGE', 'NETWORK']} }}})
 
 local_event_LampHours = LocalEvent({'group': 'Information', 'desc': 'The lamps hours for each lamp (comma separated)', 'order': next_seq(), 'schema': {'type': 'string'}})
+
+PJLINK_ERRORLEVELS = ['OK', 'Warning', 'Error', 'Unknown']
+
+local_event_Errors = LocalEvent({'group': 'Information', 'schema': {'type': 'object', 'properties': {
+        'fan': {'type': 'string', 'enum': PJLINK_ERRORLEVELS, 'order': 1},
+        'lamp': {'type': 'string', 'enum': PJLINK_ERRORLEVELS, 'order': 2},
+        'temperature': {'type': 'string', 'enum': PJLINK_ERRORLEVELS, 'order': 3},
+        'cover': {'type': 'string', 'enum': PJLINK_ERRORLEVELS, 'order': 4},
+        'filter': {'type': 'string', 'enum': PJLINK_ERRORLEVELS, 'order': 5},
+        'other': {'type': 'string', 'enum': PJLINK_ERRORLEVELS, 'order': 6}}}})
+
+PJLINK_ERRORKEYS = ['fan', 'lamp', 'temperature', 'cover', 'filter', 'other'] # sorted by relative interest when presenting status
 
 def main():
   if len((param_ipAddress or '').strip()) == 0:
@@ -44,7 +56,7 @@ def local_action_RawPowerOn(arg=None):
     try:
       p.set_power('on')
     except Exception, e:
-      local_event_Error.emit(e)
+      local_event_LastCommsError.emit(e)
     finally:
       p.f.close()
 
@@ -55,7 +67,7 @@ def local_action_RawPowerOff(arg=None):
     try:
       p.set_power('off')
     except Exception, e:
-      local_event_Error.emit(e)
+      local_event_LastCommsError.emit(e)
     finally:
       p.f.close()
 
@@ -71,7 +83,7 @@ def local_action_GetPower(arg=None):
       lastReceive[0] = system_clock()
       
     except Exception, e:
-      local_event_Error.emit(e)
+      local_event_LastCommsError.emit(e)
     finally:
       p.f.close()
 
@@ -84,7 +96,7 @@ def local_action_RawSetInput(arg):
     try:
       p.set_input(arg['source'], arg['number'])
     except Exception, e:
-      local_event_Error.emit(e)
+      local_event_LastCommsError.emit(e)
     finally:
       p.f.close()
 
@@ -98,7 +110,7 @@ def local_action_GetInput(arg=None):
       local_event_Input.emit({'source': inp[0], 'number': inp[1]}) # managed
       
     except Exception, e:
-      local_event_Error.emit(e)
+      local_event_LastCommsError.emit(e)
     finally:
       p.f.close()
 
@@ -110,7 +122,7 @@ def local_action_Mute(what):
       what = { 'video': 1, 'audio': 2, 'all': 3, }[what]
       p.set_mute(what, True)
     except Exception, e:
-      local_event_Error.emit(e)
+      local_event_LastCommsError.emit(e)
     finally:
       p.f.close()
 
@@ -122,15 +134,27 @@ def local_action_Unmute(what):
       what = { 'video': 1, 'audio': 2, 'all': 3, }[what]
       p.set_mute(what, False)
     except Exception, e:
-      local_event_Error.emit(e)
+      local_event_LastCommsError.emit(e)
     finally:
       p.f.close()
 
-def local_action_Lamps(x = None):
-  '''{"desc": "Get lamp info", "group": "Information" }'''
+PJLINK_ERRORBYLEVEL = {0: 'OK', 1: 'Warning', 2: 'Error'}
+
+def local_action_LampsAndErrors(x = None):
+  '''{"desc": "Get lamp and errors info", "group": "Information" }'''
   p = get_projector()
   if(p):
     try:
+      # get errors first in case lamps fails
+      errors = p.get_errors()
+      
+      for key in errors:
+        # resolve (overwrite) the error levels into text
+        # (note: 'get_errors' wraps the integer values as strings
+        errors[key] = PJLINK_ERRORBYLEVEL.get(int(errors[key]), 'Unknown')
+      
+      local_event_Errors.emit(errors)
+      
       lampHours = list()
       for i, (time, state) in enumerate(p.get_lamps()):
           print 'Lamp %d: %s (%d hours)' % (i+1, 'on' if state else 'off', time)
@@ -139,19 +163,7 @@ def local_action_Lamps(x = None):
       local_event_LampHours.emit(', '.join(lampHours))
           
     except Exception, e:
-      local_event_Error.emit(e)
-    finally:
-      p.f.close()
-
-def local_action_Errors(arg=None):
-  '''{"desc": "Get projector error info.", "group": "Information" }'''
-  p = get_projector()
-  if(p):
-    try:
-      for what, state in p.get_errors().items():
-          print '%s: %s' % (what, state)
-    except Exception, e:
-      local_event_Error.emit(e)
+      local_event_LastCommsError.emit(e)
     finally:
       p.f.close()
 
@@ -165,10 +177,10 @@ def get_projector():
     if(rv or rv is None):
       return proj
     else:
-      local_event_Error.emit('authentication error')
+      local_event_LastCommsError.emit('authentication error')
       return False
   except:
-    local_event_Error.emit('connection error')
+    local_event_LastCommsError.emit('connection error')
     return False
   finally:
     sock.close()
@@ -319,7 +331,7 @@ def trapPowerSignals():
   lookup_local_event('DesiredPower').addEmitHandler(evaluatePowerState)
 
   
-# <!--- device status with PJLINK lamp hours
+# <!--- device status with PJLINK lamp hours and error
 
 DEFAULT_LAMPHOURUSE = 1800
 param_warningThresholds = Parameter({'title': 'Warning thresholds', 'schema': {'type': 'object', 'properties': {
@@ -333,10 +345,10 @@ def init_lamp_hours_support():
   global lampUseHoursThreshold
   lampUseHoursThreshold = (param_warningThresholds or {}).get('lampUseHours') or lampUseHoursThreshold
   
-# poll every 24 hours, 30s first time.
-poller_lampHours = Timer(lambda: lookup_local_action('Lamps').call(), 24*3600, 30)
+# poll every 4 hours, 30s first time.
+poller_lampHoursAndErrors = Timer(lambda: lookup_local_action('LampsAndErrors').call(), 4*3600, 30)
 
-local_event_Status = LocalEvent({'title': 'Status', 'order': 9990, "schema": { 'title': 'Status', 'type': 'object', 'properties': {
+local_event_Status = LocalEvent({'title': 'Status', 'group': 'Status', 'order': 9990, "schema": { 'title': 'Status', 'type': 'object', 'properties': {
         'level': {'title': 'Level', 'order': next_seq(), 'type': 'integer'},
         'message': {'title': 'Message', 'order': next_seq(), 'type': 'string'}
     } } })
@@ -352,6 +364,9 @@ def statusCheck():
   diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
   now = date_now()
   
+  # the list of status objects
+  statuses = list()
+  
   if diff > status_check_interval+15:
     previousContactValue = local_event_LastContactDetect.getArg()
     
@@ -363,16 +378,51 @@ def statusCheck():
       roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
       message = 'Off the network for approx. %s minutes' % roughDiff
       
-    local_event_Status.emit({'level': 2, 'message': message})
-    return
-  
-  elif lampUseHours > lampUseHoursThreshold:
-    local_event_Status.emit({'level': 1, 
-                             'message': 'Lamp usage is %s hours which is %s above the replacement threshold of %s. It may need replacement.' % 
-                               (lampUseHours, lampUseHours-lampUseHoursThreshold, lampUseHoursThreshold)})
-    
-  else:
     local_event_Status.emit({'level': 0, 'message': 'OK'})
+    
+    # (is offline so no point checking any other statuses)
+    
+    return 
+  
+  # check errors
+  errors = local_event_Errors.getArg()
+  
+  for key in PJLINK_ERRORKEYS:
+    value = errors.get(key)
+    if value == None:
+      continue
+    
+    if value == 'Error':
+      statuses.append((key.title(), {'level': 2, 'message': 'Non-specific errors reported'}))
+      
+    elif value != 'OK': # Warnings or unknown status
+      statuses.append((key.title(), {'level': 1, 'message': 'Non-specific warnings reported'}))
+  
+  # check lamp hours
+  if lampUseHours > lampUseHoursThreshold:
+    statuses.append(('Lamp usage', {'level': 1, 
+                             'message': 'Lamp usage is %s hours which is %s above the replacement threshold of %s. It may need replacement.' % 
+                               (lampUseHours, lampUseHours-lampUseHoursThreshold, lampUseHoursThreshold)}))
+    
+  # aggregate the statuses
+  aggregateLevel = 0
+  aggregateMessage = 'OK'
+  msgs = list()
+  
+  for key, status in statuses:
+    level = status['level']
+    if level > 0:
+      if level > aggregateLevel:
+        aggregateLevel = level # raise the level
+        del msgs[:]  # clear message list because of a complete new (higher) level
+        
+      if level == aggregateLevel: # keep adding messages of equal status level
+        msgs.append('%s: [%s]' % (key, status['message'])) # add the message
+      
+  if aggregateLevel > 0:
+    aggregateMessage = ', '.join(msgs)
+    
+  local_event_Status.emit({'level': aggregateLevel, 'message': aggregateMessage})
   
   local_event_LastContactDetect.emit(str(now))  
   
