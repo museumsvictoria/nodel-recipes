@@ -157,7 +157,6 @@ def local_action_LampsAndErrors(x = None):
       
       lampHours = list()
       for i, (time, state) in enumerate(p.get_lamps()):
-          print 'Lamp %d: %s (%d hours)' % (i+1, 'on' if state else 'off', time)
           lampHours.append(str(time))
           
       local_event_LampHours.emit(', '.join(lampHours))
