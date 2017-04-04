@@ -71,6 +71,7 @@ $(function() {
   // get the node name
   if (window.location.pathname.split( '/' )[1]=="nodes") node = decodeURIComponent(window.location.pathname.split( '/' )[2].replace(/\+/g, '%20'));
   if(node) {
+    convertNames();
     setEvents();
     updateLogs();
     checkReload();
@@ -94,6 +95,21 @@ var checkReload = function(){
     $('body').data('timer', setTimeout(function() { checkReload(); }, 5000));
   });
 };
+
+var convertNames = function(){
+  var eles = $("[data-event]");
+  $.each(eles, function () {
+    $(this).attr('data-event', $(this).data('event').replace(unicodematch,''));
+  });
+  var eles = $("[data-status]");
+  $.each(eles, function () {
+    $(this).attr('data-status', $(this).data('status').replace(unicodematch,''));
+  });
+  var eles = $("[data-render]");
+  $.each(eles, function () {
+    $(this).attr('data-render', $(this).data('render').replace(unicodematch,''));
+  });
+}
 
 var setEvents = function(){
   $('body').on('touchend touchcancel',':not(input)', function (e) {
@@ -246,9 +262,7 @@ var parseLog = function(log){
         $('#clock').data('time',time).text(time.format('h:mm:ss a'));
         break;
       default:
-        var eles = $("[data-event]").filter(function() {
-          return log.alias.toUpperCase() === $(this).data('event').replace(unicodematch,'').toUpperCase();
-        });
+        var eles = $("[data-event='"+log.alias+"']");
         $.each(eles, function (i, ele) {
           if($.type(log.arg)== "object") log.arg = log.arg[$(ele).data('event-arg')];
           if($(ele).hasClass('dynamic')) {
@@ -338,9 +352,7 @@ var parseLog = function(log){
               break;
           }
         });
-        var eles = $("[data-status]").filter(function() {
-          return log.alias.toUpperCase() === $(this).data('status').replace(unicodematch,'').toUpperCase();
-        });
+        var eles = $("[data-status='"+log.alias+"']");
         $.each(eles, function (i, ele) {
           var ele = $(ele);
           if(!_.isUndefined(log.arg) && !_.isUndefined(log.arg['level']) && _.isNumber(log.arg['level'])){
@@ -366,9 +378,7 @@ var parseLog = function(log){
             }
           }
         });
-        var eles = $("[data-render]").filter(function() {
-          return log.alias.toUpperCase() === $(this).data('render').replace(unicodematch,'').toUpperCase();
-        });
+        var eles = $("[data-render='"+log.alias+"']");
         $.each(eles, function (i, ele) {
           if($(ele).data('render-template')) {
             try {
