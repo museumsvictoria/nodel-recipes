@@ -6795,7 +6795,8 @@ body {
 .gap {
   margin-top: 20px;
 }
-.alert > span.label {
+.alert > span.label,
+.alert > span.link {
   float: right;
   margin-bottom: 5px;
   margin-left: 5px;
@@ -6853,7 +6854,8 @@ body {
   min-height: 55px;
   margin-bottom: 20px;
 }
-.alert-mini[data-nav] {
+.alert-mini[data-nav],
+.alert-mini span.link {
   cursor: pointer;
 }
 .nav-pills > li > a.active > span.label.label-primary {

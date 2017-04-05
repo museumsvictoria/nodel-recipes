@@ -136,7 +136,7 @@
         <xsl:value-of select="translate(@page,translate(@page,$allowedSymbols,''),'')"/>
       </xsl:attribute>
     </xsl:if>
-    <xsl:apply-templates select="swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
+    <xsl:apply-templates select="link"/><xsl:apply-templates select="swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
     </div>
   </xsl:template>
   <!-- status -->
@@ -164,6 +164,17 @@
     </span>
   </xsl:template>
   <!-- partialbadge -->
+  <!-- link -->
+  <xsl:template match="link[@node and not(@url)]">
+    <span data-link-node="{@node}" class="link glyphicon glyphicon-new-window"></span>
+  </xsl:template>
+  <xsl:template match="link[@url and not(@node)]">
+    <span data-link-url="{@url}" class="link glyphicon glyphicon-new-window"></span>
+  </xsl:template>
+  <xsl:template match="link[not(@url) and not(@node)]">
+    <span data-link-event="{../@event}" class="link glyphicon glyphicon-new-window"></span>
+  </xsl:template>
+  <!-- link -->
   <!-- panel -->
   <xsl:template match="panel">
     <div class="panel panel-default">

@@ -42,8 +42,8 @@
       </column>
       <column sm="4">
         <title>Testing status</title>
-        <status event="Status1"><badge event="Status2"/><partialbadge event="PartialSwitch"/>Example status box with badge and partialbadge</status>
-        <status event="Status2" page="Testing"><partialswitch class="btn-default" event="PartialSwitch" action="PartialSwitch"/>Example status box with a long title</status>
+        <status event="Status1"><badge event="Status2"/><link/><partialbadge event="PartialSwitch"/>Example status box with badge and partialbadge</status>
+        <status event="Status2" page="Testing"><link url="http://nodel.io"/><partialswitch class="btn-default" event="PartialSwitch" action="PartialSwitch"/>Example status box with a long title</status>
       </column>
       <column sm="2">
         <title>Meters</title>

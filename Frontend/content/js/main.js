@@ -162,9 +162,31 @@ var setEvents = function(){
       callAction(action, arg);
     }
   });
+  $('body').on('click','*[data-link-event]', function (e) {
+    e.stopPropagation(); e.preventDefault();
+    var ele = $(this);
+    var newWindow = window.open('http://'+host);
+    $.getJSON('http://'+host+'/REST/nodes/'+encodeURIComponent(node)+'/remote', function(data) {
+      if (!_.isUndefined(data['events'][$(ele).data('link-event')])) {
+        var lnode = data['events'][$(ele).data('link-event')]['node'];
+        if(lnode!==''){
+          newWindow.location = 'http://'+host+'/?filter='+lnode;
+          $.getJSON('http://'+host+'/REST/nodeURLsForNode',{'name':lnode}, function(data) {
+            if (!_.isUndefined(data[0]['address'])){
+              newWindow.location = data[0]['address'];
+            }
+          });
+        }
+      }
+    });
+  });
+  $('body').on('click','*[data-link-url]', function (e) {
+    e.stopPropagation(); e.preventDefault();
+    window.open($(this).data('link-url'));
+  });
   $('body').on('click', '*[data-nav]', function (e) {
     $('*[data-nav]').parents('li').removeClass('active');
-    $(this).parents('li').addClass('active');
+    $('*[data-nav="'+$(this).data('nav')+'"]').parents('li').addClass('active');
     $("[data-section]").hide();
     $("[data-section="+$(this).data('nav')+"]").show();
   });
