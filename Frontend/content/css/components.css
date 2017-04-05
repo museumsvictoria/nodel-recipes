@@ -6795,8 +6795,7 @@ body {
 .gap {
   margin-top: 20px;
 }
-.alert > span.label,
-.alert > span.link {
+.alert > span.label {
   float: right;
   margin-bottom: 5px;
   margin-left: 5px;
@@ -6854,8 +6853,7 @@ body {
   min-height: 55px;
   margin-bottom: 20px;
 }
-.alert-mini[data-nav],
-.alert-mini span.link {
+.alert-mini[data-nav] {
   cursor: pointer;
 }
 .nav-pills > li > a.active > span.label.label-primary {
@@ -6872,6 +6870,10 @@ body {
 }
 .btn-select > button > span:first-child {
   float: left;
+}
+.btn-outline {
+  border: 1px solid #fff;
+  border: 1px solid rgba(255, 255, 255, .7);
 }
 .meter {
   position: relative;

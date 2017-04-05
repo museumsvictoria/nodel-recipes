@@ -166,13 +166,13 @@
   <!-- partialbadge -->
   <!-- link -->
   <xsl:template match="link[@node and not(@url)]">
-    <span data-link-node="{@node}" class="link glyphicon glyphicon-new-window"></span>
+    <a href="#" class="btn btn-outline" data-link-node="{@node}"><span class="glyphicon glyphicon-new-window"></span></a>
   </xsl:template>
   <xsl:template match="link[@url and not(@node)]">
-    <span data-link-url="{@url}" class="link glyphicon glyphicon-new-window"></span>
+    <a href="#" class="btn btn-outline" data-link-url="{@url}"><span class="glyphicon glyphicon-new-window"></span></a>
   </xsl:template>
   <xsl:template match="link[not(@url) and not(@node)]">
-    <span data-link-event="{../@event}" class="link glyphicon glyphicon-new-window"></span>
+    <a href="#" class="btn btn-outline" data-link-event="{../@event}"><span class="glyphicon glyphicon-new-window"></span></a>
   </xsl:template>
   <!-- link -->
   <!-- panel -->
