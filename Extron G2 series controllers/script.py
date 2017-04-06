@@ -22,6 +22,7 @@ param_reservedPorts = Parameter({'title': 'Reserved ports', 'schema': {'type': '
         'type': 'object', 'properties': {
           'port': {'type': 'string', 'desc': 'A port number/ID e.g. "1", "2", etc.', 'order': 1},
           'nodeName': {'title': 'Node name', 'type': 'string', 'desc': 'A node name e.g. "My Site Projector 1"', 'order': 2},
+          'statusPoller': {'title': 'Status polling? (e.g. Connection Status)', 'type': 'boolean', 'order': 3}
         }}}})
 
 urlBase = ""
@@ -56,6 +57,9 @@ def main(arg = None):
     
     for reservedPortInfo in param_reservedPorts or '':
       reservedNamesByPortNum[reservedPortInfo['port']] = reservedPortInfo['nodeName']
+      
+      if reservedPortInfo.get('statusPoller'):
+        initStatusPoller(reservedPortInfo['nodeName'])
     
     # reset parse mode
     local_event_ParseMode.emit('Normal')
@@ -67,6 +71,54 @@ def main(arg = None):
     tcp.setDest('%s:23' % param_ipAddress)
     
     print 'Driver binding will occur on intial TCP connection...'
+    
+def initStatusPoller(nodeName):
+    lastContact = Event('%s Last Status Poll Feedback' % nodeName, {'group': 'Status Polling', 'order': next_seq(), 'schema': {'type': 'string'}})
+    
+    statusEvent = Event('%s Poll Status' % nodeName, {'group': 'Status Polling', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+          'level': {'type': 'integer', 'order': 1},
+          'message': {'type': 'string', 'order': 2}}}})
+    
+    remoteAction = create_remote_action('%s Status Poll' % nodeName)
+    
+    poller = Action('%s Status Poller' % nodeName, lambda arg: remoteAction.call(), {'group': 'Status Polling', 'order': next_seq()})
+    
+    # poll every 5 minutes
+    Timer(lambda: poller.call(), 5*60, 10)
+      
+    def remoteHandler(arg=None):
+      lastContact.emit(str(date_now()))
+    
+    remoteEvent = create_remote_event('%s Status Poll Feedback' % nodeName, remoteHandler)
+    
+    def diffCheck():
+      lastContactDateMillis = 0 if len(lastContact.getArg() or '') == 0 else date_parse(lastContact.getArg()).getMillis()
+      
+      if lastContact.getArg() == None:
+        statusEvent.emit({'level': 5, 'message': 'Always been missing'})
+        
+      else:
+        roughDiff = (date_now().getMillis() - lastContactDateMillis)/1000/60
+        
+        level = 2
+        
+        if roughDiff < 5:
+          level = 0
+          message = 'OK'
+        
+        elif roughDiff < 60:
+          message = 'Missing for approx. %s mins' % roughDiff
+        
+        elif roughDiff < (60*24):
+          message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+        
+        else:
+          message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
+        
+        statusEvent.emit({'level': level, 'message': message})
+    
+    # check every 8 minutes
+    Timer(diffCheck, 8*60, 10)
     
 def bindEverything():
     print 'Extracted IR commands'
