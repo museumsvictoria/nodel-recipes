@@ -433,11 +433,11 @@ def statusCheck():
     local_event_Status.emit({'level': 2, 'message': message})
     return
     
-  # it may be contactable on the network, but is it checking in (landing)
+  # it may be contactable on the network, but is it checking in (landing) (if configured to do so i.e. binding is set)
   
   diff = (system_clock() - lastLanded[0])/1000.0
   
-  if diff > 5*60: # arbitrary 5 mins
+  if lookup_remote_event('LandingStatus') != None and diff > 5*60: # arbitrary 5 mins
     previousContactValue = (local_event_LandingStatus.getArg() or {}).get('lastLanded')
     
     if previousContactValue == None:
@@ -461,4 +461,3 @@ status_timer = Timer(statusCheck, status_check_interval)
 def log(msg):
   if local_event_DebugShowLogging.getArg():
     print msg
-    
