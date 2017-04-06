@@ -1,4 +1,4 @@
-# Copyright (c) 2014 Museum Victoria
+# Copyright (c) 2017 Museum Victoria
 # This software is released under the MIT license (see license.txt for details)
 
 import pjlink
@@ -363,7 +363,7 @@ def statusCheck():
   diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
   now = date_now()
   
-  # the list of status objects
+  # the list of status items as (category, statusInfo) tuples
   statuses = list()
   
   if diff > status_check_interval+15:
@@ -375,9 +375,14 @@ def statusCheck():
     else:
       previousContact = date_parse(previousContactValue)
       roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
-      message = 'Off the network for approx. %s minutes' % roughDiff
+      if roughDiff < 60:
+        message = 'Missing for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24): # less than a day, concise time is useful
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+      elif roughDiff < (60*24): # more than a day, concise date and time
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
       
-    local_event_Status.emit({'level': 0, 'message': 'OK'})
+    local_event_Status.emit({'level': 2, 'message': message})
     
     # (is offline so no point checking any other statuses)
     
@@ -399,9 +404,9 @@ def statusCheck():
   
   # check lamp hours
   if lampUseHours > lampUseHoursThreshold:
-    statuses.append(('Lamp usage', {'level': 1, 
-                             'message': 'Lamp usage is %s hours which is %s above the replacement threshold of %s. It may need replacement.' % 
-                               (lampUseHours, lampUseHours-lampUseHoursThreshold, lampUseHoursThreshold)}))
+    statuses.append(('Lamp usage', 
+                    {'level': 1, 'message': 'Lamp usage is %s hours which is %s above the replacement threshold of %s. It may need replacement.' % 
+                                 (lampUseHours, lampUseHours-lampUseHoursThreshold, lampUseHoursThreshold)}))
     
   # aggregate the statuses
   aggregateLevel = 0
