@@ -9,15 +9,25 @@ import xml.etree.ElementTree as ET
 # aborts after parse failure. Used for scrict testing; should be False in production
 strictParse = True
 
-param_ipaddress = Parameter({'title': 'IP address', "desc": "The IP address of the Extron G2 series unit.", "schema": {"type": "string"} })
+param_ipAddress = Parameter({'title': 'IP address', "desc": "The IP address of the Extron G2 series unit.", "schema": {"type": "string"} })
 
 # the standard file which should contain the list of configured devices
-controlSummaryPath = 'gc2/gv-ctlsum_1_user.xml'
+DEFAULT_CONTROLSUMMARYPATH = 'gc2/gv-ctlsum_1.xml' 
+controlSummaryPath = DEFAULT_CONTROLSUMMARYPATH
+
+param_controlSummaryFile = Parameter({'title': 'Control summary file (XML)', 'desc': 'This file changes dynamically depending on the GC3 software. Make sure it exists using a web-browser', 
+                                      'schema': {'type': 'string', 'hint': DEFAULT_CONTROLSUMMARYPATH + ' (this needs to be confirmed)'}})
+
+param_reservedPorts = Parameter({'title': 'Reserved ports', 'schema': {'type': 'array', 'items': {
+        'type': 'object', 'properties': {
+          'port': {'type': 'string', 'desc': 'A port number/ID e.g. "1", "2", etc.', 'order': 1},
+          'nodeName': {'title': 'Node name', 'type': 'string', 'desc': 'A node name e.g. "My Site Projector 1"', 'order': 2},
+        }}}})
 
 urlBase = ""
 
-# TODO: convert this to a param:
-reservedNamesByPortNum = {'1': 'Left Wall', '3': 'Interactive', '4': 'Right Wall', '5': 'Rear Left', '6': 'Rear Right', '7': 'Control'}
+# initialised in main
+reservedNamesByPortNum = {}
 
 ports = set()
 
@@ -29,20 +39,32 @@ local_event_ParseMode = LocalEvent({ 'title': 'Parse mode', 'desc': 'The parsing
                                     'schema': {'type': 'string'}})
 
 def main(arg = None):
-    if param_ipaddress == None:
+    if param_ipAddress == None:
         console.warn('Driver not started: No IP address has been specified.')
         return
         
     print 'Extron G2 series driver started.'
     
+    # use the control summary file
+    if len(param_controlSummaryFile or '') > 0:
+      global controlSummaryPath
+      controlSummaryPath = param_controlSummaryFile      
+      
+    # use the reserved port info
+    if len(param_reservedPorts or '') == 0:
+      console.warn('No reserved ports have been configured (ignore this message if intentional)')
+    
+    for reservedPortInfo in param_reservedPorts or '':
+      reservedNamesByPortNum[reservedPortInfo['port']] = reservedPortInfo['nodeName']
+    
     # reset parse mode
     local_event_ParseMode.emit('Normal')
     
     global urlBase
-    urlBase = 'http://' + str(param_ipaddress)
+    urlBase = 'http://' + str(param_ipAddress)
     
-    # (can only set the destination when 'param_ipaddress' has been injected)
-    tcp.setDest('%s:23' % param_ipaddress)
+    # (can only set the destination when 'param_ipAddress' has been injected)
+    tcp.setDest('%s:23' % param_ipAddress)
     
     print 'Driver binding will occur on intial TCP connection...'
     
@@ -60,8 +82,8 @@ def bindEverything():
 def unbindEverything():
     for port in ports:
         if port.subnode:
-        	print 'Releasing node "%s"' % port.name
-        	releaseNode(port.subnode)
+          print 'Releasing node "%s"' % port.name
+          releaseNode(port.subnode)
         
     ports.clear()
     _uniqueNames.clear()
@@ -110,6 +132,8 @@ def tcp_timeout():
   
 def tcp_received(data):
     local_event_TCPReceived.emit(data)
+    
+    lastReceive[0] = system_clock()
     
     parseState = local_event_ParseMode.getArg()
     if parseState == 'Listing files':
@@ -230,7 +254,7 @@ class ExtronPort:
         fields = list()
         
         if heading is None:
-        	self.warnings.append("'heading' was not found in <group>")
+          self.warnings.append("'heading' was not found in <group>")
         else:
             fields.append('heading:"%s"' % heading)
 
@@ -246,7 +270,7 @@ class ExtronPort:
         reservedName = reservedNamesByPortNum.get(str(portNumber))
         
         uniqueName = getUniqueName(autoName if reservedName is None else reservedName)
-		        
+        
         self.name = uniqueName
         self.subnode = Node(self.name)            
           
@@ -560,7 +584,7 @@ class ExtronPort:
     # <command label="Lamp Usage" control-rowlimit="3" command-priority="5" id="3" show="1">
     #   <item current="W16,2,625LE|" type="text" compare="14" item-priority="1" maxlamp="2000">Value</item>
     # </command>
-	# (or)
+    # (or)
     # <command label="Filter Usage" control-rowlimit="3" command-priority="6" id="127" show="1">
     #   <item current="W16,2,633LE|" type="text" compare="14" item-priority="1">Value</item>
     # </command>
@@ -577,7 +601,7 @@ class ExtronPort:
                                                       'order': nextSeqNum(),
                                                       'schema' : STRING_SCHEMA })
         retrieve_cmd = item.attrib['current']
-		
+        
         # don't need to register any global feedback because it comes back synchronously and can
         # be emitted straight away
         
@@ -607,12 +631,12 @@ def parseEventKeyFromRequest(cmd, continuous = False):
             key = '%s,%s,%s' % (port, category, eventId)
             return key
         else:
-       	    state = int(parts[3][0:-3]) # drop '1LE|'
+            state = int(parts[3][0:-3]) # drop '1LE|'
             key = '%s,%s,%s,%s' % (port, category, eventId, state)
             return key
       
     else:
-    	return None
+        return None
 
 def registerGlobalEvent(eventInfo, continuous = False):
     "Registers a callback in the callback map"
@@ -687,7 +711,7 @@ def handleVariableStateFeedback(data, event):
         value = int(feedback[0])
         
     elif len(feedback) == 4:
-      	# leave to contextual feedback handle
+        # leave to contextual feedback handle
         # value = int(feedback[FB_VALUE])
         return
         
@@ -895,8 +919,9 @@ def extractPortURLs(baseURL, filename):
     baseURL: http://192.168.178.205
     filename: gc2/gv-ctlsum_1_user.xml
     '''
-    
-    rootXML = getURL(baseURL + '/' + filename)
+    dest = baseURL + '/' + filename
+    console.info('Retrieving %s' % dest)
+    rootXML = getURL(dest)
         
     root = ET.fromstring(rootXML)
     
@@ -935,7 +960,7 @@ def nextSeqNum():
 _uniqueNames = set()
   
 def getUniqueName(name):
-    'Generates a unique name, e.g. NEC, NEC1, NEC2, etc.
+    'Generates a unique name, e.g. NEC, NEC1, NEC2, etc.'
     key = name
     counter = 0
     while key in _uniqueNames:
@@ -949,3 +974,47 @@ STRING_SCHEMA = { "name" : "A name",
                   "description": "A description", 
                   "title" : "Value", 
                   "type" : "string" }
+
+# status ---
+
+local_event_Status = LocalEvent({'title': 'Status', 'group': 'Status', 'order': 9990, "schema": { 'title': 'Status', 'type': 'object', 'properties': {
+        'level': {'title': 'Level', 'order': next_seq(), 'type': 'integer'},
+        'message': {'title': 'Message', 'order': next_seq(), 'type': 'string'}
+    } } })
+
+# for status checks
+
+lastReceive = [0]
+
+# roughly, the last contact  
+local_event_LastContactDetect = LocalEvent({'group': 'Status', 'title': 'Last contact detect', 'schema': {'type': 'string'}})
+  
+def statusCheck():
+  diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
+  now = date_now()
+  
+  if diff > status_check_interval+15:
+    previousContactValue = local_event_LastContactDetect.getArg()
+    
+    if previousContactValue == None:
+      message = 'Always been missing.'
+      
+    else:
+      previousContact = date_parse(previousContactValue)
+      roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
+      if roughDiff < 60:
+        message = 'Missing for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
+      
+    local_event_Status.emit({'level': 2, 'message': message})
+    
+  else:
+    local_event_LastContactDetect.emit(str(now))
+    local_event_Status.emit({'level': 0, 'message': 'OK'}) 
+  
+status_check_interval = 75
+status_timer = Timer(statusCheck, status_check_interval)
+
