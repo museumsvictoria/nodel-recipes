@@ -375,11 +375,11 @@ def statusCheck():
     else:
       previousContact = date_parse(previousContactValue)
       roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
-      if roughDiff < 60:
+      if roughDiff < 60: # less than an hour, show just minutes
         message = 'Missing for approx. %s mins' % roughDiff
       elif roughDiff < (60*24): # less than a day, concise time is useful
         message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
-      elif roughDiff < (60*24): # more than a day, concise date and time
+      else: # more than a day, concise date and time
         message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
       
     local_event_Status.emit({'level': 2, 'message': message})
