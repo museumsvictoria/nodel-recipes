@@ -27,11 +27,6 @@ param_coilBanks = Parameter({ 'title': 'Custom coil banks', 'order': next_seq(),
           'readOnly': {'type': 'boolean', 'title': 'Read-only?', 'order': next_seq()}
     } } } })
 
-local_event_Status = LocalEvent({'title': 'Status', 'order': 9990, "schema": { 'title': 'Status', 'type': 'object', 'properties': {
-        'level': {'title': 'Level', 'order': next_seq(), 'type': 'integer'},
-        'message': {'title': 'Message', 'order': next_seq(), 'type': 'string'}
-    } } })
-
 local_event_SyncErrors = LocalEvent({'title': 'Sync errors', 'group': 'Status', 'schema': {'type': 'object', 'title': 'Details', 'properties': {
         'count': {'type': 'integer', 'title': 'Count', 'order': 1},
 		'last': {'type': 'string', 'title': 'Last occurrence', 'order': 2}
@@ -139,8 +134,6 @@ def connected():
   # don't let commands rush through
   tcp.clearQueue()
   
-  local_event_Status.emit({'level': 0, 'message': 'OK'})
-  
   # start all the poller
   seqNum = sequence[0]
   
@@ -150,6 +143,8 @@ def connected():
     f(seqNum)
   
 def received(data):
+  lastReceive[0] = system_clock()
+
   if local_event_ShowLog.getArg():
     print 'RECV: [%s]' % data.encode('hex')
   
@@ -293,4 +288,46 @@ def safeGet(m, key, default=None):
     return default
   
   return v
+
   
+# status  ----
+
+local_event_Status = LocalEvent({'group': 'Status', 'order': 9990, "schema": { 'title': 'Status', 'type': 'object', 'properties': {
+        'level': {'title': 'Level', 'order': next_seq(), 'type': 'integer'},
+        'message': {'title': 'Message', 'order': next_seq(), 'type': 'string'}
+    } } })
+
+# for status checks
+lastReceive = [0]
+
+# roughly, the last contact  
+local_event_LastContactDetect = LocalEvent({'group': 'Status', 'title': 'Last contact detect', 'schema': {'type': 'string'}})
+  
+def statusCheck():
+  diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
+  now = date_now()
+  
+  if diff > status_check_interval+15:
+    previousContactValue = local_event_LastContactDetect.getArg()
+    
+    if previousContactValue == None:
+      message = 'Always been missing.'
+      
+    else:
+      previousContact = date_parse(previousContactValue)
+      roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
+      if roughDiff < 60:
+        message = 'Missing for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
+      
+    local_event_Status.emit({'level': 2, 'message': message})
+    
+  else:
+    local_event_LastContactDetect.emit(str(now))
+    local_event_Status.emit({'level': 0, 'message': 'OK'})
+    
+status_check_interval = 75
+status_timer = Timer(statusCheck, status_check_interval)
