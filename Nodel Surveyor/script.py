@@ -64,6 +64,9 @@ from java.net import URLEncoder
 # For loose matching
 from org.nodel import SimpleName 
 
+# To determine recipes folder for this host
+from org.nodel.jyhost import NodelHost
+
 # For non-Python exception details
 from java.lang import Exception as JavaException 
 
@@ -75,6 +78,9 @@ from org.nodel.io import Stream
 
 # to determine working directory
 import os 
+
+CURRENT_RECIPES = NodelHost.instance().recipes().getRoot()
+param_RecipesFolder = Parameter({'title': 'Recipes folder', 'schema': {'type': 'string', 'hint': CURRENT_RECIPES.getAbsolutePath()}})
 
 param_ScriptTypes = Parameter({'title': 'Custom script types', 'schema': {'type': 'array', 'items': {
         'type': 'object', 'properties': {
@@ -90,28 +96,37 @@ def main():
   for scriptTypeInfo in param_ScriptTypes or []:
     scriptTypes_bySignature[scriptTypeInfo['signature']] = scriptTypeInfo
     
-  items = load_existing_scripts()
+  if len(param_RecipesFolder or '') == 0:
+    recipesFolder = CURRENT_RECIPES
+  else:
+    recipesFolder = File(param_RecipesFolder)
+  
+  if not recipesFolder.exists():
+    console.warn("NOTE: No 'recipes' folder exists; you might want to create and populate the folder with your recipes to help detection.")
+    
+  elif recipesFolder.listFiles() in [None, 0]:
+    console.warn("NOTE: No recipes exist in the 'recipes' folder; you might want to populate the folder with your recipes to help detection.")
+    
+  items = load_existing_scripts(recipesFolder)
   console.info('loaded %s scripts' % len(items))
   for item in items:
     scriptTypes_bySignature[item['signature']] = {'type': item['path'], 'signature': item['signature']}
   
-  global udp
-  udp = UDP(source='0.0.0.0:0', dest='224.0.0.252:5354', ready=udp_ready, received=udp_received, 
-            # intf='136.154.24.165' - 
-           )
-  
-def load_existing_scripts():
+def load_existing_scripts(folder):
   items = list() # e.g. [{'path':       'recipes/pjlink', 
                  #        'scriptFile':  PATH_OF_SCRIPT,
                  #        'signature':   ___,
                  #       }]
-  
-  traverse('', File(os.getcwd(), 'recipes'), items)
+  traverse('', folder, items)
   
   return items
   
 def traverse(path, pathFile, items):
-  for f in pathFile.listFiles():
+  fileList = pathFile.listFiles()
+  if fileList == None:
+    return
+  
+  for f in fileList:
     if f.isHidden():
       continue
       
@@ -175,6 +190,11 @@ def udp_received(src, data):
       continue
       
     nodeAddressesByName[SimpleName(nodeName)] = httpAddress
+    
+# (can now use udp callbacks)
+udp = UDP(source='0.0.0.0:0', dest='224.0.0.252:5354', ready=udp_ready, received=udp_received, 
+          # intf='136.154.24.165' - 
+          )
 
 def local_action_Probe(arg=None):
   '''{"title": "1. Probe", "group": "Operations", "order": 1}'''
