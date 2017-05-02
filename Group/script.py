@@ -107,7 +107,7 @@ def initSignal(signalName, mode, states):
       for memberName in membersBySignal[signalName]:
         remoteAction = lookup_remote_action('Member %s %s' % (memberName, signalName))
         if remoteAction != None:
-          remoteAction.call(state)
+          remoteAction.call(complexArg)
           
   # create normal action (propagates)
   Action('%s' % signalName, lambda arg: handler({'state': arg}), {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': states}})
@@ -196,7 +196,7 @@ def initStatusSupport(name):
     if activeSuppression:
       aggregateMessage = '%s (*)' % aggregateMessage
       
-    selfStatusSignal.emitIfDifferent({'level': aggregateLevel, 'message': aggregateMessage})
+    selfStatusSignal.emit({'level': aggregateLevel, 'message': aggregateMessage})
       
   memberStatusSignal.addEmitHandler(lambda arg: aggregateMemberStatus())
   memberStatusSuppressedSignal.addEmitHandler(lambda arg: aggregateMemberStatus())
