@@ -1,409 +1,324 @@
-'''See manual at http://www.alcorn.com/library/manuals/man_dvm8500.pdf'''
+'No direct network port available. Link to manual (see page 71) - http://www.lg.com/us/commercial/documents/MAN_SE3B_SE3KB_SL5B.pdf'
+
+DEFAULT_ADMINPORT = 9761
+DEFAULT_BROADCASTIP = '192.168.1.255'
+
+# general device status
+local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'type': 'object', 'title': 'Status', 'properties': {
+        'level': {'type': 'integer', 'title': 'Value'},
+        'message': {'type': 'string', 'title': 'String'}
+      }}})
+
+DEFAULT_SET_ID = '001' # sometime this is 01
+
+param_ipAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string'}})
+param_setID = Parameter({'title': 'Set ID', 'schema': {'type': 'string', 'hint': DEFAULT_SET_ID}})
+param_broadcastIPAddress = Parameter({'title': 'Broadcast IP address', 'schema': {'type': 'string', 'hint': DEFAULT_BROADCASTIP}})
+param_adminPort = Parameter({'title': 'Admin port', 'schema': {'type': 'integer', 'hint': DEFAULT_ADMINPORT}})
+param_macAddress = Parameter({'title': 'MAC address', 'schema': {'type': 'string'}})
 
 local_event_DebugShowLogging = LocalEvent({'group': 'Debug', 'schema': {'type': 'boolean'}})
 
-UDP_PORT = 2638
+wol = UDP( # dest='10.65.255.255:9999' % , # set after main
+          sent=lambda arg: console.info('wol: sent [%s]' % arg),
+          ready=lambda: console.info('wol: ready'), received=lambda arg: console.info('wol: received [%s]'))
 
-param_ipAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string'}})
+local_event_DebugShowLogging = LocalEvent({'group': 'Debug', 'order': 9999, 'schema': {'type': 'boolean'}})
 
-local_event_DeviceStatus = LocalEvent({'schema': {'type': 'object', 'title': '...', 'properties': {
-      'level': {'type': 'integer', 'title': 'Level', 'order': 1},
-      'message': {'type': 'string', 'title': 'Message', 'order': 2}}}})
+POWER_STATES = ['On', 'Input Waiting', 'Unknown', 'Turning On', 'Turning Off', 'Off']
+local_event_Power = LocalEvent({'title': 'Power', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': POWER_STATES}})
+local_event_DesiredPower = LocalEvent({'title': 'Desired Power', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}}) 
+local_event_LastPowerRequest = LocalEvent({'title': 'Last request', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string'}}) 
 
-# this needs some special filtering to deal with file lists on multiple UDP packets:
-# e.g. RECV: "VID00001.MPG\r\n"
-#      RECV  "PLY00000.LST\r\n"
-# NOTE: only these packets have a '\n' at the end.
+INPUTS_TABLE = [ ('RGB', '60'),
+                 ('DVI-D (PC)', '70'),
+                 ('DVI-D (DTV)', '80'),
+                 ('HDMI (HDMI1) (DTV)', '90'),
+                 ('HDMI (HDMI1) (PC)', 'A0') ]
+INPUTS_STR = [row[0] for row in INPUTS_TABLE]
+INPUTS_STR.append('Unknown')
 
-listBuffer = list()
+INPUTNAMES_byCode = {}
+for row in INPUTS_TABLE:
+  INPUTNAMES_byCode[row[1]] = row[0]
+  
+INPUTCODES_byName = {}
+for row in INPUTS_TABLE:
+  INPUTCODES_byName[row[0]] = row[1]
 
-local_event_LastContact = LocalEvent({'group': 'Status', 'type': 'string'})
+# local_event_Input = LocalEvent({'title': 'Input', 'group': 'Input', 'order': next_seq(), 'schema': {'type': 'string', 'enum': INPUTS_STR}})
 
-# will set status as missing if been more than 10s since last contact
-def isOnline_handler():
-  if date_now().getMillis() - date_parse(local_event_LastContact.getArg() or ZERO_DATE_STR).getMillis() < 45000:
-    local_event_DeviceStatus.emit({'level': 0, 'message': 'OK'})
+local_event_InputCode = LocalEvent({'title': 'Actual', 'group': 'Input Code', 'order': next_seq(), 'schema': {'type': 'string'}})
+local_event_DesiredInputCode = LocalEvent({'title': 'Desired', 'group': 'Input Code', 'order': next_seq(), 'schema': {'type': 'string'}})
+local_event_LastInputCodeRequest = LocalEvent({'title': 'Last request', 'group': 'Input Code', 'order': next_seq(), 'schema': {'type': 'string'}}) 
+
+ZERO_DATE_STR = str(date_instant(0))
+
+setID = DEFAULT_SET_ID
+
+def powerHandler(state=''):
+  if state.lower() == 'on':
+    local_event_DesiredPower.emit('On')
+    
+  elif state.lower() == 'off':
+    local_event_DesiredPower.emit('Off')
+    
   else:
-    local_event_DeviceStatus.emit({'level': 1, 'message': 'Missing'})
-    
-timer_isOnline = Timer(isOnline_handler, 45.0) # check every 45s
-
-def udp_received(src, data):
-  if local_event_DebugShowLogging.getArg():
-    console.log('udp RECV from %s [%s]' % (src, data.replace('\r', '\\r').replace('\n', '\\n')))
-    
-  now = date_now()
-  local_event_LastContact.emit(str(now))
+    console.warn('Unknown power state specified, must be On or Off')
+    return
   
-  if data.startswith('---'): # end of the file list
-    queue.handle('\r'.join(listBuffer))
-    del listBuffer[:]
+  local_event_LastPowerRequest.emit(str(date_now()))
+  
+  timer_powerSyncer.setDelay(0.3)
+
+Action('Power', powerHandler, {'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+def setPowerState(state):
+  log('setPowerState(%s) called' % state)
+  
+  if state: # (turn on)
+    # TCP unlikely to be working but...
+    tcp.send('ka %s %s' % (setID, '01'))
+    
+    # try WOL too
+    lookup_local_action("Send WOL Packet").call()
+    
+  else: # (turn off)
+    tcp.send('ka %s %s' % (setID, '00'))
+      
+    
+def getPowerState():
+  log('getPowerState called')
+  
+  # e.g. 'a 01 OK01x'
+
+  def handleData(data):
+    if data == '01':
+      local_event_Power.emit('On')
+    elif data == '00':
+      local_event_Power.emit('Off')
+    else:
+      local_event_Power.emit('Off')
+
+  tcp.request('ka %s ff\r' % setID, 
+              lambda resp: checkHeaderAndHandleData(resp, 'a', handleData))
+  
+timer_powerPoller = Timer(getPowerState, 15.0)  
+  
+def syncPower():
+  log('syncPower called')
+  
+  last = date_parse(local_event_LastPowerRequest.getArg() or ZERO_DATE_STR)
+  if date_now().getMillis() - last.getMillis() > 60000:
+    return
+  
+  desired = local_event_DesiredPower.getArg()
+  actual = local_event_Power.getArg()
+  if desired == actual:
+    # nothing to do
+    timer_powerSyncer.setInterval(120)
+    return
+  
+  if desired == 'On':
+    setPowerState(True)
+  elif desired == 'Off':
+    setPowerState(False)
+    
+  timer_powerSyncer.setDelay(15.0)  
+
+timer_powerSyncer = Timer(syncPower, 60.0)
+
+
+
+
+def inputCodeHandler(code):
+  local_event_DesiredInputCode.emit(code)
+  local_event_LastInputCodeRequest.emit(str(date_now()))
+  
+  timer_inputCodeSyncer.setDelay(0.3)
+  
+Action('Input Code', inputCodeHandler, {'group': 'Input Code', 'schema': {'type': 'string'}})
+
+def handleInputCodeResp(arg):
+  local_event_InputCode.emit(int(arg))
+    
+def setInputCode(code):
+  log('setInputCode(%s) called' % code)
+  
+  tcp.send('xb %s %s' % (setID, code))
+  
+    
+def getInputCode():
+  if local_event_Power.getArg() != 'On':
+    console.log('Power is not on; ignoring input get request')
+    return
+  
+  getInputCodeNow()
+    
+def getInputCodeNow():
+  log('getInputCodeNow called')
+  
+  # e.g. resp: 'b 01 OK90'
+
+  def handleData(data):
+    local_event_InputCode.emit(data)
+
+  tcp.request('xb %s ff\r' % setID, 
+              lambda resp: checkHeaderAndHandleData(resp, 'b', handleData))
+  
+timer_inputCodePoller = Timer(getInputCode, 15.0, 20.0)  
+  
+def syncInputCode():
+  log('syncInputCode called')
+  last = date_parse(local_event_LastInputCodeRequest.getArg() or ZERO_DATE_STR)
+  if date_now().getMillis() - last.getMillis() > 60000:
+    return
+  
+  desired = local_event_DesiredInputCode.getArg()
+  actual = local_event_InputCode.getArg()
+  if desired == actual:
+    # nothing to do
+    timer_inputCodeSyncer.setInterval(120)
+    return
+  
+  if local_event_Power.getArg() != 'On':
+    console.log('Power is not on; ignoring input set request')
+    return
+  
+  setInputCode(desired)
+    
+  timer_inputCodeSyncer.setDelay(15.0)  
+
+timer_inputCodeSyncer = Timer(syncInputCode, 60.0)
+
+
+# LG protocol specific
+def checkHeaderAndHandleData(resp, cmdChar, dataHandler):
+  # e.g. 'a 01 OK01x'
+  
+  # Would like to check for x but delimeters are filtered out
+  # if resp[-1:]  != 'x':
+  #   console.warn('End-of-message delimiter "x" was missing')
+  #   return
+  
+  if len(resp) < 2:
+    console.warn('Response was missing or too small')
+    return
+  
+  if resp[0] != cmdChar:
+    console.warn('Response did not match expected command (expected "%s", got "%s")' % (cmdChar, resp[0]))
     return
     
-  elif data.endswith('\n'): # is part of a list
-
-    if len(listBuffer) > 256: # ensure no unbounded leak
-      return
-
-    listBuffer.append(data.strip()) # add to list and consume
+  if not 'OK' in resp:
+    console.warn('Response is not positive acknowledgement (no "OK")')
     return
-    
   
-  # drop the 'src' and sanitise the data  
-  queue.handle(data.strip())
+  # get the data between the OK and the 'x'
+  dataPart = resp[resp.find('OK')+2:]
   
-def udp_sent(data):
+  if dataHandler:
+    dataHandler(dataPart)
+
+
+# TCP related
+
+def connected():
   if local_event_DebugShowLogging.getArg():
-    console.log('udp SENT [%s]' % data)
-
-udp = UDP(sent=udp_sent, # 'dest' set in 'main'
-          ready=lambda: console.info('udp READY'), 
-          received=udp_received)
-
+    console.info('CONNECTED')
+      
+def disconnected():
+  log('DISCONNECTED')
+  
+  local_event_Power.emit('Unknown')
+  
 def timeout():
-  # local_event_DeviceStatus.emit('Missing')
-  pass
+  log('timeout')
+  
+  # flush the request queue
+  tcp.clearQueue()
+  
+  local_event_Power.emit('Unknown')
+  
+def received(line):
+  lastReceive[0] = system_clock()
+  
+  log('RECV: [%s]' % line)
+    
+def sent(line):
+  log('SENT: [%s]' % line)
 
-queue = request_queue(timeout=timeout)
+# maintain a TCP connection
+tcp = TCP(connected=connected, disconnected=disconnected, 
+          received=received, sent=sent, timeout=timeout,
+          receiveDelimiters='\r\nx', # notice the 'x' at the end of all responses
+          sendDelimiters='\r')
 
 def main(arg = None):
-  print 'Nodel script started.'
+  console.info('Script started')
   
-  udp.setDest('%s:%s' % (param_ipAddress, UDP_PORT))
+  global setID
+  if param_setID != None and len(param_setID) > 0:
+    setID = param_setID
   
-# handles responses to simple requests
-def handleReqResp(name, resp, success=None):
-  if resp=='R':
-    console.info('(%s success)' % name)
+  dest = '%s:%s' % (param_ipAddress, param_adminPort or DEFAULT_ADMINPORT)
+  console.log('Connecting to %s...' % dest)
+  tcp.setDest(dest)
+  
+  # set WOL dest which can only be done during 'main'
+  wol.setDest('%s:9999' % param_broadcastIPAddress)
+  
+def log(data):
+  if local_event_DebugShowLogging.getArg():
+    console.info(data)
+
+def local_action_SendWOLPacket(arg=None):
+  """{"title": "Send", "group": "Wake-on-LAN"}"""
+  console.info('SendWOLPacket')
+  
+  hw_addr = param_macAddress.replace('-', '').replace(':', '').decode('hex')
+  macpck = '\xff' * 6 + hw_addr * 16
+  wol.send(macpck)
+
+# for status checks
+lastReceive = [0]
+
+# roughly, the last contact  
+local_event_LastContactDetect = LocalEvent({'group': 'Status', 'title': 'Last contact detect', 'schema': {'type': 'string'}})
+  
+def statusCheck():
+  diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
+  now = date_now()
+  
+  if diff > status_check_interval+15:
+    # these panels often turn off their network on power off
+    if local_event_Power.getArg() == 'Off':
+      local_event_Status.emit({'level': 0, 'message': 'Not contactable but powered off'})
+      return
     
-    if success:
-      success()
+    previousContactValue = local_event_LastContactDetect.getArg()
+    
+    if previousContactValue == None:
+      message = 'Always been missing.'
       
+    else:
+      previousContact = date_parse(previousContactValue)
+      roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
+      if roughDiff < 60:
+        message = 'Missing for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
+      
+    local_event_Status.emit({'level': 2, 'message': message})
+    
   else:
-    console.warn('(%s failure [resp: %s])' % (name, ERROR_CODE_BY_VALUE.get(resp, resp)))
+    local_event_LastContactDetect.emit(str(now))
+    local_event_Status.emit({'level': 0, 'message': 'OK'})
     
-  # prod the status update (100ms)
-  print 'Prodding timer...'
-  timer_status.setDelay(0.1)    
+status_check_interval = 75
+status_timer = Timer(statusCheck, status_check_interval)
   
-# ---- Command Error Codes (page 60) ----
-ERROR_CODE_TABLE = [ ('E01', 'Hardware Error'),
-                     ('E04', 'Feature Not Available'),
-                     ('E06', 'Invalid Argument'),
-                     ('E12', 'Search Error') ]
-ERROR_CODE_BY_VALUE = {}
-for row in ERROR_CODE_TABLE:
-  ERROR_CODE_BY_VALUE[row[0]] = row[1]
-  
-ERROR_CODES = [ row[1] for row in ERROR_CODE_TABLE ]
-
-
-# ---- 'Status' (page 50) ----
-STATUS_CODE_TABLE= [ ('P00', 'Error'), # (resp, code)
-                     ('P01', 'Stopped'),
-                     ('P04', 'Playing'),
-                     ('P05', 'Stilled/Searched'),
-                     ('P06', 'Paused')]
-STATUS_CODES_BY_RESP = {}
-for row in STATUS_CODE_TABLE:
-  STATUS_CODES_BY_RESP[row[0]] = row[1]
-  
-STATUS_CODES = [ row[1] for row in STATUS_CODE_TABLE ]
-STATUS_CODES.append('Unknown')
-STATUS_CODES.append('Missing')
-  
-# --- Timer: Status and Clip requests ---
-
-def status_timerHandler():
-  lookup_local_action('request status').call()
-  lookup_local_action('request clip').call()
-
-# refresh the status every 10 seconds
-timer_status = Timer(status_timerHandler, 10)
-
-# --- Timer: Long poll for files listing ---
-
-def longPoll_timerHandler():
-  lookup_local_action('list files').call()
-  lookup_local_action('request audio volume').call()  
-
-timer_longPoll = Timer(longPoll_timerHandler, 30)
-
-# ---- 'Status Request' (page 50) ----
-local_event_Status = LocalEvent({'schema': { 'type': 'string', 'enum': STATUS_CODES }})
-
-def local_action_RequestStatus(arg=None):
-  queue.request(lambda: udp.send('?P\r'), 
-                lambda arg: local_event_Status.emit(STATUS_CODES_BY_RESP.get(arg, 'Unknown')))
-
-# ---- 'Clip Request' (page 51) ----
-
-local_event_Clip = LocalEvent({'group': 'Status', 'schema': { 'type': 'string'}})
-
-def local_action_RequestClip(arg=None):
-  '''{"group": "Status"}'''
-  queue.request(lambda: udp.send('?C\r'), 
-                lambda arg: local_event_Clip.emit(arg))
-  
-# ---- 'List Files' (page 51) ----
-
-local_event_FileList = LocalEvent({'title': 'File List', 'group': 'Status', 'schema': { 
-    'type': 'array', 'title': 'Files', 'items': {
-        'type': 'object', 'properties': {
-          'filename': {'title': 'Filename', 'type': 'string'}
-    } } }})
-
-def local_action_ListFiles(arg=None):
-  '''{"group": "Status"}'''
-  def handler(resp):
-    rawList = resp.split('\r')
-    
-    fileList = list()
-    
-    for raw in [x.strip() for x in rawList]:
-      if raw == '':
-        continue
-        
-      fileList.append({'filename': raw})
-    
-    local_event_FileList.emit(fileList)
-  
-  queue.request(lambda: udp.send('?D\r'), handler)  
-  
-# ---- (end)
-
-group = 'Playback'  
-  
-# ---- 'Search file' (page 46) ----
-
-def searchFile(fileOrNumber):
-  queue.request(lambda: udp.send('%sSE\r' % fileOrNumber),
-                lambda resp: handleReqResp('SearchFile', resp))
-
-Action('Search File by Number', 
-       lambda arg: searchFile(arg), 
-       { 'title': 'Search File by Number', 'group': group + ' - Search File', 'order': next_seq(), 
-         'desc': 'Searches (loads) content given a file number', 'schema': {'type': 'integer'} })
-
-Action('Search File by Filename', 
-       lambda arg: searchFile('"%s"' % arg), 
-       { 'title': 'Search File by Filename', 'group': group + ' - Search File', 'order': next_seq(), 
-         'desc': 'Searches (loads) content given filename', 'schema': {'type': 'string'} })
-       
-       
-# ---- 'Play' (page 47) ----
-def bindAction():
-  name = 'Play'
-  
-  def play():
-    queue.request(lambda: udp.send('PL\r'),
-                  lambda resp: handleReqResp(name, resp))
-
-  Action(name, lambda arg: play(), 
-         { 'title': name, 'group': group, 'order': next_seq(), 
-           'desc': 'Plays after a Search command has been used' })
-
-bindAction()
-
-# ---- 'Play File' (page 47) ----
-def bindAction():
-  name = 'Play File'
-  
-  def handler(numberOrFilename):
-    queue.request(lambda: udp.send('%sPL\r' % numberOrFilename),
-                  lambda resp: handleReqResp(name, resp))
-
-  Action('Play File by Number', lambda arg: handler(arg), 
-         { 'title': 'Play File by Number', 'group': group + ' - ' + name, 'order': next_seq(), 'schema': {'type': 'integer'} })
-  
-  Action('Play File by Filename', lambda arg: handler('"%s"' % arg), 
-         { 'title': 'Play File by Filename', 'group': group + ' - ' + name, 'order': next_seq(), 'schema': {'type': 'string'} })
-
-bindAction()
-
-# ---- 'Play File' (page 4.87) ----
-def bindAction():
-  name = 'Loop File'
-  
-  def handler(numberOrFilename):
-    queue.request(lambda: udp.send('%sLP\r' % numberOrFilename),
-                  lambda resp: handleReqResp(name, resp))
-
-  Action('Loop File by Number', lambda arg: handler(arg), 
-         { 'title': 'Loop File by Number', 'group': group + ' - ' + name, 'order': next_seq(), 'schema': {'type': 'integer'} })
-  
-  Action('Loop File by Filename', lambda arg: handler('"%s"' % arg), 
-         { 'title': 'Loop File by Filename', 'group': group + ' - ' + name, 'order': next_seq(), 'schema': {'type': 'string'} })
-
-bindAction()
-
-# ---- 'Loop Play' (page 47) ----
-def bindAction():
-  name = 'Loop Play'
-  
-  def loopPlay():
-    queue.request(lambda: udp.send('LP\r'),
-                  lambda resp: handleReqResp(name, resp))
-
-  Action(name, lambda arg: loopPlay(), 
-         { 'title': name, 'group': group, 'order': next_seq(), 
-           'desc': 'Loop Plays after a Search command has been used' })
-
-bindAction()
-
-# ---- 'Play Next' (page 48) ----
-def bindAction():
-  name = 'Play Next'
-  
-  def playNext(numberOrFilename):
-    queue.request(lambda: udp.send('%sPN\r' % numberOrFilename),
-                  lambda resp: handleReqResp(name, resp))
-
-  Action('Play Next by Number', lambda arg: playNext(arg), 
-         { 'title': 'Play Next by Number', 'group': group + ' - ' + name, 'order': next_seq(), 'schema': {'type': 'integer'} })
-  
-  Action('Play Next by Filename', lambda arg: playNext('"%s"' % arg), 
-         { 'title': 'Play Next by Filename', 'group': group + ' - ' + name, 'order': next_seq(), 'schema': {'type': 'string'} })
-
-bindAction()
-
-# ---- 'Loop Next' (page 48) ----
-def bindAction():
-  name = 'Loop Next'
-  
-  def loopNext(numberOrFilename):
-    queue.request(lambda: udp.send('%sLN\r' % numberOrFilename),
-                  lambda resp: handleReqResp(name, resp))
-
-  Action('Loop Next by Number', lambda arg: loopNext(arg), 
-         { 'title': 'Loop Next by Number', 'group': group + ' - ' + name, 'order': next_seq(), 'schema': {'type': 'integer'} })
-  
-  Action('Loop Next by Filename', lambda arg: loopNext('"%s"' % arg), 
-         { 'title': 'Loop Next by Filename', 'group': group + ' - ' + name, 'order': next_seq(), 'schema': {'type': 'string'} })
-
-bindAction()
-
-# ---- 'Still' (page 49) ----
-def bindAction():
-  name = 'Still'
-  
-  def still():
-    queue.request(lambda: udp.send('ST\r'),
-                  lambda resp: handleReqResp(name, resp))
-
-  Action(name, lambda arg: still(), 
-         { 'title': name, 'group': group, 'order': next_seq(), 
-           'desc': 'Holds current frame' })
-
-bindAction()
-
-# ---- 'Pause' (page 49) ----
-def bindAction():
-  name = 'Pause'
-  
-  def pause():
-    queue.request(lambda: udp.send('PA\r'),
-                  lambda resp: handleReqResp(name, resp))
-
-  Action(name, lambda arg: pause(), 
-         { 'title': name, 'group': group, 'order': next_seq(), 
-           'desc': 'Pauses (black frame)' })
-
-bindAction()
-  
-# ---- 'Stop' (page 49) ----
-def bindAction():
-  name = 'Stop'
-  
-  def stop():
-    queue.request(lambda: udp.send('RJ\r'),
-                  lambda resp: handleReqResp(name, resp))
-
-  Action(name, lambda arg: stop(), 
-         { 'title': name, 'group': group, 'order': next_seq() })
-
-bindAction()
-
-# ---- 'Audio Mute' (page 49) ----
-def bindAction():
-  name = 'Audio Mute'
-  
-  metadata = { 'title': name, 'group': group + ' - ' + name, 'order': next_seq(), 
-           'schema': {'type': 'string', 'enum': ['Mute', 'Unmute']}}
-  
-  event = Event(name, metadata)
-  
-  def audioMute(state):
-    # state forced to lower case
-    queue.request(lambda: udp.send('%sAD\r' % ('0' if state == 'mute' else '1')),
-                  lambda resp: handleReqResp(name, resp, lambda: event.emit('Mute' if state == 'mute' else 'Unmute')))
-
-  Action(name, lambda arg: audioMute(arg.lower()), metadata)
-
-bindAction()
-
-# ---- 'Video Mute' (page 50) ----
-def bindAction():
-  name = 'Video Mute'
-  
-  metadata = { 'title': name, 'group': group + ' - ' + name, 'order': next_seq(), 
-           'schema': {'type': 'string', 'enum': ['Black', 'Normal']}}
-  
-  event = Event(name, metadata)
-  
-  def handler(state):
-    # state forced to lower case
-    queue.request(lambda: udp.send('%sVD\r' % ('0' if state == 'black' else '1')),
-                  lambda resp: handleReqResp(name, resp, lambda: event.emit('Black' if state == 'black' else 'Normal')))
-
-  Action(name, lambda arg: handler(arg.lower()), metadata)
-
-bindAction()
-  
-# ---- 'Audio Volume' (page 50) ----
-def bindAction():
-  name = 'Audio Volume'
-  
-  metadata = { 'title': name, 'group': group + ' - ' + name, 'order': next_seq(), 
-               'schema': {'type': 'integer', 'format': 'range', 'min': 0, 'max': 100} }
-  
-  event = Event(name, metadata)
-  
-  def handler(arg):
-    # state forced to lower case
-    queue.request(lambda: udp.send('%s%%AD\r' % arg),
-                  lambda resp: handleReqResp(name, resp, lambda: event.emit(arg)))
-
-  Action(name, lambda arg: handler(arg), metadata)
-
-bindAction()
-
-# ---- 'Request Audio Volume' (page 59) ----
-def bindAction():
-  name = 'Request Audio Volume'
-  
-  metadata = { 'title': 'Request', 'group': group + ' - Audio Volume', 'order': next_seq() }
-  
-  def handler(arg):
-    queue.request(lambda: udp.send('%AD\r'),
-                  lambda resp: lookup_local_event('Audio Volume').emit(int(resp)))
-
-  Action(name, lambda arg: handler(arg), metadata)
-
-bindAction()
-
-# for acting as a mute slave
-def remote_event_Mute(arg):
-  lookup_local_action('Audio Mute').call(arg)  
-  
-# reserved for power slave action
-local_event_Power = LocalEvent({'title': 'Power', 'schema': { 'type': 'string', 'enum': ['On', 'Off']}})
-
-def local_action_Power(arg=None):
-  """{"title": "Power", "schema": { "type": "string", "enum": ["On", "Off"]}}"""
-  local_event_Power.emit(arg)
-  
+# for acting as a power slave
 def remote_event_Power(arg):
   lookup_local_action('power').call(arg)
-  
-ZERO_DATE_STR = str(date_instant(0))
