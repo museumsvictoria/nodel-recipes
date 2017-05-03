@@ -1,18 +1,18 @@
-# Copyright (c) 2014 Museum Victoria
-# This software is released under the MIT license (see license.txt for details)
+'''Computer Node'''
 
-'''This node provides mac/pc controls.'''
-
-# TODO:
-#  * emit volume & muting signal states
-#  * emit disk usage statistics
-
+### Libraries required by this Node
 import java.lang.System
 import subprocess
 
+
+
+### Parameters used by this Node
 system = java.lang.System.getProperty('os.name')
 arch = java.lang.System.getProperty('sun.arch.data.model').lower()
 
+
+
+### Functions used by this Node
 def shutdown():
   if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
     # shutdown WIN
@@ -21,6 +21,16 @@ def shutdown():
     # shutdown OSX
     # nodel process must have sudo rights to shutdown command
     returncode = subprocess.call("sudo shutdown -h -u now", shell=True)
+  else:
+    print 'unknown system: ' + system
+
+def restart():
+  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
+    # restart WIN
+    returncode = subprocess.call("shutdown -r -f -t 0", shell=True)
+  elif(system=="Mac OS X"):
+    # restart OSX
+    returncode = subprocess.call("sudo shutdown -r now", shell=True)
   else:
     print 'unknown system: ' + system
 
@@ -52,27 +62,72 @@ def set_volume(vol):
   else:
     print 'unknown system: ' + system
 
-# Local actions this Node provides
-def local_action_TurnOff(arg = None):
-  """{"title":"Turn off","desc":"Turns this computer off.","group":"Power"}"""
-  print 'Action TurnOff requested'
+
+
+### Local actions this Node provides
+def local_action_PowerOff(arg = None):
+  """{"title":"PowerOff","desc":"Turns this computer off.","group":"Power"}"""
+  print 'Action PowerOff requested'
   shutdown()
 
-def local_action_mute(arg = None):
-  """{"title":"Mute","desc":"Mute this computer.","group":"Volume"}"""
-  print 'Action Mute requested'
+def local_action_Restart(arg = None):
+  """{"title":"Restart","desc":"Restarts this computer.","group":"Power"}"""
+  print 'Action Restart requested'
+  restart()
+
+def local_action_MuteOn(arg = None):
+  """{"title":"MuteOn","desc":"Mute this computer.","group":"Volume"}"""
+  print 'Action MuteOn requested'
   mute()
 
-def local_action_unmute(arg = None):
-  """{"title":"Unmute","desc":"Un-mute this computer.","group":"Volume"}"""
-  print 'Action Unmute requested'
+def local_action_MuteOff(arg = None):
+  """{"title":"MuteOff","desc":"Un-mute this computer.","group":"Volume"}"""
+  print 'Action MuteOff requested'
   unmute()
 
 def local_action_SetVolume(arg = None):
-  """{"title":"Set volume","desc":"Set volume.","schema":{"title":"Level","type":"integer","required":"true"},"group":"Volume"}"""
+  """{"title":"SetVolume","desc":"Set volume.","schema":{"title":"Drag slider to adjust level.","type":"integer","format":"range","min": 0, "max": 100,"required":"true"},"group":"Volume"}"""
   print 'Action SetVolume requested - '+str(arg)
   set_volume(arg)
 
+DEFAULT_FREESPACEMB = 0.5
+param_FreeSpaceThreshold = Parameter({'title': 'Freespace threshold (GB)', 'schema': {'type': 'integer', 'hint': DEFAULT_FREESPACEMB}})
+
+local_event_Status = LocalEvent({'group': 'Status', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+        'level': {'type': 'integer', 'order': 1},
+        'message': {'type': 'string', 'order': 2}}}})
+
+from java.io import File
+
+def check_status():
+  # unfortunately this pulls in removable disk drives
+  # roots = list(File.listRoots())
+  
+  roots = [File('.')] # so just using current drive instead
+  
+  warnings = list()
+  
+  roots.sort(lambda x, y: cmp(x.getAbsolutePath(), y.getAbsolutePath()))
+  
+  for root in roots:
+    path = root.getAbsolutePath()
+    
+    total = root.getTotalSpace()
+    free = root.getFreeSpace()
+    usable = root.getUsableSpace()
+    
+    if free < (param_FreeSpaceThreshold or DEFAULT_FREESPACEMB)*1024*1024*1024L:
+      warnings.append('%s has less than %0.1f GB left' % (path, long(free)/1024/1024/1024))
+      
+  if len(warnings) > 0:
+    local_event_Status.emit({'level': 2, 'message': 'Disk space is low on some drives: %s' % (','.join(warnings))})
+    
+  else:
+    local_event_Status.emit({'level': 0, 'message': 'OK'})
+
+Timer(check_status, 150, 10) # check status every 2.5 mins (10s first time)
+      
+### Main
 def main(arg = None):
   # Start your script here.
   print 'Nodel script started.'
