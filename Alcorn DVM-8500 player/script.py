@@ -336,7 +336,7 @@ def bindAction():
   def audioMute(state):
     # state forced to lower case
     queue.request(lambda: udp.send('%sAD\r' % ('0' if state == 'on' else '1')),
-                  lambda resp: handleReqResp(name, resp, lambda: event.emit('On' if state == 'mute' else 'Off')))
+                  lambda resp: handleReqResp(name, resp, lambda: event.emit('On' if state == 'on' else 'Off')))
 
   Action(name, lambda arg: audioMute(arg.lower()), metadata)
 
