@@ -79,6 +79,8 @@ from org.nodel.io import Stream
 # to determine working directory
 import os 
 
+param_NodeNameFilter = Parameter({'title': 'Node name filter', 'desc': 'If blank or missing includes all nodes.', 'schema': {'type': 'string'}})
+
 CURRENT_RECIPES = NodelHost.instance().recipes().getRoot()
 param_RecipesFolder = Parameter({'title': 'Recipes folder', 'schema': {'type': 'string', 'hint': CURRENT_RECIPES.getAbsolutePath()}})
 
@@ -88,6 +90,7 @@ param_ScriptTypes = Parameter({'title': 'Custom script types', 'schema': {'type'
           'signature': { 'type': 'string', 'order': 2}}
         }}})
 
+reducedNameFilter = ''
 
 scriptTypes_bySignature = {}
 scripts_bySignature = {}
@@ -106,6 +109,10 @@ def main():
     
   elif recipesFolder.listFiles() in [None, 0]:
     console.warn("NOTE: No recipes exist in the 'recipes' folder; you might want to populate the folder with your recipes to help detection.")
+    
+  if len(param_NodeNameFilter or '') > 0:
+    global reducedNameFilter
+    reducedNameFilter = SimpleName(param_NodeNameFilter).getReducedForMatchingName()
     
   items = load_existing_scripts(recipesFolder)
   console.info('loaded %s scripts' % len(items))
@@ -189,11 +196,18 @@ def udp_received(src, data):
       console.warn('No HTTP address for this node')
       continue
       
-    nodeAddressesByName[SimpleName(nodeName)] = httpAddress
+    nodeSimpleName = SimpleName(nodeName)
+    
+    # apply a name filter if present
+    if len(reducedNameFilter) > 0:
+      if reducedNameFilter not in nodeSimpleName.getReducedForMatchingName():
+        continue
+      
+    nodeAddressesByName[nodeSimpleName] = httpAddress
     
 # (can now use udp callbacks)
 udp = UDP(source='0.0.0.0:0', dest='224.0.0.252:5354', ready=udp_ready, received=udp_received, 
-          # intf='136.154.24.165' - 
+          intf='192.168.70.250'
           )
 
 def local_action_Probe(arg=None):
