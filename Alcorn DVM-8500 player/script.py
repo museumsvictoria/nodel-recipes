@@ -329,13 +329,13 @@ def bindAction():
   name = 'Audio Mute'
   
   metadata = { 'title': name, 'group': group + ' - ' + name, 'order': next_seq(), 
-           'schema': {'type': 'string', 'enum': ['Mute', 'Unmute']}}
+           'schema': {'type': 'string', 'enum': ['On', 'Off']}}
   
   event = Event(name, metadata)
   
   def audioMute(state):
     # state forced to lower case
-    queue.request(lambda: udp.send('%sAD\r' % ('0' if state == 'mute' else '1')),
+    queue.request(lambda: udp.send('%sAD\r' % ('0' if state == 'on' else '1')),
                   lambda resp: handleReqResp(name, resp, lambda: event.emit('Mute' if state == 'mute' else 'Unmute')))
 
   Action(name, lambda arg: audioMute(arg.lower()), metadata)
@@ -402,6 +402,13 @@ local_event_Power = LocalEvent({'title': 'Power', 'schema': { 'type': 'string', 
 def local_action_Power(arg=None):
   """{"title": "Power", "schema": { "type": "string", "enum": ["On", "Off"]}}"""
   local_event_Power.emit(arg)
+  
+  # Play and Pause actions associated with power
+  if arg == 'On':
+    lookup_local_action('Play').call()
+  
+  if arg == 'Off':
+    lookup_local_action('Pause').call()
   
 def remote_event_Power(arg):
   lookup_local_action('power').call(arg)
