@@ -359,7 +359,8 @@ def local_action_ClearMenu(arg=None):
   
   
 def getIRRemoteControl(arg):
-  console.info('getIRRemoteControl')
+  log('getIRRemoteControl')
+
   # eg. 'aa ff 00 03 41 36 01 7a
   
   msg = '\x36%s\x00' % chr(int(param_id))
@@ -383,6 +384,26 @@ def setIRRemoteControl(arg):
 irRemoteControlEvent = Event('IR Remote Control', {'group': 'IR Remote Control', 'schema': {'type': 'string', 'enum': ['Enabled', 'Disabled']}})
 Action('IR Remote Control', setIRRemoteControl, {'title': 'Set', 'group': 'IR Remote Control', 'caution': 'Are you sure you want to enable/disable IR remote control?', 'schema': {'type': 'string', 'enum': ['Enabled', 'Disabled']}})
 
+
+serialNumberEvent = Event('Serial Number', {'group': 'Serial Number', 'schema': {'type': 'string'}})
+
+def getSerialNumber(arg):
+  log('getSerialNumber')
+  
+  msg = '\x0b%s\x00' % chr(int(param_id))
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: serialNumberEvent.emit(resp[6:-4])))
+  
+Action('GetSerialNumber', getSerialNumber, {'title': 'Get', 'group': 'Serial Number'})
+
+# All non-critical informational polling should occur here
+def local_action_PollNonCriticalInfo(arg=None):
+  '''{"title": "Poll non-critical info",  "desc": "This occurs daily in the background", "group": "General"}'''
+  lookup_local_action('GetSerialNumber').call()
+  lookup_local_action('GetIRRemoteControl').call()
+  
+# non-critical poll every 2 days, first after 15 s
+Timer(lambda: lookup_local_action('PollNonCriticalInfo').call(), 3600*48, 15)
 
 
 def checkHeader(arg, onSuccess=None):
@@ -461,3 +482,4 @@ status_timer = Timer(statusCheck, status_check_interval)
 def log(msg):
   if local_event_DebugShowLogging.getArg():
     print msg
+    
