@@ -336,7 +336,7 @@ def bindAction():
   def audioMute(state):
     # state forced to lower case
     queue.request(lambda: udp.send('%sAD\r' % ('0' if state == 'on' else '1')),
-                  lambda resp: handleReqResp(name, resp, lambda: event.emit('Mute' if state == 'mute' else 'Unmute')))
+                  lambda resp: handleReqResp(name, resp, lambda: event.emit('On' if state == 'mute' else 'Off')))
 
   Action(name, lambda arg: audioMute(arg.lower()), metadata)
 
@@ -411,6 +411,6 @@ def local_action_Power(arg=None):
     lookup_local_action('Pause').call()
   
 def remote_event_Power(arg):
-  lookup_local_action('power').call(arg)
+  lookup_local_action('Power').call(arg)
   
 ZERO_DATE_STR = str(date_instant(0))
