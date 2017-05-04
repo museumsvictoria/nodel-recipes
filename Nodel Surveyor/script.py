@@ -5,7 +5,7 @@ console.warn('''
 
 
 NOTE: 
-        Due to the intensive CPU and memory requirements, it
+        Due to intensive CPU and memory requirements, it
         is highly recommended this node only execute within its 
         own independent process space e.g. run directly from
         the command-line of a workstation:
@@ -81,6 +81,9 @@ import os
 
 param_NodeNameFilter = Parameter({'title': 'Node name filter', 'desc': 'If blank or missing includes all nodes.', 'schema': {'type': 'string'}})
 
+param_Interface = Parameter({'title': 'Network interface for multicasting', 'desc': 'Optional - if blank, will use the OS "bind all" default (0.0.0.0) which can have inconsistent results depending on the state of the topology.', 
+                             'schema': {'type': 'string', 'hint': '0.0.0.0'}})
+
 CURRENT_RECIPES = NodelHost.instance().recipes().getRoot()
 param_RecipesFolder = Parameter({'title': 'Recipes folder', 'schema': {'type': 'string', 'hint': CURRENT_RECIPES.getAbsolutePath()}})
 
@@ -118,6 +121,9 @@ def main():
   console.info('loaded %s scripts' % len(items))
   for item in items:
     scriptTypes_bySignature[item['signature']] = {'type': item['path'], 'signature': item['signature']}
+    
+  if len(param_Interface or '') > 0:
+    udp.setIntf(param_Interface)
   
 def load_existing_scripts(folder):
   items = list() # e.g. [{'path':       'recipes/pjlink', 
@@ -205,10 +211,8 @@ def udp_received(src, data):
       
     nodeAddressesByName[nodeSimpleName] = httpAddress
     
-# (can now use udp callbacks)
-udp = UDP(source='0.0.0.0:0', dest='224.0.0.252:5354', ready=udp_ready, received=udp_received, 
-          intf='192.168.70.250'
-          )
+# (can now use udp callbacks. NOTE: interface may be set later)
+udp = UDP(source='0.0.0.0:0', dest='224.0.0.252:5354', ready=udp_ready, received=udp_received)
 
 def local_action_Probe(arg=None):
   '''{"title": "1. Probe", "group": "Operations", "order": 1}'''
