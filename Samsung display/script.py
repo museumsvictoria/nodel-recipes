@@ -396,11 +396,23 @@ def getSerialNumber(arg):
   
 Action('GetSerialNumber', getSerialNumber, {'title': 'Get', 'group': 'Serial Number'})
 
+softwareVersionEvent = Event('Software Version', {'group': 'Software Version', 'schema': {'type': 'string'}})
+
+def getSoftwareVersion(arg):
+  log('getSoftwareVersion')
+  
+  msg = '\x0e%s\x00' % chr(int(param_id))
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: softwareVersionEvent.emit(resp[6:-1])))
+  
+Action('GetSoftwareVersion', getSoftwareVersion, {'title': 'Get', 'group': 'Software Version'})
+
 # All non-critical informational polling should occur here
 def local_action_PollNonCriticalInfo(arg=None):
   '''{"title": "Poll non-critical info",  "desc": "This occurs daily in the background", "group": "General"}'''
   lookup_local_action('GetSerialNumber').call()
   lookup_local_action('GetIRRemoteControl').call()
+  lookup_local_action('GetSoftwareVersion').call()
   
 # non-critical poll every 2 days, first after 15 s
 Timer(lambda: lookup_local_action('PollNonCriticalInfo').call(), 3600*48, 15)
