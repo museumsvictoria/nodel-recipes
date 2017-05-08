@@ -125,16 +125,17 @@ def initStatusPoller(nodeName):
 def bindEverything():
     print 'Extracted IR commands'
     bindIRCommands()
-  
-    #urls = extractPortURLs(urlBase, controlSummaryPath)
     
-    #print 'Extracted device URLs:', urls
-
-    #for url in urls:
-    #    bindPort(url)
-
     if param_useControlSummary:
-        bindPort(controlSummaryPath)
+      
+      urls = extractPortURLs(urlBase, controlSummaryPath)
+    
+      print 'Extracted device URLs:', urls
+
+      for url in urls:
+          bindPort(url)
+
+ 	  bindPort(controlSummaryPath)
         
 def unbindEverything():
     for port in ports:
