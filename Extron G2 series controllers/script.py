@@ -25,6 +25,8 @@ param_reservedPorts = Parameter({'title': 'Reserved ports', 'schema': {'type': '
           'statusPoller': {'title': 'Status polling? (e.g. Connection Status)', 'type': 'boolean', 'order': 3}
         }}}})
 
+param_useControlSummary = Parameter({'title': 'Use "control summary file"?', "schema": {"type": "boolean"} ,"order":"-10"})
+
 urlBase = ""
 
 # initialised in main
@@ -124,12 +126,15 @@ def bindEverything():
     print 'Extracted IR commands'
     bindIRCommands()
   
-    urls = extractPortURLs(urlBase, controlSummaryPath)
+    #urls = extractPortURLs(urlBase, controlSummaryPath)
     
-    print 'Extracted device URLs:', urls
+    #print 'Extracted device URLs:', urls
 
-    for url in urls:
-        bindPort(url)
+    #for url in urls:
+    #    bindPort(url)
+
+    if param_useControlSummary:
+        bindPort(controlSummaryPath)
         
 def unbindEverything():
     for port in ports:
@@ -1069,4 +1074,3 @@ def statusCheck():
   
 status_check_interval = 75
 status_timer = Timer(statusCheck, status_check_interval)
-
