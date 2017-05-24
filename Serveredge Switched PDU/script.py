@@ -16,7 +16,7 @@ SLOW_GET_INTERVAL = 60 * 30 # every 30 minute
 
 lastReceive = [0] # the last time *anything* was sent to the unit
 
-param_ipAddress = Parameter({ "title": "IP address", "schema": {"type": "string", "required": True}})
+param_ipAddress = Parameter({ "title": "IP address", "schema": {"type": "string", "required": True }})
 param_username = Parameter({ "title": "Username", "schema": {"type": "string", "hint": DEFAULT_USER }})
 param_password = Parameter({ "title": "Password", "schema": {"type": "string", "hint": DEFAULT_PASS }})
 
@@ -41,25 +41,59 @@ def get_power():
   if not response:
     return
   tree = et.parse(response).getroot()
-  status = tree[0].text
-  # emit status based on status of port 1 - should cover all models
-  if status[34] == '1':
-    local_event_Power.emit('On')
-  elif status[34] == '0':
-    local_event_Power.emit('Off')
-  else:
-    local_event_Error.emit()
+  result = tree[0].text
+  status = result[34] + result[36]
 
+  outlets = lookup_local_event('OutletState') # is there a 2 port status
+  # emit status logic based on 1 or 2 outlet models
+  # 2 port model
+  if outlets:
+    # both ports are are on
+    if status[0] == '1' and status[1] == '1':
+      local_event_Power.emit('On')
+      outlets.emit({'outlet1': 'On', 'outlet2': 'On'})
+    # both ports are off
+    elif status[0] == '0' and status[1] == '0':
+      local_event_Power.emit('Off')
+      outlets.emit({'outlet1': 'Off', 'outlet2': 'Off'})
+    # either of the ports are reporting errors
+    elif status[0] == '-1' or status[1] == '-1':
+      local_event_Error.emit()
+    else:
+      local_event_Power.emit('Partially On')
+      # just outlet 1 on
+      if status[0] == '1' and not status[1] == '1':
+        outlets.emit({'outlet1': 'On', 'outlet2': 'Off'})
+      # just outlet 2 on
+      elif status[0] == '0' and not status[1] == '0':
+        outlets.emit({'outlet1': 'Off', 'outlet2': 'On'})
+      # an error on either outlet
+      else:
+        local_event_Error.emit()
+  else:
+  # 1 port model
+     # emit status based on status of port 1
+    if status[0] == '1':
+      local_event_Power.emit('On')
+    elif status[0] == '0':
+      local_event_Power.emit('Off')
+    else:
+      local_event_Error.emit()
+    
   # EXAMPLE RESPONSES
   # ,,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,5,5,5,5,5,5,5,5,0.0,0, // ON - PORT 1 & 2
   # ,,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,5,5,5,5,5,5,5,5,0.0,0, // OFF - ALL PORTS
 
-def set_power(status):
-  response = request('offs.cgi?led=110000000000000000000000') if (status == 'Off') else request('ons.cgi?led=110000000000000000000000')
+def set_power(status, outlet):
+  if status == 'Off':
+    command = ('offs.cgi?led=%s0000000000000000000000' % outlet)
+  else:
+    command = ('ons.cgi?led=%s0000000000000000000000' % outlet)
+  response = request(command)
   if not response:
     return
   # wait a moment for ports to update
-  sleep(1)
+  sleep(2)
   get_power()
 
 lastReceive = [0]
@@ -100,14 +134,14 @@ status_timer.start()
 
 # Local actions this Node provides
 def local_action_PowerOn(arg):
-  '''{"title":"PowerOn","desc":"PowerOn","group":"Outlet"}'''
+  '''{"title":"PowerOn","desc":"PowerOn","group":"Power"}'''
   console.log('Action PowerOn requested.')
-  set_power('On')
+  set_power('On','11')
 
 def local_action_PowerOff(arg):
-  '''{"title":"PowerOff","desc":"PowerOff","group":"Outlet"}'''
+  '''{"title":"PowerOff","desc":"PowerOff","group":"Power"}'''
   console.log('Action PowerOff requested.')
-  set_power('Off')
+  set_power('Off','11')
 
 def local_action_GetPower(arg):
   '''{"title":"GetPower","desc":"GetPower","group":"Information","order":1}'''
@@ -117,7 +151,7 @@ def local_action_GetPower(arg):
 
 
 ### Local events this Node provides
-local_event_Power = LocalEvent({'schema': {'type':'string','enum':['On','Off']}, 'group': 'Outlet', 'order': next_seq()})
+local_event_Power = LocalEvent({'schema': {'type':'string','enum':['On','Off','Partially On']}, 'group': 'Power', 'order': next_seq()})
 local_event_Error = LocalEvent({'group': 'Status',' order': next_seq()})
 local_event_LastContactDetect = LocalEvent({'order': next_seq(), 'group': 'Information', 'title': 'Last contact', 'schema': {'type': 'string'}})
 local_event_Status = LocalEvent({'order': 100, 'schema': {'type': 'object', 'title': 'Status', 'properties': {
@@ -133,3 +167,24 @@ def main(arg = None):
   if len((param_ipAddress or '').strip()) == 0:
     console.warn('No IP address configured; nothing to do')
     return
+
+# <!--- dual uutlets
+
+param_dualoutlet = Parameter({ "title": "Dual Port Controls", "schema": {"type": "boolean" }, "order": 100 })
+
+@after_main
+def expandActions():
+
+  # add dual outlet support
+  if param_dualoutlet:
+    Action('Outlet1On', lambda arg: set_power('On','10'), {'title': 'Outlet1On', 'group': 'Outlet'})
+    Action('Outlet2On', lambda arg: set_power('On','01'), {'title': 'Outlet2On', 'group': 'Outlet'})
+    Action('Outlet1Off', lambda arg: set_power('Off','10'), {'title': 'Outlet1Off', 'group': 'Outlet'})
+    Action('Outlet2Off', lambda arg: set_power('Off','01'), {'title': 'Outlet2Off', 'group': 'Outlet'})
+
+    Event('OutletState', {'title': 'Outlets', 'group': 'Power', 'schema': {'type': 'object', 'title': 'Outlets', 'properties': {
+        'outlet1': {'type':'string','enum':['On','Off'], 'title': 'Outlet 1'},
+        'outlet2': {'type':'string','enum':['On','Off'], 'title': 'Outlet 2'}
+      }}})
+
+# dual outlets ---!>
