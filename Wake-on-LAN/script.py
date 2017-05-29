@@ -134,3 +134,7 @@ def updateStatus():
     else:
       local_event_Power.emit('Off')
       local_event_Status.emit({'level': 0, 'message': 'OK (*)'})
+        
+# Remote events to activate actions   
+def remote_event_Power(arg):
+  lookup_local_action('Power').call(arg)
