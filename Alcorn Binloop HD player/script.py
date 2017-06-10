@@ -562,8 +562,8 @@ def bindReproducer(reproducerNum):
     
 # for acting as a power slave
 def remote_event_Power(arg):
-  lookup_local_action('power').call(arg)
+  lookup_local_action('LoopOnAll').call() if arg == 'On' else lookup_local_action('PauseOnAll').call()
   
 # for acting as a mute slave
 def remote_event_Mute(arg):
-  lookup_local_action('Audo Mute on All').call(arg)  
+  lookup_local_action('AudioMuteOnAll').call('Unmute') if arg == 'Off' else lookup_local_action('AudioMuteOnAll').call('Mute') 
