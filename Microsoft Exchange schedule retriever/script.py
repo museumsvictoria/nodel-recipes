@@ -1,4 +1,4 @@
-from java.io import IOException
+import sys # for exception info
 
 DEFAULT_CONN_ENDPOINT = 'https://outlook.office365.com/EWS/Exchange.asmx'
 
@@ -130,69 +130,78 @@ def main():
     name = calendarParam['name']
     Event('Calendar %s Items' % name, {'title': '"%s"' % (name), 'group': 'Calendars', 'order': next_seq(), 'schema': {'type': 'array', 'title': '...', 'items': ITEM_SCHEMA}})
 
-  console.info('Started! Will poll folders and items now (then items every 30s)')
+  console.info('Started! Will poll folders and items now (then items every minute)')
 
   # folder resolution might not even be necessary, but no harm in doing it once anyway
   call(lambda: lookup_local_action('PollFolders').call())
 
 
 # timer responsible for continually polling items  
-# TODO: set to 30s period
-timer_poller = Timer(lambda: lookup_local_action('PollItems').call(), 10, 10)
+# (every min, first after 10s)
+timer_poller = Timer(lambda: lookup_local_action('PollItems').call(), 60, 10)
 
 def local_action_PollItems(arg=None):
-  now = date_now()
+  try:
+    now = date_now()
 
-  rawBookings = query_ews(now, now.plusDays(7))
+    rawBookings = query_ews(now, now.plusDays(7))
   
-  print 'Raw:'
-  for raw in rawBookings:
-    print raw
+    trace('Raw:')
+    for raw in rawBookings:
+      trace(raw)
     
-  # emit raw bookings
-  local_event_RawItems.emitIfDifferent(rawBookings)
+    # emit raw bookings
+    local_event_RawItems.emitIfDifferent(rawBookings)
 
   
-  # go through the raw list
-  bookingsByCalendar = {}
+    # go through the raw list
+    bookingsByCalendar = {}
 
-  for raw in rawBookings:
-    calendarIndex = raw['calendar']
+    for raw in rawBookings:
+      calendarIndex = raw['calendar']
     
-    subject = raw['subject']
+      subject = raw['subject']
 
-    booking = { 'title': subject,
-                'start': str(raw['start']),
-                'end': str(raw['end']),
-                'member': raw['location'],
-                'signal': None,
-                'state': None }
+      booking = { 'title': subject,
+                  'start': str(raw['start']),
+                  'end': str(raw['end']),
+                  'member': raw['location'],
+                  'signal': None,
+                  'state': None }
     
-    # extract optional fields in the subject line
+      # extract optional fields in the subject line
 
-    # e.g. subject': 'Peace and quiet! {Power: Off}
-    fieldName, fieldValue = extractField(subject)
+      # e.g. subject': 'Peace and quiet! {Power: Off}
+      fieldName, fieldValue = extractField(subject)
     
-    # override the signal name if it's present
-    if not isBlank(fieldName):
-      booking['signal'] = fieldName
+      # override the signal name if it's present
+      if not isBlank(fieldName):
+        booking['signal'] = fieldName
 
-    # override the value if it's present
-    if not isBlank(fieldValue):
-      booking['state'] = fieldValue
+      # override the value if it's present
+      if not isBlank(fieldValue):
+        booking['state'] = fieldValue
 
-    bookings = bookingsByCalendar.get(calendarIndex)
-    if bookings == None:
-      bookings = list()
-      bookingsByCalendar[calendarIndex] = bookings
+      bookings = bookingsByCalendar.get(calendarIndex)
+      if bookings == None:
+        bookings = list()
+        bookingsByCalendar[calendarIndex] = bookings
 
-    bookings.append(booking)
+      bookings.append(booking)
 
-  # emit clean bookings
-  for index, info in enumerate(param_calendars):
-    print 'index:', index, 'info', info
+    # emit clean bookings
+    for index, info in enumerate(param_calendars):
+      trace('index:%s, info:%s' % (index, info))
     
-    lookup_local_event('Calendar %s Items' % info['name']).emitIfDifferent(bookingsByCalendar.get(index) or [])
+      lookup_local_event('Calendar %s Items' % info['name']).emitIfDifferent(bookingsByCalendar.get(index) or [])
+      
+    # indicate a successful poll cycle
+    lastSuccess[0] = system_clock()
+
+  except:
+    eType, eValue, eTraceback = sys.exc_info()
+    
+    console.warn('Failed to poll items; exception was [%s]' % eValue)
   
 def query_ews(start, end):
   '''Date-range query of calendar items. Returns false if calendar resolution has not been completed yet.'''
@@ -217,18 +226,15 @@ def query_ews(start, end):
   request = prepareQueryRequest(start, end, resolvedFolders=folderElements)
   xmlRequest = ET.tostring(request)
   
-  console.info('Requesting... request:%s' % xmlRequest)
+  trace('Requesting... request:%s' % xmlRequest)
   
-  try:
-    response = get_url(connector['ewsEndPoint'],
+  response = get_url(connector['ewsEndPoint'],
                        username=connector['username'],
                        password=connector['password'],
                        contentType='text/xml',
                        post=xmlRequest)
-  except IOException, exc:
-    raise Exception(exc.getMessage)
   
-  console.info('Got response. data:%s' % response)
+  trace('Got response. data:%s' % response)
   
   warnings = list()
   
@@ -283,14 +289,19 @@ def parse_query_response(responseXML, warnHandler):
             itemIDElement = getElement(item, 'type:ItemId')
             itemID = {'id': getAttrib(itemIDElement, 'Id'),
                       'changeKey': getAttrib(itemIDElement, 'ChangeKey')}
-            subject = getElementText(item, 'type:Subject')
-            sensitivity = getElementText(item, 'type:Sensitivity') # TODO: interpret 'Sensitivity'
+            subject = tryGetElementText(item, 'type:Subject', default='')
+            sensitivity = tryGetElementText(item, 'type:Sensitivity', default='') # TODO: interpret 'Sensitivity'
             start = getElementText(item, 'type:Start')
             end = getElementText(item, 'type:End')
-            location = tryGetElementText(item, 'type:Location')
-            organiserElement = getElement(item, 'type:Organizer')
-            organiserMailboxElement = getElement(organiserElement, 'type:Mailbox')
-            organiserName = getElementText(organiserMailboxElement, 'type:Name')
+            location = tryGetElementText(item, 'type:Location', default='')
+            
+            organiserElement = tryGetElement(item, 'type:Organizer')
+            if organiserElement != None:
+              organiserMailboxElement = getElement(organiserElement, 'type:Mailbox')
+              organiserName = tryGetElementText(organiserMailboxElement, 'type:Name', default='')
+              
+            else:
+              organiserName = ''
 
             calendarItems.append({ # 'id': itemID,
                                    'calendar': responseIndex,
@@ -306,7 +317,15 @@ def parse_query_response(responseXML, warnHandler):
   return calendarItems
 
 def local_action_PollFolders(arg=None):
-  updateFolderMap()
+  try:
+    updateFolderMap()
+    
+  except:
+    eType, eValue, eTraceback = sys.exc_info()
+    
+    console.warn('Failed to poll folders (will self retry in 5 mins); exception was [%s]' % eValue)
+    
+    call(lambda: lookup_local_action('PollFolders').call(), 5*60)
 
 def updateFolderMap():
   folderItems = find_folders()
@@ -322,18 +341,15 @@ def find_folders():
   request = prepareGetFoldersRequest(smtpAddress=connector['address'])
 
   xmlRequest = ET.tostring(request)
-  console.info('find_folders requesting... data:%s' % xmlRequest)
+  trace('find_folders requesting... data:%s' % xmlRequest)
   
-  try:
-    response = get_url(connector['ewsEndPoint'], 
+  response = get_url(connector['ewsEndPoint'], 
                        username=connector['username'],
                        password=connector['password'],
                        contentType='text/xml',
                        post=xmlRequest)
-  except IOException, exc:
-    raise Exception(exc.getMessage)
   
-  console.info('find_folders. got response. data:%s' % response)
+  trace('find_folders. got response. data:%s' % response)
   
   warnings = list()
   
@@ -553,11 +569,17 @@ def getElementText(root, path):
 
   return result.text
 
-def tryGetElementText(root, path):
+def tryGetElementText(root, path, default=None):
   '''Gets the text part of an element (optionally)'''
   result = root.find(expandPath(path))
+  
+  if result != None:
+    result = result.text
+    
+  if result == None:
+    result = default
 
-  return result.text if result != None else None  
+  return result
 
 def getElements(root, path):
     results = root.findall(expandPath(path))
@@ -617,6 +639,59 @@ def extractField(s):
 
 # simple parsing --->
 
+# <--- status, errors and debug
+
+local_event_Trace = LocalEvent({'group': 'Status, Errors & Debug', 'order': 9999+next_seq(), 'schema': {'type': 'boolean'}})
+
+def trace(msg):
+  if local_event_Trace.getArg():
+    console.info(msg)
+    
+def traceWarn(msg):
+  if local_event_Trace.getArg():
+    console.warn(msg)
+    
+local_event_Status = LocalEvent({'group': 'Status, Errors & Debug', 'order': 9999+next_seq(), 'schema': {'type': 'object', 'properties': {
+        'level': {'type': 'integer', 'order': 1},
+        'message': {'type': 'string', 'order': 2}
+      }}})
+    
+# for status checks
+lastSuccess = [0]
+
+# roughly, the last contact  
+local_event_LastContactDetect = LocalEvent({'group': 'Status, Errors & Debug', 'order': 9999+next_seq(), 'schema': {'type': 'string'}})
+  
+def statusCheck():
+  diff = (system_clock() - lastSuccess[0])/1000.0 # (in secs)
+  now = date_now()
+  
+  if diff > status_check_interval+15:
+    previousContactValue = local_event_LastContactDetect.getArg()
+    
+    if previousContactValue == None:
+      message = 'A successful poll has never taken place.'
+      
+    else:
+      previousContact = date_parse(previousContactValue)
+      roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
+      if roughDiff < 60:
+        message = 'Continual failures for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'Continual failures since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'Continual failures since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
+      
+    local_event_Status.emit({'level': 2, 'message': message})
+    
+  else:
+    local_event_LastContactDetect.emit(str(now))
+    local_event_Status.emit({'level': 0, 'message': 'OK'})
+    
+status_check_interval = 75
+status_timer = Timer(statusCheck, status_check_interval)    
+
+# status, errors and debug --->
 
 # <--- convenience functions
 
