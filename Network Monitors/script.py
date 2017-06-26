@@ -1,12 +1,17 @@
 DEFAULT_MINTHRESHOLD = 30
 DEFAULT_LONGGAP_SECS = 30
+DEFAULT_REPEATS = 3
 
 param_monitors = Parameter({'title': 'Monitors', 'schema': {'type': 'array', 'items': {'type': 'object', 'properties': {
         'name': {'title': 'Name', 'type': 'string', 'order': next_seq()},
         'url': {'title': 'URL', 'type': 'string', 'order': next_seq()},
         'minThreshold': {'title': 'Min. threshold (ms)', 'type': 'integer', 'order': next_seq(), 'hint': str(DEFAULT_MINTHRESHOLD)},
         'longGap': {'title': 'Long gap (s)', 'type': 'integer', 'order': next_seq(), 'hint': str(DEFAULT_LONGGAP_SECS)},
-        'hideLatency': {'title': 'Hide latency?', 'type': 'boolean', 'order': next_seq()}
+        'hideLatency': {'title': 'Hide latency?', 'type': 'boolean', 'order': next_seq()},
+        'repeats': {'title': 'Repeats', 'type': 'integer', 'order': next_seq(), 'hint': DEFAULT_REPEATS,
+                    'desc': 'When determining latency, the lowest and highest are discarded; the rest averaged.'},
+        'valueAsSignal': {'title': 'Expose the value as a signal?', 'type': 'boolean', 'order': next_seq(),
+                    'desc': 'In addition to Status, expose the last successful value as a signal.'}
     }}}})
 
 def main():
@@ -17,17 +22,17 @@ def main():
   for param in param_monitors or '':
       initMonitorParam(param)
       
-  console.info('Started %s monitors' % len(param_monitors))
+  console.info('Started %s monitors' % len(param_monitors or ''))
 
 def initMonitorParam(param):
   initPoller(param['name'], 
              lambda complete: beginCheckURL(param['url'], complete),
-             repeats=3,
+             repeats=param.get('repeats') or DEFAULT_REPEATS,
              minThreshold=param.get('minThreshold') or DEFAULT_MINTHRESHOLD,
              longGapInSec=param.get('longGap') or DEFAULT_LONGGAP_SECS,
-             hideLatency=param.get('hideLatency')
+             hideLatency=param.get('hideLatency'),
+             valueAsSignal=param.get('valueAsSignal')
             )
-  
   
 class Stats:
   def __init__(self):
@@ -52,7 +57,14 @@ class Stats:
       
     self.total += elapsed
     
-def initPoller(name, poller, minThreshold=DEFAULT_MINTHRESHOLD, repeats=3, gapInSec=2.5, longGapInSec=30, hideLatency=False):
+def initPoller(name, poller, 
+               minThreshold=DEFAULT_MINTHRESHOLD, 
+               repeats=DEFAULT_REPEATS, 
+               gapInSec=2.5, 
+               longGapInSec=30, 
+               hideLatency=False,
+               valueAsSignal=False
+              ):
   status = Event('%s Status' % name, {'title': 'Status', 'group': name, 'schema': {
                                         'type': 'object', 'title': 'Status', 'properties': {
                                           'level': {'type': 'integer', 'title': 'Level', 'order': 1},
@@ -67,6 +79,11 @@ def initPoller(name, poller, minThreshold=DEFAULT_MINTHRESHOLD, repeats=3, gapIn
                 }}
   
   stats = Stats()
+  
+  valueSignal = None
+  
+  if valueAsSignal:
+    valueSignal = Event('%s Value' % name, {'title': 'Value', 'group': name, 'schema': {'type': 'string'}})
   
   def poll():
     log('%s: polling...' % name)
@@ -85,11 +102,17 @@ def initPoller(name, poller, minThreshold=DEFAULT_MINTHRESHOLD, repeats=3, gapIn
       if stats.count >= repeats:
         total = stats.total
         
-        if repeats > 2:
+        if repeats == 2:
+          # remove max i.e best case scenario
+          total -= stats.max
+          ave = total/(stats.count-1)
+        
+        elif repeats > 2:
           # remove max and min
           total -= stats.max
           total -= stats.min
           ave = total/(stats.count-2)
+          
         else:
           ave = total/stats.count
         
@@ -106,12 +129,16 @@ def initPoller(name, poller, minThreshold=DEFAULT_MINTHRESHOLD, repeats=3, gapIn
           status.emit({'level': 2, 'message': 'Errors occurred during poll.'})
           
         else:
+          if valueSignal != None:
+            valueSignal.emit(result.strip() if result != None else None)
+          
           status.emit({'level': 0, 'message': 'OK%s' % ('' if hideLatency else ' (%sms latency)' % ave) })
         
         stats.reset()
         
         # wait long gap
         call_safe(poll, longGapInSec)
+        
       else:
         # wait small gap
         call_safe(poll, gapInSec)
@@ -196,6 +223,3 @@ class DNSPoller:
 def log(msg):
   pass
   print msg
-  
-  
-  
