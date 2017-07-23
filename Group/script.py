@@ -1,43 +1,53 @@
 '''A node that groups members for control propagation and status monitoring.'''
 
+# NOTE: disappearing member support requires at least Nodel Host rev. 322 or later
+
 def main(arg=None):
-  console.info('Started!')
+  try:
+    for memberInfo in lookup_parameter('members') or []:
+      initMember(memberInfo)
+  
+    console.info('Started!')
+    
+  except:
+    console.err("Failed it initialise structures. NOTE: if 'disappearing' member support is being used, Nodel Host rev. 322 or later is required")
+    
+    raise
   
 # <!--- members and status support  
-
-@after_main
-def initMembersSupport():
-  for memberInfo in lookup_parameter('members') or []:
-    initMember(memberInfo)
 
 MODES = ['Action & Signal', 'Signal Only']
 
 param_members = Parameter({'title': 'Members', 'schema': {'type': 'array', 'items': {'type': 'object', 'properties': {
    'name': {'type': 'string', 'order': 1},
    'hasStatus': {'type': 'boolean', 'title': 'Status?', 'order': 3},
+   'disappears': {'title': 'Disappears when Power Off?', 'type': 'boolean', 'order': 3.1},
    'power': {'title': 'Power', 'type': 'object', 'order': 4, 'properties': {
-     'mode': {'title': 'Mode', 'type': 'string', 'enum': MODES}}
-   },
+     'mode': {'title': 'Mode', 'type': 'string', 'enum': MODES}
+   }},
    'muting': {'title': 'Muting', 'type': 'object', 'order': 5, 'properties': {
      'mode': {'title': 'Mode', 'type': 'string', 'enum': MODES}
-   }
-}}}}})
+   }}
+}}}})
 
 def initMember(memberInfo):
   name = mustNotBeBlank('name', memberInfo['name'])
-
-  if memberInfo.get('hasStatus'):
-    initStatusSupport(name)
+                           
+  disappears = memberInfo.get('disappears')
 
   if (memberInfo.get('power') or {}).get('mode') in MODES:
-    initSignalSupport(name, memberInfo['power']['mode'], 'Power', ['On', 'Off'])
+    initSignalSupport(name, memberInfo['power']['mode'], 'Power', ['On', 'Off'], disappears)
     
   if (memberInfo.get('muting') or {}).get('mode') in MODES:
-    initSignalSupport(name, memberInfo['muting']['mode'], 'Muting', ['On', 'Off'])
+    initSignalSupport(name, memberInfo['muting']['mode'], 'Muting', ['On', 'Off'], disappears)
+    
+  # do status last because it depends on 'Power' when 'disappears' is in use
+  if memberInfo.get('hasStatus'):
+    initStatusSupport(name, disappears)
 
 membersBySignal = {}
     
-def initSignalSupport(name, mode, signalName, states):
+def initSignalSupport(name, mode, signalName, states, disappears):
   members = getMembersInfoOrRegister(signalName, name)
   
   # establish local signals if haven't done so already
@@ -82,6 +92,9 @@ def initSignalSupport(name, mode, signalName, states):
   
   create_remote_event('Member %s %s' % (name, signalName), handleRemoteEvent, {'group': 'Members (%s)' % signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}},
                       suggestedNode=name, suggestedEvent=signalName)
+                           
+  if disappears:
+    prepareForDisappearingMemberSignal(name, signalName)
 
 def initSignal(signalName, mode, states):
   resultantStates = states + ['Partially %s' % s for s in states]
@@ -136,7 +149,7 @@ STATUS_SCHEMA = { 'type': 'object', 'properties': {
 
 EMPTY_SET = {}
   
-def initStatusSupport(name):
+def initStatusSupport(name, disappears):
   # look up the members structure (assume
   members = getMembersInfoOrRegister('Status', name)
   
@@ -206,9 +219,98 @@ def initStatusSupport(name):
   
   create_remote_event('Member %s Status' % name, handleRemoteEvent, {'group': 'Members (Status)', 'order': next_seq(), 'schema': STATUS_SCHEMA},
                        suggestedNode=name, suggestedEvent="Status")
+                           
+  if disappears:
+    prepareForDisappearingMemberStatus(name)
   
 # members and status support ---!>
 
+# <!--- disappearing members
+
+# (for disappearing signals)
+from org.nodel.core import BindingState
+
+def prepareForDisappearingMemberStatus(name):
+  # lookup it's desired 'Power' signal
+  desiredPowerSignal = lookup_local_event('DesiredPower')
+  
+  # create assumed status
+  assumedStatus = Event('%s Assumed Status' % name, { 'group': '(advanced)', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+                          'level': {'type': 'integer', 'order': 1},
+                          'message': {'type': 'string', 'order': 2}}}})
+  
+  # create volatile remote binding that just passes through the status anyway
+  disappearingRemoteStatus = create_remote_event('%s Disappearing Status' % name, lambda arg: assumedStatus.emit(arg))
+  
+  # and when there's a wiring fault
+  def checkBindingState():
+    desiredPower = desiredPowerSignal.getArg()
+    
+    wiringStatus = disappearingRemoteStatus.getStatus()
+    
+    if desiredPower == 'On':
+      if wiringStatus != BindingState.Wired:
+        assumedStatus.emit({'level': 2, 'message': 'Power is supposed to be On - no confirmation of that.'})
+        
+      else:
+        # wiringStatus is 'Wired', normal status can be passed through
+        remoteStatusArg = disappearingRemoteStatus.getArg()
+        if remoteStatusArg != None:
+          assumedStatus.emit(remoteStatusArg)
+      
+    
+    elif desiredPower == 'Off':
+      if wiringStatus == BindingState.Wired:
+        assumedStatus.emit({'level': 1, 'message': 'Power should be Off but appears to be alive'})
+        
+      else:
+        # wiringStatus is not 'Wired'
+        assumedStatus.emit({'level': 0, 'message': 'OK'})
+        
+  # check when the status binding state changes
+  disappearingRemoteStatus.addBindingStateHandler(lambda arg: checkBindingState())
+  
+  # and when the power state changes
+  desiredPowerSignal.addEmitHandler(lambda arg: checkBindingState())
+  
+  
+def prepareForDisappearingMemberSignal(name, signalName):
+  # lookup it's desired 'Power' signal
+  desiredPowerSignal = lookup_local_event('DesiredPower')
+  
+  # create assumed signal
+  assumedSignal = Event('%s Assumed %s' % (name, signalName), { 'group': '(advanced)', 'order': next_seq(), 'schema': {'type': 'string'}})
+  
+  # create volatile remote binding that just passes through the status anyway
+  disappearingRemoteSignal = create_remote_event('%s Disappearing %s' % (name, signalName), lambda arg: assumedSignal.emit(arg))
+  
+  # and when there's a wiring fault
+  def checkBindingState():
+    desiredPower = desiredPowerSignal.getArg()
+    
+    wiringStatus = disappearingRemoteSignal.getStatus()
+    
+    if wiringStatus == BindingState.Wired:
+      # pass on the remote signal
+      remoteSignalArg = disappearingRemoteSignal.getArg()
+      if remoteSignalArg != None:
+        assumedSignal.emit(remoteSignalArg)
+        
+    else:
+      # wiring status is NOT wired
+      if desiredPower == 'On':
+        assumedSignal.emit('Partially On')
+        
+      elif desiredPower == 'Off':
+        assumedSignal.emit('Off')
+
+  # check when the status binding state changes
+  disappearingRemoteSignal.addBindingStateHandler(lambda arg: checkBindingState())        
+        
+  # and when the power state changes
+  desiredPowerSignal.addEmitHandler(lambda arg: checkBindingState())
+
+# disappearing members ---!>
 
 # <!--- convenience functions
 
