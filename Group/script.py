@@ -1,6 +1,10 @@
-'''A node that groups members for control propagation and status monitoring.'''
+'''A node that groups members for control propagation and status monitoring - see script.py for notes'''
 
-# NOTE: disappearing member support requires at least Nodel Host rev. 322 or later
+# For disappearing member support:
+#    (requires at least Nodel Host rev. 322 or later)
+#
+#    - remote "Disappearing" signals should be wired to the actual signals
+#    - the usual remote signals should be wired to the respective "assumed" local signals respectively.
 
 def main(arg=None):
   try:
@@ -235,7 +239,7 @@ def prepareForDisappearingMemberStatus(name):
   desiredPowerSignal = lookup_local_event('DesiredPower')
   
   # create assumed status
-  assumedStatus = Event('%s Assumed Status' % name, { 'group': '(advanced)', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+  assumedStatus = Event('Member %s Assumed Status' % name, { 'group': '(advanced)', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
                           'level': {'type': 'integer', 'order': 1},
                           'message': {'type': 'string', 'order': 2}}}})
   
@@ -279,7 +283,7 @@ def prepareForDisappearingMemberSignal(name, signalName):
   desiredPowerSignal = lookup_local_event('DesiredPower')
   
   # create assumed signal
-  assumedSignal = Event('%s Assumed %s' % (name, signalName), { 'group': '(advanced)', 'order': next_seq(), 'schema': {'type': 'string'}})
+  assumedSignal = Event('Member %s Assumed %s' % (name, signalName), { 'group': '(advanced)', 'order': next_seq(), 'schema': {'type': 'string'}})
   
   # create volatile remote binding that just passes through the status anyway
   disappearingRemoteSignal = create_remote_event('%s Disappearing %s' % (name, signalName), lambda arg: assumedSignal.emit(arg))
@@ -329,3 +333,4 @@ def isEmpty(o):
     return True
 
 # convenience functions ---!>
+
