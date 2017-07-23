@@ -107,7 +107,7 @@ def initSignal(signalName, mode, states):
   
   localResultantSignal = Event('%s' % signalName, {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}})
   
-  def handler(complexArg):
+  def handleComplexArg(complexArg):
     state = complexArg['state']
     noPropagate = complexArg.get('noPropagate')
     
@@ -126,11 +126,17 @@ def initSignal(signalName, mode, states):
         if remoteAction != None:
           remoteAction.call(complexArg)
           
-  # create normal action (propagates)
-  Action('%s' % signalName, lambda arg: handler({'state': arg}), {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': states}})
+  # create action
+  def handleSimpleOrComplexArg(arg):
+    if hasattr(arg, 'get'): # does it have the '.get' function i.e. dict/map-like
+      handleComplexArg(arg) # if so, assume it's complex and pass through
+    else:
+      handleComplexArg({'state': arg}) # else assume it's plain, wrap up in a complex arg
+      
+  Action('%s' % signalName, handleSimpleOrComplexArg, {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': states}})
   
   # create action with options (e.g. 'noPropagate')
-  Action('%s Extended' % signalName, handler, {'group': '(extended)', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+  Action('%s Extended' % signalName, handleComplexArg, {'group': '(extended)', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
            'state': {'type': 'string', 'enum': states, 'order': 3},
            'noPropagate': {'type': 'boolean', 'order': 2}}}})
   
@@ -334,3 +340,16 @@ def isEmpty(o):
 
 # convenience functions ---!>
 
+# <!-- customisation
+
+# in the absense of any Nodel Host out-of-script customisation mechanism, 
+# try load any custom scripts by default...
+
+try :
+  from custom import *
+  
+except ImportError:
+  # no custom script
+  pass
+
+# --!>
