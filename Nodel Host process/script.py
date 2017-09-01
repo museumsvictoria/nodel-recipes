@@ -3,10 +3,12 @@ from java.io import File
 
 DEFAULT_WORKINGDIR = '/opt/bit/site/stablehost'
 DEFAULT_PORT = 0
+DEFAULT_WSPORT = 0
 DEFAULT_NODELRELEASE = '/opt/nodel/nodelhost.jar'
 
 param_working = Parameter({'title': 'Working directory', 'schema': {'type': 'string', 'hint': DEFAULT_WORKINGDIR}})
 param_port = Parameter({'title': 'Port', 'desc': 'Use "0" for any port (recommended) or choose a fixed TCP port.', 'schema': {'type': 'integer', 'hint': DEFAULT_PORT}})
+param_wsPort = Parameter({'title': 'Websocket port', 'desc': 'Use "0" for any port (recommended) or choose a fixed TCP port.', 'schema': {'type': 'integer', 'hint': DEFAULT_WSPORT}})
 param_nodelRelease = Parameter({'title': 'Nodel release', 'desc': 'The full path to the Nodel release.', 
                                 'schema': {'type': 'string', 'hint': DEFAULT_NODELRELEASE}})
 param_interface = Parameter({'title': 'Interface', 'desc': 'The interface to bind to.', 'schema': {'type': 'string'}})
@@ -50,6 +52,9 @@ def main():
     
   if param_nodesRoot != None:
     params.extend(['-r', param_nodesRoot])
+    
+  if param_wsPort != None:
+    param.extend(['--wsPort', param_wsPort])
     
   inclList = list()
   exclList = list()
