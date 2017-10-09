@@ -169,6 +169,8 @@ def local_action_LampsAndErrors(x = None):
 def get_projector():
   try:
     sock = socket.socket()
+    sock.settimeout(10) # envorce a conservative timeout to avoid 
+                        # any accidental lingering connections
     sock.connect((param_ipAddress, param_port or DEFAULT_PORT))
     f = sock.makefile()
     proj = pjlink.Projector(f)
@@ -179,7 +181,11 @@ def get_projector():
       local_event_LastCommsError.emit('authentication error')
       return False
   except:
-    local_event_LastCommsError.emit('connection error')
+    # may not be native Python exception, so capture using 'sys'
+    eType, eValue, eTraceback = sys.exc_info()
+
+    local_event_LastCommsError.emit('connection error - %s' % eValue)
+    
     return False
   finally:
     sock.close()
