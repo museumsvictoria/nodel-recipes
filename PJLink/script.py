@@ -395,7 +395,7 @@ def statusCheck():
     return 
   
   # check errors
-  errors = local_event_Errors.getArg()
+  errors = local_event_Errors.getArg() or {}
   
   for key in PJLINK_ERRORKEYS:
     value = errors.get(key)
