@@ -32,10 +32,12 @@
           </column>
         </row>
         <row>
-          <column sm="6">
+          <column sm="12">
             <switch class="btn-default" event="Switch" action="Switch"/>
           </column>
-          <column sm="6">
+        </row>
+        <row>
+          <column sm="12">
             <partialswitch class="btn-default" event="PartialSwitch" action="PartialSwitch"/>
           </column>
         </row>
@@ -73,10 +75,15 @@
           </column>
         </row>
         <row>
-          <column sm="12">
+          <column sm="6">
             <title>Volume</title>
             <button action='VolumeDown' class='btn-success'>Down</button>
             <button action='VolumeUp' class='btn-success'>Up</button>
+          </column>
+          <column sm="6">
+            <title>Volume momentary</title>
+            <button type="momentary" action-off='VolumeStop' action-on='VolumeDownOn' class='btn-success'>Down</button>
+            <button type="momentary" action-off='VolumeStop' action-on='VolumeUpOn' class='btn-success'>Up</button>
           </column>
         </row>
       </column>
