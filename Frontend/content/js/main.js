@@ -129,17 +129,37 @@ var setEvents = function(){
     }
     $(ele).data('throttle')(action, arg);
   });
-  $('body').on('touchstart mousedown touchend touchcancel mouseup','*[data-actionon]*[data-actionoff]', function (e) {
-    e.stopPropagation(); e.preventDefault();
-    data = getAction(this);
-    callAction(data.action, data.arg);
-  });
-  $('body').on('click','*[data-arg], *[data-action]', function (e) {
+  $('body').on('click','*[data-arg], *[data-action], *[data-actionon]*[data-actionoff]', function (e) {
     e.stopPropagation(); e.preventDefault();
     if(!$('body').hasClass('touched')) {
+      var arg = '';
+      var action = '';
       if(navigator.issmart) $('body').addClass('touched');
-      data = getAction(this);
-      callAction(data.action, data.arg);
+      if (!_.isUndefined($(this).data('arg-type'))) var type = $(this).data('arg-type')
+      else type = false;
+      if (!_.isUndefined($(this).data('action-on')) && !_.isUndefined($(this).data('action-off'))) {
+        if ($(this).hasClass('active')) action = $(this).data('actionoff');
+        else action = $(this).data('actionon');
+      }
+      else if (!_.isUndefined($(this).data('action'))) action = $(this).data('action');
+      else if (!_.isUndefined($(this).parents().data('arg-action'))) action = $(this).parents().data('arg-action');
+      if (!_.isUndefined($(this).data('arg-on')) && !_.isUndefined($(this).data('arg-off'))) {
+        if ($(this).hasClass('active')) arg = "{'arg':" + stringify($(this).data('arg-off'), type) + "}";
+        else arg = "{'arg':" + stringify($(this).data('arg-on'), type) + "}";
+      } else {
+        if (!_.isUndefined($(this).data('arg'))) arg = "{'arg':" + stringify($(this).data('arg'), type) + "}";
+        else if(!_.isUndefined($(this).data('arg-source'))) {
+          var val = $($(this).data('arg-source')).data('arg');
+          if(_.isUndefined(val)) return false;
+          if(!_.isUndefined($(this).data('arg-sourcekey'))) {
+            arg = {"arg":{}};
+            arg['arg'][$(this).data('arg-sourcekey')] = val;
+            if(!_.isUndefined($(this).data('arg-add'))) arg = $.extend(true, arg, {'arg':$(this).data('arg-add')});
+            arg = stringify(arg);
+          } else arg = "{'arg':"+stringify(val)+"}";
+        } else arg = "{}";
+      }
+      callAction(action, arg);
     }
   });
   $('body').on('click','*[data-link-event]', function (e) {
@@ -171,37 +191,6 @@ var setEvents = function(){
     $("[data-section="+$(this).data('nav')+"]").show();
   });
 };
-
-var getAction = function(ele){
-  var arg = '';
-  var action = '';
-  if (!_.isUndefined($(ele).data('arg-type'))) var type = $(ele).data('arg-type')
-  else type = false;
-  if (!_.isUndefined($(ele).data('actionon')) && !_.isUndefined($(ele).data('actionoff'))) {
-    if ($(ele).hasClass('active')) action = $(ele).data('actionoff');
-    else action = $(ele).data('actionon');
-  }
-  else if (!_.isUndefined($(ele).data('action'))) action = $(ele).data('action');
-  else if (!_.isUndefined($(ele).closest('[data-arg-action]').data('arg-action'))) action = $(ele).closest('[data-arg-action]').data('arg-action');
-  if (!_.isUndefined($(ele).data('arg-on')) && !_.isUndefined($(ele).data('arg-off'))) {
-    if ($(ele).hasClass('active')) arg = "{'arg':" + stringify($(ele).data('arg-off'), type) + "}";
-    else arg = "{'arg':" + stringify($(ele).data('arg-on'), type) + "}";
-  } else {
-    if (!_.isUndefined($(ele).data('arg'))) arg = "{'arg':" + stringify($(ele).data('arg'), type) + "}";
-    else if(!_.isUndefined($(ele).data('arg-source'))) {
-      if($(ele).data('arg-source') == 'this') val = $(ele).val();
-      else val = $($(ele).data('arg-source')).data('arg');
-      if(_.isUndefined(val)) val = {};
-      if(!_.isUndefined($(ele).data('arg-sourcekey'))) {
-        arg = {"arg":{}};
-        arg['arg'][$(ele).data('arg-sourcekey')] = val;
-        if(!_.isUndefined($(ele).data('arg-add'))) arg = $.extend(true, arg, {'arg':$(ele).data('arg-add')});
-        arg = stringify(arg);
-      } else arg = "{'arg':"+stringify(val)+"}";
-    } else arg = "{}";
-  }
-  return {'action': action, 'arg': arg};
-}
 
 var callAction = function(action, arg) {
   $.postJSON('http://' + host + '/REST/nodes/' + node + '/actions/' + encodeURIComponent(action) + '/call', arg, function () {

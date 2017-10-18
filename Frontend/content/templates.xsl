@@ -36,13 +36,8 @@
   </xsl:template>
   <!-- title -->
   <!-- button -->
-  <xsl:template match="button[not(@type)]">
+  <xsl:template match="button">
     <a href="#" class="btn {@class}" data-action="{@action}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
-  </xsl:template>
-  <xsl:template match="button[@type]">
-    <xsl:if test="@type='momentary'">
-      <a href="#" class="btn {@class}" data-actionon="{@action-on}" data-actionoff="{@action-off}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
-    </xsl:if>
   </xsl:template>
   <!-- button -->
   <!-- buttongroup -->
