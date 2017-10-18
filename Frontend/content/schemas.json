@@ -1,0 +1,52 @@
+{ 
+  "pills": {
+    "type": "string"
+  },
+  
+  "select": {
+    "type": "string"
+  },
+  
+  "panel": {
+    "type": "string",
+    "format": "long"
+  },
+  
+  "switch": {
+    "type": "boolean"
+  },
+
+  "partialswitch": {
+    "type": "string",
+    "enum": ["Off", "PartiallyOff", "PartiallyOn", "On"]
+  },
+  
+  "partialbadge": {
+    "type": "string",
+    "enum": ["Off", "PartiallyOff", "PartiallyOn", "On"]
+  },
+  
+  "status_signal": { 
+    "type": "object", 
+    "properties": {
+      "level": {"type": "integer", "title": "Level", "order": 1},
+      "message": {"type": "string", "title": "Message", "order": 2}
+    }
+  },
+  
+  "meter": {
+    "type": "number"
+  },
+  
+  "range": {
+    "type": "number"
+  },
+  
+  "badge": { 
+    "type": "object", 
+    "properties": {
+      "level": {"type": "integer", "title": "Level", "order": 1},
+      "message": {"type": "string", "title": "Message", "order": 2}
+    }
+  }
+}
