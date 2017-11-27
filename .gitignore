@@ -1,5 +1,5 @@
 # Apple OSX file-system metadata files
-.DS_Store
+*.DS_Store
 
 # Compiled Python
 *.pyc
