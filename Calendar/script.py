@@ -237,25 +237,35 @@ def main():
     signalName = signalType['name']
     lastTrees[signalName] = createNewTree()
     
-  startingIn = quantisePollNow()
+  delay = quantisePollNow()
   
-  console.info('Scheduler started! (polling on half-minute boundaries first in %.1f seconds)' % (startingIn/1000.0))
+  console.info('Scheduler started! (polling on half-minute boundaries first one in %.1f seconds)' % delay)
   
   # check the active future ones every 5 mins (after 30s at first)
   Timer(lambda: lookup_local_action('ProcessActiveFuture'), 30, 5*60)
-
-# attempts to trigger the poll on the minute edge
+  
+# schedules the next poll on sharp 30s wall-clock edges
 def quantisePollNow():
-  nowMillis = date_now().getMillis()
-  
-  halfMinRemainder = 30000 - nowMillis % 30000
-  
-  action = lookup_local_action('ProcessActiveNow')
-  
-  call_safe(lambda: action.call(), halfMinRemainder/1000.0)
-  
+  halfMinRemainder = 30 - (date_now().getMillis() % 30000) / 1000.0   # is in secs
+  timer_poller.setDelay(halfMinRemainder)
+
+  # return what is the delay
   return halfMinRemainder
+
+# establish a timer that will be manually quantised on 30s edges
+def handlePollTimer():
+  if local_event_Debug.getArg() > 0:
+    console.log('handlePollTimer called')
+
+  # when this timer fires, we should be on sharp 30s intervals 
+  # of the wall clock
   
+  lookup_local_action('ProcessActiveNow').call()
+  quantisePollNow()
+  
+timer_poller = Timer(handlePollTimer, 99999, 99999) # NOTE: 'delay' is continually set on-the-fly
+                                                    #       and 'interval' control is not used
+
 def initMember(memberInfo):
   name = memberInfo.get('name')
   if isBlank(name):
@@ -392,7 +402,7 @@ def emitAgenda(fullList):
       line = '%sAt %s, %s %s in %s ("%s")' % ('INVALID: ' if item.get('warning') else '',
                                        instant.toString('h:mm a'),
                                        item['signal'],
-                                       item['state'],
+                                       item.get('state') if 'state' in item else '<undefined_state>',
                                        item['member'],
                                        item['title'])
       lines.append(line)
