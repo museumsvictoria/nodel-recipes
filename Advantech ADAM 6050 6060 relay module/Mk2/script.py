@@ -1,5 +1,12 @@
 '''Lightweight modbus control.'''
 
+# REVISION HISTORY
+#
+# 20-Jan-2018  (minor, non-functional)
+#   Uses the 'request_queue' from the toolkit to manually handle any packet fragmentation that is possible with
+#   MODBUS' length-delimeted packetised stream over TCP. This is very unlikely when direct from Advantech MODBUS hardware
+#   but possible when port-forwarding.
+
 TCP_PORT = 502
 
 DEFAULT_BOUNCE = 1.2 # the default bounce time (1200 ms)
@@ -132,7 +139,9 @@ def connected():
   console.info('TCP connected')
   
   # don't let commands rush through
+
   tcp.clearQueue()
+  queue.clearQueue()
   
   # start all the poller
   seqNum = sequence[0]
@@ -147,6 +156,11 @@ def received(data):
 
   if local_event_ShowLog.getArg():
     print 'RECV: [%s]' % data.encode('hex')
+
+  # extend the recv buffer
+  recvBuffer.extend(data)
+
+  processBuffer()    
   
 def sent(data):
   if local_event_ShowLog.getArg():
@@ -157,6 +171,7 @@ def disconnected():
   
   # reset sequence (which will stop pollers)
   tcp.clearQueue()
+  queue.clearQueue()
   
   newSeq = sequence[0] + 1
   sequence[0] = newSeq
@@ -172,6 +187,49 @@ tcp = TCP(connected=connected,
           timeout=timeout, 
           sendDelimiters=None, 
           receiveDelimiters=None)
+
+def protocolTimeout():
+  console.log('MODBUS timeout; flushing buffers and dropping TCP connection for good measure')
+  tcp.drop()
+  queue.clearQueue()
+  del recvBuffer[:]
+
+# MODBUS using no delimeters within its binary protocol so must use a 
+# custom request queue
+queue = request_queue(timeout=protocolTimeout)
+
+# the full receive buffer
+recvBuffer = list()
+
+# example response packet:
+# 00:93            00:00                00:05                 01:01:02:fd:0f
+# TID (2 bytes)    Protocol (2 bytes)   Length, n (2 bytes)   n bytes...
+def processBuffer():
+  while True:
+    bufferLen = len(recvBuffer)
+    if bufferLen < 6:
+      # not big enough yet, let it grow
+      return
+  
+    # got at least 6 bytes (fifth and sixth hold the length)
+    messageLen = toInt16(recvBuffer, 4)
+  
+    # work out expected length (incl. header)
+    fullLen = 2 + 2 + 2 + messageLen
+  
+    # check if we've got at least one full packet
+    if bufferLen >= fullLen:
+      # grab that packet from the buffer
+      message = ''.join(recvBuffer[:fullLen])
+      del recvBuffer[:fullLen]
+      
+      # and 'push' it back through the request queue handler
+      queue.handle(message)
+      
+      # might be more, so continue...
+      
+    else:
+      return
 
 # modbus ----
 READ_COILS = 1
@@ -228,7 +286,7 @@ def modbus_readCoils(startAddr=0, count=12, onFuncResp=None):
   req = '%s%s%s%s%s%s%s' % (formatInt16(tid), formatInt16(protID), formatInt16(length),
                             chr(unitID), chr(modbus_func), formatInt16(startAddr), formatInt16(count))
   
-  tcp.request(req, lambda resp: handleModbusResponse(resp, tid, count, onFuncResp=onFuncResp))
+  queue.request(lambda: tcp.send(req), lambda resp: handleModbusResponse(resp, tid, count, onFuncResp=onFuncResp))
   
 Action('ReadCoils', lambda arg: modbus_readCoils(arg['startAddr'], arg['count']), 
        metadata={'group': 'Modbus', 'order': next_seq()+9000, 'schema': {'type': 'object', 'title': 'Params', 'properties': {
@@ -249,7 +307,7 @@ def modbus_writeCoil(addr, state, onFuncResp=None):
   req = '%s%s%s%s%s%s%s' % (formatInt16(tid), formatInt16(protID), formatInt16(length),
                             chr(unitID), chr(modbus_func), formatInt16(addr), value)
   
-  tcp.request(req, lambda resp: handleModbusResponse(resp, tid, onFuncResp=onFuncResp))
+  queue.request(lambda: tcp.send(req), lambda resp: handleModbusResponse(resp, tid, onFuncResp=onFuncResp))
 
 Action('WriteCoil', lambda arg: modbus_writeCoil(arg['addr'], arg['state']), 
        metadata={'group': 'Modbus', 'order': next_seq()+9000, 'schema': {'type': 'object', 'title': 'Params', 'properties': {
