@@ -243,7 +243,9 @@ def query_ews(start, end):
   
 def parse_query_response(responseXML, warnHandler):
   '''Parses a response, given the full envelope (as XML string)'''
-  root = ET.fromstring(responseXML)
+  # no way to specify string encoding using this version of Python APIs
+  # so need to pre-encode UTF8. Inner parser only deals with plain ASCII.
+  root = ET.fromstring(responseXML.encode('utf-8'))
 
   # ensure header exists
   header = getElement(root, 'env:Header')
@@ -359,7 +361,8 @@ def find_folders():
 
 def parse_find_folders_response(responseXML, warnHandler):
   '''Parses a response, given the full envelope (as XML string)'''
-  root = ET.fromstring(responseXML)
+  # see previous comment RE UTF-8 encoding
+  root = ET.fromstring(responseXML.encode('utf-8'))
 
   # ensure header exists
   header = getElement(root, 'env:Header')
