@@ -7,6 +7,7 @@ DEFAULT_WSPORT = 0
 DEFAULT_NODELRELEASE = '/opt/nodel/nodelhost.jar'
 
 param_working = Parameter({'title': 'Working directory', 'schema': {'type': 'string', 'hint': DEFAULT_WORKINGDIR}})
+param_recipes = Parameter({'title': 'Recipes directory', 'schema': {'type': 'string'}})
 param_port = Parameter({'title': 'Port', 'desc': 'Use "0" for any port (recommended) or choose a fixed TCP port.', 'schema': {'type': 'integer', 'hint': DEFAULT_PORT}})
 param_wsPort = Parameter({'title': 'Websocket port', 'desc': 'Use "0" for any port (recommended) or choose a fixed TCP port.', 'schema': {'type': 'integer', 'hint': DEFAULT_WSPORT}})
 param_nodelRelease = Parameter({'title': 'Nodel release', 'desc': 'The full path to the Nodel release.', 
@@ -47,6 +48,9 @@ def main():
   params = ['java', '-jar', nodelRelease, '-p', str(nodelPort)]
   
   # use the interface setting if specified
+  if param_recipes != None:
+    params.extend(['--recipes', param_recipes])
+
   if param_interface != None:
     params.extend(['-i', param_interface])
     
