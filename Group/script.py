@@ -26,10 +26,7 @@ param_members = Parameter({'title': 'Members', 'schema': {'type': 'array', 'item
    'name': {'type': 'string', 'order': 1},
    'hasStatus': {'type': 'boolean', 'title': 'Status?', 'order': 3},
    'disappears': {'title': 'Disappears when Power Off?', 'type': 'boolean', 'order': 3.1},
-<<<<<<< HEAD
    'device': {'title': 'Is a device?', 'type': 'boolean', 'order': 3.2},
-=======
->>>>>>> upstream/master
    'power': {'title': 'Power', 'type': 'object', 'order': 4, 'properties': {
      'mode': {'title': 'Mode', 'type': 'string', 'enum': MODES}
    }},
@@ -118,12 +115,8 @@ def initSignal(signalName, mode, states):
     localDesiredSignal.emit(state)
     
     # for convenience, just emit the state as the status if no members are configured
-<<<<<<< HEAD
     members = lookup_parameter('members')
     if isEmpty(members):
-=======
-    if isEmpty(lookup_parameter('members')):
->>>>>>> upstream/master
       localResultantSignal.emit(state)
     
     else:
@@ -133,13 +126,9 @@ def initSignal(signalName, mode, states):
       for memberName in membersBySignal[signalName]:
         remoteAction = lookup_remote_action('Member %s %s' % (memberName, signalName))
         if remoteAction != None:
-<<<<<<< HEAD
           for member in members:
             if member['name'] == memberName:
               remoteAction.call(complexArg['state']) if member['device'] else remoteAction.call(complexArg)
-=======
-          remoteAction.call(complexArg)
->>>>>>> upstream/master
           
   # create action
   def handleSimpleOrComplexArg(arg):
