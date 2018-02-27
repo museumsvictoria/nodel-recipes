@@ -461,7 +461,12 @@ def statusCheck():
     else:
       previousContact = date_parse(previousContactValue)
       roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
-      message = 'Off the network for approx. %s minutes' % roughDiff
+      if roughDiff < 60:
+        message = 'Off the network for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'Off the network since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'Off the network since %s' % previousContact.toString('h:mm:ss a, E d-MMM')      
       
     local_event_Status.emit({'level': 2, 'message': message})
     return
@@ -479,7 +484,12 @@ def statusCheck():
     else:
       previousContact = date_parse(previousContactValue)
       roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
-      message = 'Last landing was approx. %s minutes ago' % roughDiff
+      if roughDiff < 60:
+        message = 'Last landing was approx. %s mins ago' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'No landing since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'No landing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')      
       
     local_event_Status.emit({'level': 2, 'message': message})
     return
@@ -494,4 +504,3 @@ status_timer = Timer(statusCheck, status_check_interval)
 def log(msg):
   if local_event_DebugShowLogging.getArg():
     print msg
-    
