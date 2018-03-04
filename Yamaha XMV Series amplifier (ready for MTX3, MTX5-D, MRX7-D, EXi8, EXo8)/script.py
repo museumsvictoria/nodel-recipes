@@ -119,7 +119,7 @@ def bindParameters(paramInfo):
                   {'group': group, 'order': next_seq()})
   
   # setter
-  setter = Action('Set ' + name, lambda arg: setParam(address, arg, option=5, converters=converters, signal=signal),
+  setter = Action(name, lambda arg: setParam(address, arg, option=5, converters=converters, signal=signal),
                   {'group': group, 'order': next_seq(), 'schema': schema})
   
   # for async feedback from device e.g. [NOTIFY set MTX:mem_512/1/4/0/0/1/0 0 0 -75 "-75"]
