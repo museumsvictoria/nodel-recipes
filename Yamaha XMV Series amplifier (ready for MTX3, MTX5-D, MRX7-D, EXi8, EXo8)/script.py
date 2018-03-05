@@ -71,8 +71,8 @@ CHSEL_CONVERTERS = [ lambda arg: 'Digital' if arg == '1' else 'Analog',
 PARAMETERS = [
   #     0:address                 1:group        2:name               3:schema         4:converters
       ['MTX:mem_512/1/6/0/0/0/0', "Power",       "Power",             POWER_SCHEMA,    POWER_CONVERTERS],
-      ['MTX:mem_512/1/6/0/0/0/0', "Utility",     "Input Select",      INPUTSEL_SCHEMA, INPUTSEL_CONVERTERS],
-      ['MTX:mem_512/1/6/0/0/0/0', "Sensitivity", "Input Sensitivity", SENSI_SCHEMA,    SENSI_CONVERTERS]
+      ['MTX:mem_512/1/7/0/0/0/0', "Utility",     "Input Select",      INPUTSEL_SCHEMA, INPUTSEL_CONVERTERS],
+      ['MTX:mem_512/1/10/0/0/0/0', "Sensitivity", "Input Sensitivity", SENSI_SCHEMA,   SENSI_CONVERTERS]
   ]  
 
 @after_main
