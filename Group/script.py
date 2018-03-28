@@ -127,7 +127,7 @@ def initSignal(signalName, mode, states):
         if remoteAction != None:
           remoteAction.call(state)
 
-        remoteActionExtended = lookup_remote_action('Member %s %s (extended)' % (memberName, signalName))
+        remoteActionExtended = lookup_remote_action('Member %s %s Extended' % (memberName, signalName))
         if remoteActionExtended != None:
           remoteActionExtended.call(complexArg)
           
