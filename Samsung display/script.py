@@ -47,6 +47,8 @@ timer_deviceStatus = Timer(handle_displayStatusTimer, 30)
 def main(arg = None):
   if param_ipAddress == None or len(param_ipAddress.strip())==0:
     console.warn('No IP address set!')
+    timer_deviceStatus.stop()
+    timer_nonCritical.stop()
     return
   
   print 'Nodel script started.'
@@ -415,7 +417,7 @@ def local_action_PollNonCriticalInfo(arg=None):
   lookup_local_action('GetSoftwareVersion').call()
   
 # non-critical poll every 2 days, first after 15 s
-Timer(lambda: lookup_local_action('PollNonCriticalInfo').call(), 3600*48, 15)
+timer_nonCritical = Timer(lambda: lookup_local_action('PollNonCriticalInfo').call(), 3600*48, 15)
 
 
 def checkHeader(arg, onSuccess=None):
