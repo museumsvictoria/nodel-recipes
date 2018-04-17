@@ -46,7 +46,12 @@ var updatemeter = function(ele, arg) {
         var bar = $(el).find('.bar');
         $(el).data('bar', bar);
       }
-      $(bar).css('clip', 'rect('+((100-val) * pxheight)+'px, '+width+'px, 100px, 0px)');
+      var range = $(el).data('range');
+      if(range=='db') var vl = 88*Math.pow(10,val/40);
+      else var vl = val;
+      if(vl > 100) vl = 100;
+      if(vl < 0) vl = 0;
+      $(bar).css('clip', 'rect('+((100-vl) * pxheight)+'px, '+width+'px, 100px, 0px)');
       var p = $(el).data('p');
       if(!p) {
         var p = $(el).find('p');
@@ -303,7 +308,7 @@ var parseLog = function(log){
           }
           switch ($.type(log.arg)) {
             case "number":
-              if ($(ele).is("span")) $(ele).text(log.arg);
+              if ($(ele).is("span") || $(ele).is("output")) $(ele).text(log.arg);
               else if ($(ele).not('.meter').is("div")) {
                 $(ele).children().filter(function () {
                   return $(this).attr("data-arg") > log.arg;
