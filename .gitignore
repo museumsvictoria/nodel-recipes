@@ -1,0 +1,10 @@
+# Apple OSX file-system metadata files
+.DS_Store
+
+# Compiled Python
+*.pyc
+
+# Compiled Java
+*.class
+
+
