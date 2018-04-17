@@ -29,7 +29,7 @@ param_patterns = Parameter({'title': 'Patterns', 'order': next_seq(), 'schema': 
           'label': {'type': 'string', 'title': 'Label', 'hint': 'Foobar', 'order': next_seq()},
           'address': {'type': 'string', 'title': 'Address', 'hint': '/foo/bar', 'order': next_seq()}                                                              
         } } } })
-param_filter = Parameter({ 'title': 'Display non-parameterised messagess', 'order': next_seq(), 'schema': {'type': 'boolean'}})
+param_filter = Parameter({ 'title': 'Display non-parameterised messages', 'order': next_seq(), 'schema': {'type': 'boolean'}})
 
 ### Functions used by this Node
 def default_handler(addr, tags, args, source):
