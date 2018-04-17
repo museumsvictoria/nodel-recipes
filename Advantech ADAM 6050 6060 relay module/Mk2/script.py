@@ -1,5 +1,14 @@
 '''Lightweight modbus control.'''
 
+# REVISION HISTORY
+# 21-Jan-2018 
+#   Support for read-only unsigned 16-bit MODBUS registers (use Custom)
+#
+# 20-Jan-2018  (minor, non-functional)
+#   Uses the 'request_queue' from the toolkit to manually handle any packet fragmentation that is possible with
+#   MODBUS' length-delimeted packetised stream over TCP. This is very unlikely when direct from Advantech MODBUS hardware
+#   but possible when port-forwarding.
+
 TCP_PORT = 502
 
 DEFAULT_BOUNCE = 1.2 # the default bounce time (1200 ms)
@@ -11,11 +20,17 @@ CUSTOM = 'Custom'
 ADAM_6050 = 'Advantech ADAM 6050 (12xDI 6xDO)'
 ADAM_6060 = 'Advantech ADAM 6060 (6xDI 6xrelay)'
 
-DEVICE_CONFIGS = { CUSTOM: None,
-                   ADAM_6050: [{'startAddr': 0, 'count': 12, 'prefix': 'Input', 'readOnly': True},
-                               {'startAddr': 16, 'count': 6, 'prefix': 'Output', 'readOnly': False}],
-                   ADAM_6060: [{'startAddr': 0, 'count': 6, 'prefix': 'Input', 'readOnly': True},
-                               {'startAddr': 16, 'count': 6, 'prefix': 'Relay', 'readOnly': False}] }
+DEVICE_CONFIGS = { ADAM_6050: { 'coils':
+                                 [ {'startAddr': 0, 'count': 12, 'prefix': 'Input', 'readOnly': True},
+                                   {'startAddr': 16, 'count': 6, 'prefix': 'Output', 'readOnly': False} ],
+                                'registers': []
+                              },
+                   ADAM_6060: { 'coils': 
+                                 [ {'startAddr': 0, 'count': 6, 'prefix': 'Input', 'readOnly': True},
+                                   {'startAddr': 16, 'count': 6, 'prefix': 'Relay', 'readOnly': False} ],
+                                'registers': []
+                              }
+                 }
 
 param_modbusDevice = Parameter({'title': 'Modbus device', 'order': next_seq(), 'schema': {'type': 'string', 'enum': [CUSTOM, ADAM_6050, ADAM_6060]}})
 
@@ -25,6 +40,14 @@ param_coilBanks = Parameter({ 'title': 'Custom coil banks', 'order': next_seq(),
           'count': {'type': 'integer', 'title': 'Count', 'order': next_seq()},
           'prefix': {'type': 'string', 'title': 'Prefix', 'order': next_seq(), 'desc': 'e.g "Input" or "Output"'},
           'readOnly': {'type': 'boolean', 'title': 'Read-only?', 'order': next_seq()}
+    } } } })
+
+param_registerBanks = Parameter({ 'title': 'Custom register banks', 'order': next_seq(), 'schema': { 'type': 'array', 'items': {
+        'type': 'object', 'properties': {
+          'startAddr': {'type': 'integer', 'title': 'Start address', 'order': next_seq()},
+          'count': {'type': 'integer', 'title': 'Count', 'order': next_seq()},
+          'prefix': {'type': 'string', 'title': 'Prefix', 'order': next_seq(), 'desc': 'e.g "Input" or "Output"'},
+          'readOnly': {'type': 'boolean', 'title': '(RESERVED) Read-only? (only read-only for now)', 'order': next_seq()}
     } } } })
 
 local_event_SyncErrors = LocalEvent({'title': 'Sync errors', 'group': 'Status', 'schema': {'type': 'object', 'title': 'Details', 'properties': {
@@ -40,10 +63,23 @@ pollers = list()
 def main(arg = None):
   tcp.setDest('%s:%s'% (param_ipAddress, TCP_PORT))
   
+  # lookup the config based on the device
   deviceConfig = DEVICE_CONFIGS.get(param_modbusDevice)
   
-  for info in deviceConfig or (param_coilBanks or []):
-    bindCoilBank(info)
+  if deviceConfig != None:
+    for info in deviceConfig.get('coils') or []:
+      bindCoilBank(info)
+    
+    for info in deviceConfig.get('registers') or []:
+      bindRegisterBank(info)
+    
+  else:
+    # 'Custom' and everything will fallthrough to here
+    for info in param_coilBanks or []:
+      bindCoilBank(info)
+    
+    for info in param_registerBanks or []:
+      bindRegisterBank(info)
     
 def bindCoilBank(info):
   startAddr = info['startAddr']
@@ -126,13 +162,61 @@ def bindCoil(prefix, index, addr, readOnly):
   
   return (event, configEvent)
 
+def bindRegisterBank(info):
+  startAddr = info['startAddr']
+  prefix = info['prefix']
+  count = info['count']
+  readOnly = True # info.get('readOnly') not used yet, would be
+  
+  registerEvents = list()
+  
+  for i in range(info['count']):
+    (event, configEvent) = bindRegister(prefix, i+1, startAddr+i, readOnly)
+    registerEvents.append((event, configEvent))
+    
+  pollGap = 0.08 if readOnly else 2.0
+
+  def onRegisterResponse(seqNum, values):
+    for (es, v) in zip(registerEvents, values):
+      es[0].emitIfDifferent(v)
+    
+    call_safe(lambda: readRegister(seqNum), pollGap)
+    
+  def readRegister(seqNum):
+    # chain next call (instead of locked timer)
+    if seqNum != sequence[0]:
+      # stop this chain
+      print '(connection %s ended)' % seqNum
+      return
+    
+    modbus_readRegisters(startAddr, count, lambda values: onRegisterResponse(seqNum, values))
+    
+  pollers.append(readRegister)
+
+def bindRegister(prefix, index, addr, readOnly):
+  # 'readOnly' not used yet
+  event = Event('%s %s Value' % (prefix, index), {'group': '"%s" registers\' values' % prefix, 'order': next_seq(), 'schema': {'type': 'integer'}})
+  configEvent = Event('%s %s Config' % (prefix, index), {'group': '"%s" registers\' config' % prefix, 'order': next_seq(), 'schema': {'type': 'object', 'title': 'Params', 'properties': {
+          'label': {'type': 'string', 'title': 'Label', 'order': next_seq()}
+        }}})
+  
+  label = safeGet(configEvent.getArg(), 'label', None)
+  
+  if label != None:
+    event2 = Event('%s Value' % label, {'group': 'Labelled registers\' values', 'order': next_seq()+8000, 'schema': {'type': 'integer'}})
+    event.addEmitHandler(lambda arg: event2.emit(arg))
+  
+  return (event, configEvent)
+
 sequence = [0]
 
 def connected():
   console.info('TCP connected')
   
   # don't let commands rush through
+
   tcp.clearQueue()
+  queue.clearQueue()
   
   # start all the poller
   seqNum = sequence[0]
@@ -147,6 +231,16 @@ def received(data):
 
   if local_event_ShowLog.getArg():
     print 'RECV: [%s]' % data.encode('hex')
+    
+  # ensure buffer doesn't blow out i.e. greater than a reasonable sized "massive" value
+  if len(recvBuffer) > 4096:
+    console.warn('The incoming buffer is too large which might indicate protocol corruption; dropping it')
+    del recvBuffer[:]
+
+  # extend the recv buffer
+  recvBuffer.extend(data)
+
+  processBuffer()    
   
 def sent(data):
   if local_event_ShowLog.getArg():
@@ -157,6 +251,7 @@ def disconnected():
   
   # reset sequence (which will stop pollers)
   tcp.clearQueue()
+  queue.clearQueue()
   
   newSeq = sequence[0] + 1
   sequence[0] = newSeq
@@ -173,8 +268,52 @@ tcp = TCP(connected=connected,
           sendDelimiters=None, 
           receiveDelimiters=None)
 
+def protocolTimeout():
+  console.log('MODBUS timeout; flushing buffers and dropping TCP connection for good measure')
+  tcp.drop()
+  queue.clearQueue()
+  del recvBuffer[:]
+
+# MODBUS using no delimeters within its binary protocol so must use a 
+# custom request queue
+queue = request_queue(timeout=protocolTimeout)
+
+# the full receive buffer
+recvBuffer = list()
+
+# example response packet:
+# 00:93            00:00                00:05                 01:01:02:fd:0f
+# TID (2 bytes)    Protocol (2 bytes)   Length, n (2 bytes)   n bytes...
+def processBuffer():
+  while True:
+    bufferLen = len(recvBuffer)
+    if bufferLen < 6:
+      # not big enough yet, let it grow
+      return
+  
+    # got at least 6 bytes (fifth and sixth hold the length)
+    messageLen = toInt16(recvBuffer, 4)
+  
+    # work out expected length (incl. header)
+    fullLen = 2 + 2 + 2 + messageLen
+  
+    # check if we've got at least one full packet
+    if bufferLen >= fullLen:
+      # grab that packet from the buffer
+      message = ''.join(recvBuffer[:fullLen])
+      del recvBuffer[:fullLen]
+      
+      # and 'push' it back through the request queue handler
+      queue.handle(message)
+      
+      # might be more, so continue...
+      
+    else:
+      return
+
 # modbus ----
 READ_COILS = 1
+READ_REGISTERS = 3
 FORCE_COIL = 5
 
 def handleModbusResponse(resp, expTid, count=0, onFuncResp=None):
@@ -208,7 +347,24 @@ def handleModbusResponse(resp, expTid, count=0, onFuncResp=None):
     if onFuncResp:
       # return boolean array
       onFuncResp(bits)
-           
+
+
+  if modbus_func == READ_REGISTERS:
+    registers = list()
+
+    # go through the 2-byte registers which
+    # starts at offset 9
+    for i in range(count):
+      registers.append(toInt16(resp, 9+i*2))
+    
+    if local_event_ShowLog.getArg():
+      console.log('READ_REGISTERS resp: tid:%s protID:%s len:%s unit:%s func:%s count:%s registers:%s' % (tID, protID, length, unit, modbus_func, count, registers))
+      
+    if onFuncResp:
+      # return boolean array
+      onFuncResp(registers)
+
+
   elif modbus_func == FORCE_COIL:
     # e.g. 0001 0000 0006 01 05 0010 ff00
     
@@ -219,6 +375,7 @@ def handleModbusResponse(resp, expTid, count=0, onFuncResp=None):
       state = resp[-2:]=='\xff\x00'
       onFuncResp(state)
 
+
 def modbus_readCoils(startAddr=0, count=12, onFuncResp=None):
   # Request example:
   #      \x00\x93  \x00\x00  \x00\x06  \x01  \x01         \x00\x00     \x00\x0c                                      
@@ -228,13 +385,29 @@ def modbus_readCoils(startAddr=0, count=12, onFuncResp=None):
   req = '%s%s%s%s%s%s%s' % (formatInt16(tid), formatInt16(protID), formatInt16(length),
                             chr(unitID), chr(modbus_func), formatInt16(startAddr), formatInt16(count))
   
-  tcp.request(req, lambda resp: handleModbusResponse(resp, tid, count, onFuncResp=onFuncResp))
+  queue.request(lambda: tcp.send(req), lambda resp: handleModbusResponse(resp, tid, count, onFuncResp=onFuncResp))
   
 Action('ReadCoils', lambda arg: modbus_readCoils(arg['startAddr'], arg['count']), 
        metadata={'group': 'Modbus', 'order': next_seq()+9000, 'schema': {'type': 'object', 'title': 'Params', 'properties': {
         'startAddr': {'type': 'integer', 'title': 'Start address', 'order': 1},
         'count': {'type': 'integer', 'title': 'Count', 'order': 2}}}})
 
+
+def modbus_readRegisters(startAddr=0, count=12, onFuncResp=None):
+  # Request example (read 3 registers, from address 00:6B)
+  #      \x00\x93  \x00\x00  \x00\x06  \x01  \x03         \x00\x6b     \x00\x03
+  #      tID2      protID2   length2   unit  modbus_func  start_addr2  count
+  (tid, protID, length, unitID, modbus_func) = (next_seq() % 65536, 0, 6, 1, READ_REGISTERS)
+  
+  req = '%s%s%s%s%s%s%s' % (formatInt16(tid), formatInt16(protID), formatInt16(length),
+                            chr(unitID), chr(modbus_func), formatInt16(startAddr), formatInt16(count))
+  
+  queue.request(lambda: tcp.send(req), lambda resp: handleModbusResponse(resp, tid, count, onFuncResp=onFuncResp))
+
+Action('ReadRegisters', lambda arg: modbus_readRegisters(arg['startAddr'], arg['count']), 
+       metadata={'group': 'Modbus', 'order': next_seq()+9000, 'schema': {'type': 'object', 'title': 'Params', 'properties': {
+        'startAddr': {'type': 'integer', 'title': 'Start address', 'order': 1},
+        'count': {'type': 'integer', 'title': 'Count', 'order': 2}}}})  
 
 def modbus_writeCoil(addr, state, onFuncResp=None):
   # e.g 00 01     00 00     00 06     01    05           00 10     ff 00
@@ -249,7 +422,7 @@ def modbus_writeCoil(addr, state, onFuncResp=None):
   req = '%s%s%s%s%s%s%s' % (formatInt16(tid), formatInt16(protID), formatInt16(length),
                             chr(unitID), chr(modbus_func), formatInt16(addr), value)
   
-  tcp.request(req, lambda resp: handleModbusResponse(resp, tid, onFuncResp=onFuncResp))
+  queue.request(lambda: tcp.send(req), lambda resp: handleModbusResponse(resp, tid, onFuncResp=onFuncResp))
 
 Action('WriteCoil', lambda arg: modbus_writeCoil(arg['addr'], arg['state']), 
        metadata={'group': 'Modbus', 'order': next_seq()+9000, 'schema': {'type': 'object', 'title': 'Params', 'properties': {

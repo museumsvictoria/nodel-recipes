@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?xml-stylesheet type="text/xsl" href="index.xsl" ?>
+<?xml-stylesheet type="text/xsl" href="index.xsl"?>
 <pages title='Status Page' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="index.xsd">
   <page title='My Control'>
     <row>
@@ -32,24 +32,26 @@
           </column>
         </row>
         <row>
-          <column sm="6">
+          <column sm="12">
             <switch class="btn-default" event="Switch" action="Switch"/>
           </column>
-          <column sm="6">
+        </row>
+        <row>
+          <column sm="12">
             <partialswitch class="btn-default" event="PartialSwitch" action="PartialSwitch"/>
           </column>
         </row>
       </column>
       <column sm="4">
         <title>Testing status</title>
-        <status event="Status1"><badge event="Status2"/><link/><partialbadge event="PartialSwitch"/>Example status box with badge and partialbadge</status>
-        <status event="Status2" page="Testing"><link url="http://nodel.io"/><partialswitch class="btn-default" event="PartialSwitch" action="PartialSwitch"/>Example status box with a long title</status>
+        <status event="Status1"><badge event="Status2"/><link url="http://nodel.io"/><partialbadge event="PartialSwitch"/>Example status box with badge and partialbadge</status>
+        <status event="Status2" page="Testing"><link url="http://nodel.io">Nodel</link><partialswitch class="btn-default" event="PartialSwitch" action="PartialSwitch"/>Example status box with a long title</status>
       </column>
       <column sm="2">
         <title>Meters</title>
         <meter event="Meter1"></meter>
         <meter event="Meter2"></meter>
-        <meter event="Meter3"></meter>
+        <meter event="Meter3" range="db"></meter>
       </column>
     </row>
     <row>
@@ -73,16 +75,31 @@
           </column>
         </row>
         <row>
-          <column sm="12">
+          <column sm="6">
             <title>Volume</title>
             <button action='VolumeDown' class='btn-success'>Down</button>
             <button action='VolumeUp' class='btn-success'>Up</button>
           </column>
+          <column sm="6">
+            <title>Volume momentary</title>
+            <button type="momentary" action-off='VolumeStop' action-on='VolumeDownOn' class='btn-success'>Down</button>
+            <button type="momentary" action-off='VolumeStop' action-on='VolumeUpOn' class='btn-success'>Up</button>
+          </column>
         </row>
       </column>
       <column sm="4">
-        <title>Testing panel</title>
-        <panel height="150" event="Panel"></panel>
+        <row>
+          <column sm="12">
+            <title>Testing panel</title>
+            <panel height="100" event="Panel"></panel>
+          </column>
+        </row>
+        <row>
+          <column sm="12">
+            <title>Testing field</title>
+            <field event="Field"></field>
+          </column>
+        </row>
       </column>
     </row>
   </page>

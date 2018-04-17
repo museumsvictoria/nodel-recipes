@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="index.xsl" ?>
+<pages title='Yamaha Amplifier (XMV) Series' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="index.xsd">
+  <page title='Main'>
+    <row>
+      <column sm="3">
+        <status event="Status">Status</status>
+        
+        <title>Manual</title>
+        <link url="http://download.yamaha.com/api/asset/file/?language=en&amp;site=countrysite-master.prod.wsys.yamaha.com&amp;asset_id=63959"/>
+        
+        <title>Device</title>
+        Firmware
+        <panel event="FirmwareVersion"></panel>
+        
+        Run Mode
+        <panel event="DeviceRunMode"></panel>
+        
+        Error Status
+        <panel event="DeviceErrorStatus"></panel>
+        
+        <title>Utility</title>
+        <select event="Input Select" action="Input Select">
+          <item value="Analog">Analog</item>
+          <item value="Digital">Digital</item>
+          <item value="Multiple">Multiple</item>
+        </select>
+        
+        <title>Sensitivity</title>
+        <select event="InputSensitivity" action="InputSensitivity">
+          <item value="-20dBFS">-20dBFS</item>
+          <item value="-3dBFS">-3dBFS</item>
+        </select>
+      </column>
+      <column sm="3">
+        <title>Power</title>
+        <partialswitch event="Power" action="Power"></partialswitch>
+        
+        <title>Attenuation</title>
+        <range action='Channel1Att' event="Channel1Att" min="-90" max="0"/>
+        <range action='Channel2Att' event="Channel2Att" min="-90" max="0"/>
+        <range action='Channel3Att' event="Channel3Att" min="-90" max="0"/>
+        <range action='Channel4Att' event="Channel4Att" min="-90" max="0"/>
+        <range action='Channel5Att' event="Channel5Att" min="-90" max="0"/>
+        <range action='Channel6Att' event="Channel6Att" min="-90" max="0"/>
+        <range action='Channel7Att' event="Channel7Att" min="-90" max="0"/>
+        <range action='Channel8Att' event="Channel8Att" min="-90" max="0"/>
+      </column>
+      <column sm="2">
+        <title>Muting</title>
+        <partialswitch event="Channel1Mute" action="Channel1Mute"></partialswitch>
+        <partialswitch event="Channel2Mute" action="Channel2Mute"></partialswitch>
+        <partialswitch event="Channel3Mute" action="Channel3Mute"></partialswitch>
+        <partialswitch event="Channel4Mute" action="Channel4Mute"></partialswitch>
+        <partialswitch event="Channel5Mute" action="Channel5Mute"></partialswitch>
+        <partialswitch event="Channel6Mute" action="Channel6Mute"></partialswitch>
+        <partialswitch event="Channel7Mute" action="Channel7Mute"></partialswitch>
+        <partialswitch event="Channel8Mute" action="Channel8Mute"></partialswitch>
+      </column>
+      <column sm="4">
+        <title>Outputs</title>
+        <meter event="Output1Meter"/>
+        <meter event="Output2Meter"/>
+        <meter event="Output3Meter"/>
+        <meter event="Output4Meter"/>
+        <meter event="Output5Meter"/>
+        <meter event="Output6Meter"/>
+        <meter event="Output7Meter"/>
+        <meter event="Output8Meter"/>
+        
+        <title>Inputs</title>
+        <meter event="Input1Meter"/>
+        <meter event="Input2Meter"/>
+        <meter event="Input3Meter"/>
+        <meter event="Input4Meter"/>
+        <meter event="Input5Meter"/>
+        <meter event="Input6Meter"/>
+        <meter event="Input7Meter"/>
+        <meter event="Input8Meter"/>
+        
+        <title>Inputs (9 - 16)</title>
+        <meter event="Input9Meter" min="-50" max="0"/>
+        <meter event="Input10Meter"/>
+        <meter event="Input11Meter"/>
+        <meter event="Input12Meter"/>
+        <meter event="Input13Meter"/>
+        <meter event="Input14Meter"/>
+        <meter event="Input15Meter"/>
+        <meter event="Input16Meter"/>
+
+      </column>
+    </row>
+  </page>
+</pages>

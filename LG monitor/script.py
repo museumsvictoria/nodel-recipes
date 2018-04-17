@@ -17,8 +17,6 @@ param_broadcastIPAddress = Parameter({'title': 'Broadcast IP address', 'schema':
 param_adminPort = Parameter({'title': 'Admin port', 'schema': {'type': 'integer', 'hint': DEFAULT_ADMINPORT}})
 param_macAddress = Parameter({'title': 'MAC address', 'schema': {'type': 'string'}})
 
-local_event_DebugShowLogging = LocalEvent({'group': 'Debug', 'schema': {'type': 'boolean'}})
-
 wol = UDP( # dest='10.65.255.255:9999' % , # set after main
           sent=lambda arg: console.info('wol: sent [%s]' % arg),
           ready=lambda: console.info('wol: ready'), received=lambda arg: console.info('wol: received [%s]'))
@@ -26,8 +24,9 @@ wol = UDP( # dest='10.65.255.255:9999' % , # set after main
 local_event_DebugShowLogging = LocalEvent({'group': 'Debug', 'order': 9999, 'schema': {'type': 'boolean'}})
 
 POWER_STATES = ['On', 'Input Waiting', 'Unknown', 'Turning On', 'Turning Off', 'Off']
-local_event_Power = LocalEvent({'title': 'Power', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': POWER_STATES}})
-local_event_DesiredPower = LocalEvent({'title': 'Desired Power', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}}) 
+local_event_Power = LocalEvent({'title': 'Power', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': POWER_STATES + ['Partially On', 'Partially Off']}})
+local_event_RawPower = LocalEvent({'title': 'Raw', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': POWER_STATES}})
+local_event_DesiredPower = LocalEvent({'title': 'Desired', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}}) 
 local_event_LastPowerRequest = LocalEvent({'title': 'Last request', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string'}}) 
 
 INPUTS_TABLE = [ ('RGB', '60'),
@@ -56,6 +55,37 @@ ZERO_DATE_STR = str(date_instant(0))
 
 setID = DEFAULT_SET_ID
 
+# Power signal needs special handling because the panels drop off the network when 
+# they're turned off
+@after_main
+def attachPowerEmitHandlers():
+  raw = lookup_local_event('Raw Power')
+  desired = lookup_local_event('Desired Power')
+  power = lookup_local_event('Power')
+  
+  def handler(arg):
+    rawValue = raw.getArg()
+    desiredValue = desired.getArg()
+    
+    if desiredValue == 'On':
+      if rawValue == 'Off':
+        power.emit('Partially On')
+      else:
+        # pass through the raw value
+        power.emit(rawValue)
+      
+    elif desiredValue == 'Off':
+      if rawValue == 'On':
+        power.emit('Partially Off')
+      else:
+        # the raw value could be UNKNOWN or OFF here because
+        # they disappear off the network
+        power.emit('Off')
+        
+  # attach handlers
+  desired.addEmitHandler(handler)
+  raw.addEmitHandler(handler)
+
 def powerHandler(state=''):
   if state.lower() == 'on':
     local_event_DesiredPower.emit('On')
@@ -73,37 +103,55 @@ def powerHandler(state=''):
 
 Action('Power', powerHandler, {'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
+# NOTE ABOUT POWER: 
+#       This uses the 'SCREEN OFF' command as opposed to the 'POWER' command so
+#       the arguments needs to be interpretted within that context. At first glance
+#       may seem flipped.
+  
+
+# e.g. 'a 01 OK01x'
+def handlePowerResp(data):
+  if data == '00':    # yes, '00' for ON! (see important note above)
+    local_event_RawPower.emit('On') 
+    
+  elif data == '01':  # yes, '01' for OFF! (see important note above)
+    local_event_RawPower.emit('Off')
+      
+  else:
+    local_event_RawPower.emit('Unknown-%s' % data)
+
 def setPowerState(state):
   log('setPowerState(%s) called' % state)
   
-  if state: # (turn on)
-    # TCP unlikely to be working but...
-    tcp.send('ka %s %s' % (setID, '01'))
+  if state:
+    cmd = '00' # yes, '00' for OFF! (see note above)
+  else:
+    cmd = '01' 
     
+  # Using the "Screen Power = Off" command here NOT the main Power command
+  # otherwise risk the power going off for good (WOL can be very flakey)
+  tcp.request('kd %s %s\r' % (setID, cmd), 
+              lambda resp: checkHeaderAndHandleData(resp, 'd', handlePowerResp))
+  
+  # when turning on, do a few more things for good measure
+  if state: # (turn on)
     # try WOL too
     lookup_local_action("Send WOL Packet").call()
     
+    # and try Mains Power on
+    lookup_local_action("Main Power").call('On')
+    
   else: # (turn off)
-    tcp.send('ka %s %s' % (setID, '00'))
-      
+    tcp.send('kd %s %s' % (setID, '01')) 
     
 def getPowerState():
   log('getPowerState called')
-  
-  # e.g. 'a 01 OK01x'
 
-  def handleData(data):
-    if data == '01':
-      local_event_Power.emit('On')
-    elif data == '00':
-      local_event_Power.emit('Off')
-    else:
-      local_event_Power.emit('Off')
-
-  tcp.request('ka %s ff\r' % setID, 
-              lambda resp: checkHeaderAndHandleData(resp, 'a', handleData))
+  # this actually polls the 'SCREEN OFF' state
+  tcp.request('kd %s ff\r' % setID, 
+              lambda resp: checkHeaderAndHandleData(resp, 'd', handlePowerResp))
   
-timer_powerPoller = Timer(getPowerState, 15.0)  
+timer_powerPoller = Timer(getPowerState, 15.0)
   
 def syncPower():
   log('syncPower called')
@@ -113,7 +161,7 @@ def syncPower():
     return
   
   desired = local_event_DesiredPower.getArg()
-  actual = local_event_Power.getArg()
+  actual = local_event_RawPower.getArg()
   if desired == actual:
     # nothing to do
     timer_powerSyncer.setInterval(120)
@@ -149,8 +197,8 @@ def setInputCode(code):
   
     
 def getInputCode():
-  if local_event_Power.getArg() != 'On':
-    console.log('Power is not on; ignoring input get request')
+  if local_event_RawPower.getArg() != 'On':
+    log('Power is not On; ignoring input get request')
     return
   
   getInputCodeNow()
@@ -181,7 +229,7 @@ def syncInputCode():
     timer_inputCodeSyncer.setInterval(120)
     return
   
-  if local_event_Power.getArg() != 'On':
+  if local_event_RawPower.getArg() != 'On':
     console.log('Power is not on; ignoring input set request')
     return
   
@@ -190,6 +238,59 @@ def syncInputCode():
   timer_inputCodeSyncer.setDelay(15.0)  
 
 timer_inputCodeSyncer = Timer(syncInputCode, 60.0)
+
+SETTINGS_GROUP = "Settings & Info"
+
+# Serial number ---
+
+Event('Serial Number', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string'}})
+Action('Get Serial Number', lambda arg: tcp.request('fy %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'y', lambda data: lookup_local_event('Serial Number').emit(data))), 
+       {'group': SETTINGS_GROUP, 'order': next_seq()})
+
+Timer(lambda: lookup_local_action('Get Serial Number').call(), 15, 5*60)
+
+
+# Temperature ---
+
+Event('Temperature', {'desc': 'Inside temperature', 'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'integer'}})
+Action('Get Temperature', lambda arg: tcp.request('dn %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Temperature').emit(int(data, 16)))), 
+       {'group': SETTINGS_GROUP, 'order': next_seq()})
+
+Timer(lambda: lookup_local_action('Get Temperature').call(), 15, 5*60)
+
+
+# Main Power ---
+
+Event('Main Power', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+Action('Get Main Power', lambda arg: tcp.request('ka %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'a', lambda data: lookup_local_event('Main Power').emit('Off' if data == '00' else ('On' if data == '01' else 'Unknown %s' % data)))), 
+       {'group': SETTINGS_GROUP, 'order': next_seq()})
+
+def handleMainPowerSet(arg):
+  if arg == 'On':
+    cmd = '01'
+  elif arg == 'Off':
+    cmd = '00'
+  else:
+    raise Exception('Unknown MainPower state %s' % arg)
+    
+  tcp.request('ka %s %s\r' % (setID, cmd), 
+              lambda resp: checkHeaderAndHandleData(resp, 'a', lambda data: lookup_local_event('Main Power').emit('Off' if data == '00' else ('On' if data == '01' else 'Unknown %s' % data))))
+
+Action('Main Power', handleMainPowerSet, {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+  
+Timer(lambda: lookup_local_action('Get Main Power').call(), 15, 5*60)
+
+
+# Automatic Standy ---
+
+Event('Automatic Standy', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string'}})
+Action('Get Automatic Standy', lambda arg: tcp.request('mn %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Automatic Standy').emit(data))), 
+       {'group': SETTINGS_GROUP, 'order': next_seq()})
+
+Action('Automatic Standy', lambda arg: tcp.request('mn %s %s\r' % (setID, cmd), lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Automatic Standy').emit(data))),
+       {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['00', '01', '02', '03']}})
+  
+Timer(lambda: lookup_local_action('Get Automatic Standy').call(), 15, 5*60)
 
 
 # LG protocol specific
@@ -223,13 +324,16 @@ def checkHeaderAndHandleData(resp, cmdChar, dataHandler):
 # TCP related
 
 def connected():
-  if local_event_DebugShowLogging.getArg():
-    console.info('CONNECTED')
+  console.info('TCP CONNECTED')
+  
+  # flush the request queue
+  tcp.clearQueue()
       
 def disconnected():
-  log('DISCONNECTED')
+  console.info('TCP DISCONNECTED')
   
-  local_event_Power.emit('Unknown')
+  # immediately trip this value
+  local_event_RawPower.emit('Unknown')
   
 def timeout():
   log('timeout')
@@ -237,7 +341,7 @@ def timeout():
   # flush the request queue
   tcp.clearQueue()
   
-  local_event_Power.emit('Unknown')
+  local_event_RawPower.emit('Unknown')
   
 def received(line):
   lastReceive[0] = system_clock()
@@ -290,10 +394,13 @@ def statusCheck():
   now = date_now()
   
   if diff > status_check_interval+15:
+    # Now using "SCREEN OFF" command which does not disrupt po
+    # so section below is now commented out
+    
     # these panels often turn off their network on power off
-    if local_event_Power.getArg() == 'Off':
-      local_event_Status.emit({'level': 0, 'message': 'Not contactable but powered off'})
-      return
+    # if local_event_Power.getArg() == 'Off':
+    #   local_event_Status.emit({'level': 0, 'message': 'OK (missing but likely Off)'})
+    #   return
     
     previousContactValue = local_event_LastContactDetect.getArg()
     

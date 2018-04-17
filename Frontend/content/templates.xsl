@@ -36,40 +36,57 @@
   </xsl:template>
   <!-- title -->
   <!-- button -->
-  <xsl:template match="button">
+  <xsl:template match="button[not(@type)]">
     <a href="#" class="btn {@class}" data-action="{@action}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
+  </xsl:template>
+  <xsl:template match="button[@type]">
+    <xsl:if test="@type='momentary'">
+      <a href="#" class="btn {@class}" data-actionon="{@action-on}" data-actionoff="{@action-off}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
+    </xsl:if>
   </xsl:template>
   <!-- button -->
   <!-- buttongroup -->
   <xsl:template match="buttongroup">
     <xsl:if test="not(@type)">
-    <div class="btn-group {@class}" role="group">
-    <xsl:for-each select="button">
-      <a href="#" class="btn {@class}" data-action="{@action}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
-    </xsl:for-each>
-    </div>
+      <div class="btn-group {@class}" role="group">
+        <xsl:for-each select="button">
+          <a href="#" class="btn {@class}" data-action="{@action}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
+        </xsl:for-each>
+      </div>
     </xsl:if>
     <xsl:if test="@type='vertical'">
-    <div class="btn-group-vertical btn-block {@class}" role="group">
-    <xsl:for-each select="button">
-      <a href="#" class="btn {@class}" data-action="{@action}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
-    </xsl:for-each>
-    </div>
+      <div class="btn-group-vertical btn-block {@class}" role="group">
+        <xsl:for-each select="button">
+          <a href="#" class="btn {@class}" data-action="{@action}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
+        </xsl:for-each>
+      </div>
     </xsl:if>
   </xsl:template>
   <!-- buttongroup -->
   <!-- switch -->
   <xsl:template match="switch">
-    <div class="btn-group btn-switch" role="group" data-event="{@event}" data-arg-action="{@action}" data-class-off="btn-danger" data-class-on="btn-success">
+    <div class="btn-group btn-switch" role="group" data-event="{@event}" data-arg-action="{@action}">
+      <xsl:attribute name="data-class-off">
+        <xsl:choose>
+          <xsl:when test="@class-off"><xsl:value-of select="@class-off"/></xsl:when>
+          <xsl:otherwise>btn-danger</xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
+      <xsl:attribute name="data-class-on">
+        <xsl:choose>
+          <xsl:when test="@class-on"><xsl:value-of select="@class-on"/></xsl:when>
+          <xsl:otherwise>btn-success</xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
       <a href="#" class="btn btn-default" data-arg="false">
         <xsl:choose>
-          <xsl:when test="off"><xsl:value-of select="off"/></xsl:when>
+          <xsl:when test="@off"><xsl:value-of select="@off"/></xsl:when>
           <xsl:otherwise>Off</xsl:otherwise>
         </xsl:choose>
       </a>
       <a href="#" class="btn btn-default" data-arg="true">
          <xsl:choose>
-          <xsl:when test="on"><xsl:value-of select="on"/></xsl:when>
+          <xsl:when test="@on"><xsl:value-of select="@on"/></xsl:when>
           <xsl:otherwise>On</xsl:otherwise>
         </xsl:choose>
       </a>
@@ -78,16 +95,28 @@
   <!-- switch -->
   <!-- partialswitch -->
   <xsl:template match="partialswitch">
-    <div class="btn-group btn-pswitch" role="group" data-event="{@event}" data-arg-action="{@action}" data-class-off="btn-danger" data-class-on="btn-success">
+    <div class="btn-group btn-pswitch" role="group" data-event="{@event}" data-arg-action="{@action}">
+      <xsl:attribute name="data-class-off">
+        <xsl:choose>
+          <xsl:when test="@class-off"><xsl:value-of select="@class-off"/></xsl:when>
+          <xsl:otherwise>btn-danger</xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
+      <xsl:attribute name="data-class-on">
+        <xsl:choose>
+          <xsl:when test="@class-on"><xsl:value-of select="@class-on"/></xsl:when>
+          <xsl:otherwise>btn-success</xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
       <a href="#" class="btn btn-default" data-arg="Off">
         <xsl:choose>
-          <xsl:when test="off"><xsl:value-of select="off"/></xsl:when>
+          <xsl:when test="@off"><xsl:value-of select="@off"/></xsl:when>
           <xsl:otherwise>Off</xsl:otherwise>
         </xsl:choose>
       </a>
       <a href="#" class="btn btn-default" data-arg="On">
          <xsl:choose>
-          <xsl:when test="on"><xsl:value-of select="on"/></xsl:when>
+          <xsl:when test="@on"><xsl:value-of select="@on"/></xsl:when>
           <xsl:otherwise>On</xsl:otherwise>
         </xsl:choose>
       </a>
@@ -150,13 +179,13 @@
     <span class="label label-default label-pbadge" data-event="{@event}" data-class-off="label-danger" data-class-on="label-success">
     <xsl:attribute name="data-off">
       <xsl:choose>
-        <xsl:when test="off"><xsl:value-of select="off"/></xsl:when>
+        <xsl:when test="@off"><xsl:value-of select="@off"/></xsl:when>
         <xsl:otherwise>Off</xsl:otherwise>
       </xsl:choose>
     </xsl:attribute>
     <xsl:attribute name="data-on">
       <xsl:choose>
-        <xsl:when test="on"><xsl:value-of select="on"/></xsl:when>
+        <xsl:when test="@on"><xsl:value-of select="@on"/></xsl:when>
         <xsl:otherwise>On</xsl:otherwise>
       </xsl:choose>
     </xsl:attribute>
@@ -166,13 +195,13 @@
   <!-- partialbadge -->
   <!-- link -->
   <xsl:template match="link[@node and not(@url)]">
-    <a href="#" class="btn btn-outline" data-link-node="{@node}"><span class="glyphicon glyphicon-new-window"></span></a>
+    <a href="#" class="btn btn-outline" data-link-node="{@node}"><span class="glyphicon glyphicon-new-window"></span><span><xsl:value-of select="text()"/></span></a>
   </xsl:template>
   <xsl:template match="link[@url and not(@node)]">
-    <a href="#" class="btn btn-outline" data-link-url="{@url}"><span class="glyphicon glyphicon-new-window"></span></a>
+    <a href="#" class="btn btn-outline" data-link-url="{@url}"><span class="glyphicon glyphicon-new-window"></span><span><xsl:value-of select="text()"/></span></a>
   </xsl:template>
   <xsl:template match="link[not(@url) and not(@node)]">
-    <a href="#" class="btn btn-outline" data-link-event="{../@event}"><span class="glyphicon glyphicon-new-window"></span></a>
+    <a href="#" class="btn btn-outline" data-link-event="{../@event}"><span class="glyphicon glyphicon-new-window"></span><span><xsl:value-of select="text()"/></span></a>
   </xsl:template>
   <!-- link -->
   <!-- panel -->
@@ -187,12 +216,23 @@
   <!-- panel -->
   <!-- range -->
   <xsl:template match="range">
-    <div><form><input data-arg-source="this" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" /></form></div>
+    <div><form class="range"><input data-arg-source="this" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" /><output data-event="{@event}"></output></form></div>
   </xsl:template>
   <!-- range -->
+  <!-- field -->
+  <xsl:template match="field">
+    <div><form><input class="form-control" data-arg-source="this" data-event="{@event}" disabled="true"/></form></div>
+  </xsl:template>
+  <!-- field -->
   <!-- meter -->
   <xsl:template match="meter">
     <div class="meter" data-event="{@event}">
+      <xsl:attribute name="data-range">
+        <xsl:choose>
+          <xsl:when test="@range"><xsl:value-of select="@range"/></xsl:when>
+          <xsl:otherwise>perc</xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
       <div>
         <div data-toggle="tooltip" class="base label-default"></div>
         <div class="bar">

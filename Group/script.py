@@ -1,32 +1,24 @@
 '''A node that groups members for control propagation and status monitoring - see script.py for notes'''
 
 # For disappearing member support:
-#    (requires at least Nodel Host rev. 322 or later)
+#    (see readme, requires at least Nodel Host rev. 322 or later)
 #
 #    - remote "Disappearing" signals should be wired to the actual signals
 #    - the usual remote signals should be wired to the respective "assumed" local signals respectively.
 
 def main(arg=None):
-  try:
-    for memberInfo in lookup_parameter('members') or []:
-      initMember(memberInfo)
+  for memberInfo in lookup_parameter('members') or []:
+    initMember(memberInfo)
   
-    console.info('Started!')
-    
-  except:
-    console.err("Failed it initialise structures. NOTE: if 'disappearing' member support is being used, Nodel Host rev. 322 or later is required")
-    
-    raise
+  console.info('Started!')
   
-# <!--- members and status support  
-
 MODES = ['Action & Signal', 'Signal Only']
 
 param_members = Parameter({'title': 'Members', 'schema': {'type': 'array', 'items': {'type': 'object', 'properties': {
-   'name': {'type': 'string', 'order': 1},
-   'hasStatus': {'type': 'boolean', 'title': 'Status?', 'order': 3},
-   'disappears': {'title': 'Disappears when Power Off?', 'type': 'boolean', 'order': 3.1},
-   'device': {'title': 'Is a device?', 'type': 'boolean', 'order': 3.2},
+   'name': {'title': 'Simple name (can assume context)', 'type': 'string', 'order': 1},
+   'isGroup': {'type': 'boolean', 'order': 2, 'title': 'Is a Group? (supports extended actions)'}, # this affects whether 'extended' remote arguments are to be used
+   'hasStatus': {'type': 'boolean', 'title': 'Provides Status?', 'order': 3},
+   'disappears': {'title': 'Disappears when Power Off? (usually on edge hosts)', 'type': 'boolean', 'order': 3.1},
    'power': {'title': 'Power', 'type': 'object', 'order': 4, 'properties': {
      'mode': {'title': 'Mode', 'type': 'string', 'enum': MODES}
    }},
@@ -39,12 +31,13 @@ def initMember(memberInfo):
   name = mustNotBeBlank('name', memberInfo['name'])
                            
   disappears = memberInfo.get('disappears')
+  isGroup = memberInfo.get('isGroup')
 
   if (memberInfo.get('power') or {}).get('mode') in MODES:
-    initSignalSupport(name, memberInfo['power']['mode'], 'Power', ['On', 'Off'], disappears)
+    initSignalSupport(name, memberInfo['power']['mode'], 'Power', ['On', 'Off'], disappears, isGroup)
     
   if (memberInfo.get('muting') or {}).get('mode') in MODES:
-    initSignalSupport(name, memberInfo['muting']['mode'], 'Muting', ['On', 'Off'], disappears)
+    initSignalSupport(name, memberInfo['muting']['mode'], 'Muting', ['On', 'Off'], disappears, isGroup)
     
   # do status last because it depends on 'Power' when 'disappears' is in use
   if memberInfo.get('hasStatus'):
@@ -52,7 +45,7 @@ def initMember(memberInfo):
 
 membersBySignal = {}
     
-def initSignalSupport(name, mode, signalName, states, disappears):
+def initSignalSupport(name, mode, signalName, states, disappears, isGroup):
   members = getMembersInfoOrRegister(signalName, name)
   
   # establish local signals if haven't done so already
@@ -65,14 +58,21 @@ def initSignalSupport(name, mode, signalName, states, disappears):
     
   # establish a remote action
   if mode == 'Action & Signal':
-    create_remote_action('Member %s %s' % (name, signalName), {'group': 'Members (%s)' % signalName, 'schema': {'type': 'string', 'enum': states}},
-                         suggestedNode=name, suggestedAction=signalName)
+    if not isGroup:
+      # for non-groups, just use simple remote actions
+      create_remote_action('Member %s %s' % (name, signalName), {'title': '"%s" %s' % (name, signalName), 'group': 'Members\' "%s"' % signalName, 'schema': {'type': 'string', 'enum': states}},
+                           suggestedNode=name, suggestedAction=signalName)
+    
+    else:
+      # for group member, add remote action to handle the 'propogation' flags  
+      create_remote_action('Member %s %s Extended' % (name, signalName), {'title': '"%s" %s (extended)' % (name, signalName), 'group': 'Members (%s)' % signalName, 'schema': {'type': 'string', 'enum': states}},
+                           suggestedNode=name, suggestedAction=signalName)    
   
   # establish a remote signal to receive status
   # signal status states include 'Partially ...' forms
   resultantStates = states + ['Partially %s' % s for s in states]
   
-  localMemberSignal = Event('Member %s %s' % (name, signalName), {'title': '"%s" %s' % (name, signalName), 'group': '(advanced)', 'order': 9999+next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}})
+  localMemberSignal = Event('Member %s %s' % (name, signalName), {'title': '"%s" %s' % (name, signalName), 'group': 'Members\' "%s"' % signalName, 'order': 9999+next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}})
   
   def aggregateMemberSignals():
     shouldBeState = localDesiredSignal.getArg()
@@ -95,7 +95,7 @@ def initSignalSupport(name, mode, signalName, states, disappears):
     
     localMemberSignal.emit(arg)
   
-  create_remote_event('Member %s %s' % (name, signalName), handleRemoteEvent, {'group': 'Members (%s)' % signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}},
+  create_remote_event('Member %s %s' % (name, signalName), handleRemoteEvent, {'title': '"%s" %s' % (name, signalName),'group': 'Members ("%s")' % signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}},
                       suggestedNode=name, suggestedEvent=signalName)
                            
   if disappears:
@@ -104,9 +104,9 @@ def initSignalSupport(name, mode, signalName, states, disappears):
 def initSignal(signalName, mode, states):
   resultantStates = states + ['Partially %s' % s for s in states]
   
-  localDesiredSignal = Event('Desired %s' % signalName, {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': states}})
+  localDesiredSignal = Event('Desired %s' % signalName, {'group': '"%s"' % signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': states}})
   
-  localResultantSignal = Event('%s' % signalName, {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}})
+  localResultantSignal = Event('%s' % signalName, {'group': '"%s"' % signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': resultantStates}})
   
   def handleComplexArg(complexArg):
     state = complexArg['state']
@@ -115,8 +115,7 @@ def initSignal(signalName, mode, states):
     localDesiredSignal.emit(state)
     
     # for convenience, just emit the state as the status if no members are configured
-    members = lookup_parameter('members')
-    if isEmpty(members):
+    if isEmpty(lookup_parameter('members')):
       localResultantSignal.emit(state)
     
     else:
@@ -126,9 +125,11 @@ def initSignal(signalName, mode, states):
       for memberName in membersBySignal[signalName]:
         remoteAction = lookup_remote_action('Member %s %s' % (memberName, signalName))
         if remoteAction != None:
-          for member in members:
-            if member['name'] == memberName:
-              remoteAction.call(complexArg['state']) if member['device'] else remoteAction.call(complexArg)
+          remoteAction.call(state)
+
+        remoteActionExtended = lookup_remote_action('Member %s %s Extended' % (memberName, signalName))
+        if remoteActionExtended != None:
+          remoteActionExtended.call(complexArg)
           
   # create action
   def handleSimpleOrComplexArg(arg):
@@ -137,10 +138,10 @@ def initSignal(signalName, mode, states):
     else:
       handleComplexArg({'state': arg}) # else assume it's plain, wrap up in a complex arg
       
-  Action('%s' % signalName, handleSimpleOrComplexArg, {'group': signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': states}})
+  Action('%s' % signalName, handleSimpleOrComplexArg, {'group': '"%s"' % signalName, 'order': next_seq(), 'schema': {'type': 'string', 'enum': states}})
   
   # create action with options (e.g. 'noPropagate')
-  Action('%s Extended' % signalName, handleComplexArg, {'group': '(extended)', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+  Action('%s Extended' % signalName, handleComplexArg, {'group': '"%s" (extended)' % signalName, 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
            'state': {'type': 'string', 'enum': states, 'order': 3},
            'noPropagate': {'type': 'boolean', 'order': 2}}}})
   
@@ -173,12 +174,12 @@ def initStatusSupport(name, disappears):
     selfStatusSignal = Event('Status', {'group': 'Status', 'order': next_seq(), 'schema': STATUS_SCHEMA})
     
   # status for the member
-  memberStatusSignal = Event('Member %s Status' % name, {'title': '"%s" Status' % name, 'group': '(advanced)', 'order': 9999+next_seq(), 'schema': STATUS_SCHEMA})
+  memberStatusSignal = Event('Member %s Status' % name, {'title': '"%s" Status' % name, 'group': 'Members\' Status', 'order': 9999+next_seq(), 'schema': STATUS_SCHEMA})
   
   # suppression flag?
-  memberStatusSuppressedSignal = Event('Member %s Status Suppressed' % name, {'title': 'Suppress "%s" Status' % name, 'group': '(advanced)', 'order': 9999+next_seq(), 'schema': {'type': 'boolean'}})
+  memberStatusSuppressedSignal = Event('Member %s Status Suppressed' % name, {'title': 'Suppress "%s" Status' % name, 'group': 'Status Suppression', 'order': 9999+next_seq(), 'schema': {'type': 'boolean'}})
   
-  Action('Member %s Status Suppressed' % name, lambda arg: memberStatusSuppressedSignal.emit(arg), {'title': 'Suppress "%s" Status' % name, 'group': '(advanced)', 'order': 9999+next_seq(), 'schema': {'type': 'boolean'}})
+  Action('Member %s Status Suppressed' % name, lambda arg: memberStatusSuppressedSignal.emit(arg), {'title': 'Suppress "%s" Status' % name, 'group': 'Status Suppression', 'order': 9999+next_seq(), 'schema': {'type': 'boolean'}})
   
   def aggregateMemberStatus():
     aggregateLevel = 0
@@ -231,7 +232,7 @@ def initStatusSupport(name, disappears):
   def handleRemoteEvent(arg):
     memberStatusSignal.emit(arg)
   
-  create_remote_event('Member %s Status' % name, handleRemoteEvent, {'group': 'Members (Status)', 'order': next_seq(), 'schema': STATUS_SCHEMA},
+  create_remote_event('Member %s Status' % name, handleRemoteEvent, {'title': '"%s" Status' % name, 'group': 'Members (Status)', 'order': next_seq(), 'schema': STATUS_SCHEMA},
                        suggestedNode=name, suggestedEvent="Status")
                            
   if disappears:
@@ -343,17 +344,3 @@ def isEmpty(o):
     return True
 
 # convenience functions ---!>
-
-# <!-- customisation
-
-# in the absense of any Nodel Host out-of-script customisation mechanism, 
-# try load any custom scripts by default...
-
-try :
-  from custom import *
-  
-except ImportError:
-  # no custom script
-  pass
-
-# --!>

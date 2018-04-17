@@ -41,6 +41,10 @@
   "range": {
     "type": "number"
   },
+
+  "field": {
+    "type": "string"
+  },
   
   "badge": { 
     "type": "object", 

@@ -10,11 +10,13 @@ import subprocess
 system = java.lang.System.getProperty('os.name')
 arch = java.lang.System.getProperty('sun.arch.data.model').lower()
 
+windows = [ "Windows 7", "Windows 8", "Windows 10" ]
+
 
 
 ### Functions used by this Node
 def shutdown():
-  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
+  if system in windows:
     # shutdown WIN
     returncode = subprocess.call("shutdown -s -f -t 0", shell=True)
   elif(system=="Mac OS X"):
@@ -24,8 +26,19 @@ def shutdown():
   else:
     print 'unknown system: ' + system
 
+def suspend():
+  if system in windows:
+    # suspend WIN
+    returncode = subprocess.call("rundll32.exe powrprof.dll,SetSuspendState 0,1,0", shell=True)
+  elif(system=="Mac OS X"):
+    # suspend OSX
+    # nodel process must have sudo rights to shutdown command
+    returncode = subprocess.call("sudo shutdown -s now", shell=True)
+  else:
+    print 'unknown system: ' + system
+
 def restart():
-  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
+  if system in windows:
     # restart WIN
     returncode = subprocess.call("shutdown -r -f -t 0", shell=True)
   elif(system=="Mac OS X"):
@@ -35,7 +48,7 @@ def restart():
     print 'unknown system: ' + system
 
 def mute():
-  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
+  if system in windows:
     returncode = subprocess.call("nircmd"+arch+".exe mutesysvolume 1", shell=True)
   elif(system=="Mac OS X"):
     returncode = subprocess.call("osascript -e 'set volume output muted true'", shell=True)
@@ -43,7 +56,7 @@ def mute():
     print 'unknown system: ' + system
 
 def unmute():
-  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
+  if system in windows:
     returncode = subprocess.call("nircmd"+arch+".exe mutesysvolume 0", shell=True)
     print returncode
   elif(system=="Mac OS X"):
@@ -52,7 +65,7 @@ def unmute():
     print 'unknown system: ' + system
 
 def set_volume(vol):
-  if(system=="Windows 7" or system=="Windows 8" or system=="Windows 10"):
+  if system in windows:
     winvol = (65535/100)*vol
     returncode = subprocess.call("nircmd"+arch+".exe setsysvolume "+str(winvol), shell=True)
   elif(system=="Mac OS X"):
@@ -69,6 +82,11 @@ def local_action_PowerOff(arg = None):
   """{"title":"PowerOff","desc":"Turns this computer off.","group":"Power"}"""
   print 'Action PowerOff requested'
   shutdown()
+
+def local_action_Suspend(arg = None):
+  """{"title":"Suspend","desc":"Suspends this computer.","group":"Power"}"""
+  print 'Action Suspend requested'
+  suspend()
 
 def local_action_Restart(arg = None):
   """{"title":"Restart","desc":"Restarts this computer.","group":"Power"}"""

@@ -47,6 +47,8 @@ timer_deviceStatus = Timer(handle_displayStatusTimer, 30)
 def main(arg = None):
   if param_ipAddress == None or len(param_ipAddress.strip())==0:
     console.warn('No IP address set!')
+    timer_deviceStatus.stop()
+    timer_nonCritical.stop()
     return
   
   print 'Nodel script started.'
@@ -415,7 +417,7 @@ def local_action_PollNonCriticalInfo(arg=None):
   lookup_local_action('GetSoftwareVersion').call()
   
 # non-critical poll every 2 days, first after 15 s
-Timer(lambda: lookup_local_action('PollNonCriticalInfo').call(), 3600*48, 15)
+timer_nonCritical = Timer(lambda: lookup_local_action('PollNonCriticalInfo').call(), 3600*48, 15)
 
 
 def checkHeader(arg, onSuccess=None):
@@ -461,7 +463,12 @@ def statusCheck():
     else:
       previousContact = date_parse(previousContactValue)
       roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
-      message = 'Off the network for approx. %s minutes' % roughDiff
+      if roughDiff < 60:
+        message = 'Off the network for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'Off the network since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'Off the network since %s' % previousContact.toString('h:mm:ss a, E d-MMM')      
       
     local_event_Status.emit({'level': 2, 'message': message})
     return
@@ -479,7 +486,12 @@ def statusCheck():
     else:
       previousContact = date_parse(previousContactValue)
       roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
-      message = 'Last landing was approx. %s minutes ago' % roughDiff
+      if roughDiff < 60:
+        message = 'Last landing was approx. %s mins ago' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'No landing since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'No landing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')      
       
     local_event_Status.emit({'level': 2, 'message': message})
     return
@@ -494,4 +506,3 @@ status_timer = Timer(statusCheck, status_check_interval)
 def log(msg):
   if local_event_DebugShowLogging.getArg():
     print msg
-    

@@ -1,15 +1,15 @@
 /*!
- * jQuery JavaScript Library v3.1.1
+ * jQuery JavaScript Library v3.3.1
  * https://jquery.com/
  *
  * Includes Sizzle.js
  * https://sizzlejs.com/
  *
- * Copyright jQuery Foundation and other contributors
+ * Copyright JS Foundation and other contributors
  * Released under the MIT license
  * https://jquery.org/license
  *
- * Date: 2016-09-22T22:30Z
+ * Date: 2018-01-20T17:24Z
  */
 ( function( global, factory ) {
 
@@ -71,16 +71,57 @@ var ObjectFunctionString = fnToString.call( Object );
 
 var support = {};
 
+var isFunction = function isFunction( obj ) {
+
+      // Support: Chrome <=57, Firefox <=52
+      // In some browsers, typeof returns "function" for HTML <object> elements
+      // (i.e., `typeof document.createElement( "object" ) === "function"`).
+      // We don't want to classify *any* DOM node as a function.
+      return typeof obj === "function" && typeof obj.nodeType !== "number";
+  };
 
 
-	function DOMEval( code, doc ) {
+var isWindow = function isWindow( obj ) {
+		return obj != null && obj === obj.window;
+	};
+
+
+
+
+	var preservedScriptAttributes = {
+		type: true,
+		src: true,
+		noModule: true
+	};
+
+	function DOMEval( code, doc, node ) {
 		doc = doc || document;
 
-		var script = doc.createElement( "script" );
+		var i,
+			script = doc.createElement( "script" );
 
 		script.text = code;
+		if ( node ) {
+			for ( i in preservedScriptAttributes ) {
+				if ( node[ i ] ) {
+					script[ i ] = node[ i ];
+				}
+			}
+		}
 		doc.head.appendChild( script ).parentNode.removeChild( script );
 	}
+
+
+function toType( obj ) {
+	if ( obj == null ) {
+		return obj + "";
+	}
+
+	// Support: Android <=2.3 only (functionish RegExp)
+	return typeof obj === "object" || typeof obj === "function" ?
+		class2type[ toString.call( obj ) ] || "object" :
+		typeof obj;
+}
 /* global Symbol */
 // Defining this global in .eslintrc.json would create a danger of using the global
 // unguarded in another place, it seems safer to define global only for this module
@@ -88,7 +129,7 @@ var support = {};
 
 
 var
-	version = "3.1.1",
+	version = "3.3.1",
 
 	// Define a local copy of jQuery
 	jQuery = function( selector, context ) {
@@ -100,16 +141,7 @@ var
 
 	// Support: Android <=4.0 only
 	// Make sure we trim BOM and NBSP
-	rtrim = /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g,
-
-	// Matches dashed string for camelizing
-	rmsPrefix = /^-ms-/,
-	rdashAlpha = /-([a-z])/g,
-
-	// Used by jQuery.camelCase as callback to replace()
-	fcamelCase = function( all, letter ) {
-		return letter.toUpperCase();
-	};
+	rtrim = /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g;
 
 jQuery.fn = jQuery.prototype = {
 
@@ -209,7 +241,7 @@ jQuery.extend = jQuery.fn.extend = function() {
 	}
 
 	// Handle case when target is a string or something (possible in deep copy)
-	if ( typeof target !== "object" && !jQuery.isFunction( target ) ) {
+	if ( typeof target !== "object" && !isFunction( target ) ) {
 		target = {};
 	}
 
@@ -236,11 +268,11 @@ jQuery.extend = jQuery.fn.extend = function() {
 
 				// Recurse if we're merging plain objects or arrays
 				if ( deep && copy && ( jQuery.isPlainObject( copy ) ||
-					( copyIsArray = jQuery.isArray( copy ) ) ) ) {
+					( copyIsArray = Array.isArray( copy ) ) ) ) {
 
 					if ( copyIsArray ) {
 						copyIsArray = false;
-						clone = src && jQuery.isArray( src ) ? src : [];
+						clone = src && Array.isArray( src ) ? src : [];
 
 					} else {
 						clone = src && jQuery.isPlainObject( src ) ? src : {};
@@ -275,30 +307,6 @@ jQuery.extend( {
 
 	noop: function() {},
 
-	isFunction: function( obj ) {
-		return jQuery.type( obj ) === "function";
-	},
-
-	isArray: Array.isArray,
-
-	isWindow: function( obj ) {
-		return obj != null && obj === obj.window;
-	},
-
-	isNumeric: function( obj ) {
-
-		// As of jQuery 3.0, isNumeric is limited to
-		// strings and numbers (primitives or objects)
-		// that can be coerced to finite numbers (gh-2662)
-		var type = jQuery.type( obj );
-		return ( type === "number" || type === "string" ) &&
-
-			// parseFloat NaNs numeric-cast false positives ("")
-			// ...but misinterprets leading-number strings, particularly hex literals ("0x...")
-			// subtraction forces infinities to NaN
-			!isNaN( obj - parseFloat( obj ) );
-	},
-
 	isPlainObject: function( obj ) {
 		var proto, Ctor;
 
@@ -332,31 +340,9 @@ jQuery.extend( {
 		return true;
 	},
 
-	type: function( obj ) {
-		if ( obj == null ) {
-			return obj + "";
-		}
-
-		// Support: Android <=2.3 only (functionish RegExp)
-		return typeof obj === "object" || typeof obj === "function" ?
-			class2type[ toString.call( obj ) ] || "object" :
-			typeof obj;
-	},
-
 	// Evaluates a script in a global context
 	globalEval: function( code ) {
 		DOMEval( code );
-	},
-
-	// Convert dashed to camelCase; used by the css and data modules
-	// Support: IE <=9 - 11, Edge 12 - 13
-	// Microsoft forgot to hump their vendor prefix (#9572)
-	camelCase: function( string ) {
-		return string.replace( rmsPrefix, "ms-" ).replace( rdashAlpha, fcamelCase );
-	},
-
-	nodeName: function( elem, name ) {
-		return elem.nodeName && elem.nodeName.toLowerCase() === name.toLowerCase();
 	},
 
 	each: function( obj, callback ) {
@@ -479,37 +465,6 @@ jQuery.extend( {
 	// A global GUID counter for objects
 	guid: 1,
 
-	// Bind a function to a context, optionally partially applying any
-	// arguments.
-	proxy: function( fn, context ) {
-		var tmp, args, proxy;
-
-		if ( typeof context === "string" ) {
-			tmp = fn[ context ];
-			context = fn;
-			fn = tmp;
-		}
-
-		// Quick check to determine if target is callable, in the spec
-		// this throws a TypeError, but we will just return undefined.
-		if ( !jQuery.isFunction( fn ) ) {
-			return undefined;
-		}
-
-		// Simulated bind
-		args = slice.call( arguments, 2 );
-		proxy = function() {
-			return fn.apply( context || this, args.concat( slice.call( arguments ) ) );
-		};
-
-		// Set the guid of unique handler to the same of original handler, so it can be removed
-		proxy.guid = fn.guid = fn.guid || jQuery.guid++;
-
-		return proxy;
-	},
-
-	now: Date.now,
-
 	// jQuery.support is not used in Core but other projects attach their
 	// properties to it so it needs to exist.
 	support: support
@@ -532,9 +487,9 @@ function isArrayLike( obj ) {
 	// hasOwn isn't used here due to false negatives
 	// regarding Nodelist length in IE
 	var length = !!obj && "length" in obj && obj.length,
-		type = jQuery.type( obj );
+		type = toType( obj );
 
-	if ( type === "function" || jQuery.isWindow( obj ) ) {
+	if ( isFunction( obj ) || isWindow( obj ) ) {
 		return false;
 	}
 
@@ -2843,15 +2798,20 @@ var siblings = function( n, elem ) {
 
 var rneedsContext = jQuery.expr.match.needsContext;
 
+
+
+function nodeName( elem, name ) {
+
+  return elem.nodeName && elem.nodeName.toLowerCase() === name.toLowerCase();
+
+};
 var rsingleTag = ( /^<([a-z][^\/\0>:\x20\t\r\n\f]*)[\x20\t\r\n\f]*\/?>(?:<\/\1>|)$/i );
 
 
 
-var risSimple = /^.[^:#\[\.,]*$/;
-
 // Implement the identical functionality for filter and not
 function winnow( elements, qualifier, not ) {
-	if ( jQuery.isFunction( qualifier ) ) {
+	if ( isFunction( qualifier ) ) {
 		return jQuery.grep( elements, function( elem, i ) {
 			return !!qualifier.call( elem, i, elem ) !== not;
 		} );
@@ -2871,16 +2831,8 @@ function winnow( elements, qualifier, not ) {
 		} );
 	}
 
-	// Simple selector that can be filtered directly, removing non-Elements
-	if ( risSimple.test( qualifier ) ) {
-		return jQuery.filter( qualifier, elements, not );
-	}
-
-	// Complex selector, compare the two sets, removing non-Elements
-	qualifier = jQuery.filter( qualifier, elements );
-	return jQuery.grep( elements, function( elem ) {
-		return ( indexOf.call( qualifier, elem ) > -1 ) !== not && elem.nodeType === 1;
-	} );
+	// Filtered directly for both simple and complex selectors
+	return jQuery.filter( qualifier, elements, not );
 }
 
 jQuery.filter = function( expr, elems, not ) {
@@ -3001,7 +2953,7 @@ var rootjQuery,
 						for ( match in context ) {
 
 							// Properties of context are called as methods if possible
-							if ( jQuery.isFunction( this[ match ] ) ) {
+							if ( isFunction( this[ match ] ) ) {
 								this[ match ]( context[ match ] );
 
 							// ...and otherwise set as attributes
@@ -3044,7 +2996,7 @@ var rootjQuery,
 
 		// HANDLE: $(function)
 		// Shortcut for document ready
-		} else if ( jQuery.isFunction( selector ) ) {
+		} else if ( isFunction( selector ) ) {
 			return root.ready !== undefined ?
 				root.ready( selector ) :
 
@@ -3194,7 +3146,18 @@ jQuery.each( {
 		return siblings( elem.firstChild );
 	},
 	contents: function( elem ) {
-		return elem.contentDocument || jQuery.merge( [], elem.childNodes );
+        if ( nodeName( elem, "iframe" ) ) {
+            return elem.contentDocument;
+        }
+
+        // Support: IE 9 - 11 only, iOS 7 only, Android Browser <=4.3 only
+        // Treat the template element as a regular one in browsers that
+        // don't support it.
+        if ( nodeName( elem, "template" ) ) {
+            elem = elem.content || elem;
+        }
+
+        return jQuery.merge( [], elem.childNodes );
 	}
 }, function( name, fn ) {
 	jQuery.fn[ name ] = function( until, selector ) {
@@ -3292,7 +3255,7 @@ jQuery.Callbacks = function( options ) {
 		fire = function() {
 
 			// Enforce single-firing
-			locked = options.once;
+			locked = locked || options.once;
 
 			// Execute callbacks for all pending executions,
 			// respecting firingIndex overrides and runtime changes
@@ -3348,11 +3311,11 @@ jQuery.Callbacks = function( options ) {
 
 					( function add( args ) {
 						jQuery.each( args, function( _, arg ) {
-							if ( jQuery.isFunction( arg ) ) {
+							if ( isFunction( arg ) ) {
 								if ( !options.unique || !self.has( arg ) ) {
 									list.push( arg );
 								}
-							} else if ( arg && arg.length && jQuery.type( arg ) !== "string" ) {
+							} else if ( arg && arg.length && toType( arg ) !== "string" ) {
 
 								// Inspect recursively
 								add( arg );
@@ -3461,25 +3424,26 @@ function Thrower( ex ) {
 	throw ex;
 }
 
-function adoptValue( value, resolve, reject ) {
+function adoptValue( value, resolve, reject, noValue ) {
 	var method;
 
 	try {
 
 		// Check for promise aspect first to privilege synchronous behavior
-		if ( value && jQuery.isFunction( ( method = value.promise ) ) ) {
+		if ( value && isFunction( ( method = value.promise ) ) ) {
 			method.call( value ).done( resolve ).fail( reject );
 
 		// Other thenables
-		} else if ( value && jQuery.isFunction( ( method = value.then ) ) ) {
+		} else if ( value && isFunction( ( method = value.then ) ) ) {
 			method.call( value, resolve, reject );
 
 		// Other non-thenables
 		} else {
 
-			// Support: Android 4.0 only
-			// Strict mode functions invoked without .call/.apply get global-object context
-			resolve.call( undefined, value );
+			// Control `resolve` arguments by letting Array#slice cast boolean `noValue` to integer:
+			// * false: [ value ].slice( 0 ) => resolve( value )
+			// * true: [ value ].slice( 1 ) => resolve()
+			resolve.apply( undefined, [ value ].slice( noValue ) );
 		}
 
 	// For Promises/A+, convert exceptions into rejections
@@ -3489,7 +3453,7 @@ function adoptValue( value, resolve, reject ) {
 
 		// Support: Android 4.0 only
 		// Strict mode functions invoked without .call/.apply get global-object context
-		reject.call( undefined, value );
+		reject.apply( undefined, [ value ] );
 	}
 }
 
@@ -3528,14 +3492,14 @@ jQuery.extend( {
 						jQuery.each( tuples, function( i, tuple ) {
 
 							// Map tuples (progress, done, fail) to arguments (done, fail, progress)
-							var fn = jQuery.isFunction( fns[ tuple[ 4 ] ] ) && fns[ tuple[ 4 ] ];
+							var fn = isFunction( fns[ tuple[ 4 ] ] ) && fns[ tuple[ 4 ] ];
 
 							// deferred.progress(function() { bind to newDefer or newDefer.notify })
 							// deferred.done(function() { bind to newDefer or newDefer.resolve })
 							// deferred.fail(function() { bind to newDefer or newDefer.reject })
 							deferred[ tuple[ 1 ] ]( function() {
 								var returned = fn && fn.apply( this, arguments );
-								if ( returned && jQuery.isFunction( returned.promise ) ) {
+								if ( returned && isFunction( returned.promise ) ) {
 									returned.promise()
 										.progress( newDefer.notify )
 										.done( newDefer.resolve )
@@ -3589,7 +3553,7 @@ jQuery.extend( {
 										returned.then;
 
 									// Handle a returned thenable
-									if ( jQuery.isFunction( then ) ) {
+									if ( isFunction( then ) ) {
 
 										// Special processors (notify) just wait for resolution
 										if ( special ) {
@@ -3685,7 +3649,7 @@ jQuery.extend( {
 							resolve(
 								0,
 								newDefer,
-								jQuery.isFunction( onProgress ) ?
+								isFunction( onProgress ) ?
 									onProgress :
 									Identity,
 								newDefer.notifyWith
@@ -3697,7 +3661,7 @@ jQuery.extend( {
 							resolve(
 								0,
 								newDefer,
-								jQuery.isFunction( onFulfilled ) ?
+								isFunction( onFulfilled ) ?
 									onFulfilled :
 									Identity
 							)
@@ -3708,7 +3672,7 @@ jQuery.extend( {
 							resolve(
 								0,
 								newDefer,
-								jQuery.isFunction( onRejected ) ?
+								isFunction( onRejected ) ?
 									onRejected :
 									Thrower
 							)
@@ -3748,8 +3712,15 @@ jQuery.extend( {
 					// fulfilled_callbacks.disable
 					tuples[ 3 - i ][ 2 ].disable,
 
+					// rejected_handlers.disable
+					// fulfilled_handlers.disable
+					tuples[ 3 - i ][ 3 ].disable,
+
 					// progress_callbacks.lock
-					tuples[ 0 ][ 2 ].lock
+					tuples[ 0 ][ 2 ].lock,
+
+					// progress_handlers.lock
+					tuples[ 0 ][ 3 ].lock
 				);
 			}
 
@@ -3814,11 +3785,12 @@ jQuery.extend( {
 
 		// Single- and empty arguments are adopted like Promise.resolve
 		if ( remaining <= 1 ) {
-			adoptValue( singleValue, master.done( updateFunc( i ) ).resolve, master.reject );
+			adoptValue( singleValue, master.done( updateFunc( i ) ).resolve, master.reject,
+				!remaining );
 
 			// Use .then() to unwrap secondary thenables (cf. gh-3000)
 			if ( master.state() === "pending" ||
-				jQuery.isFunction( resolveValues[ i ] && resolveValues[ i ].then ) ) {
+				isFunction( resolveValues[ i ] && resolveValues[ i ].then ) ) {
 
 				return master.then();
 			}
@@ -3886,15 +3858,6 @@ jQuery.extend( {
 	// the ready event fires. See #6781
 	readyWait: 1,
 
-	// Hold (or release) the ready event
-	holdReady: function( hold ) {
-		if ( hold ) {
-			jQuery.readyWait++;
-		} else {
-			jQuery.ready( true );
-		}
-	},
-
 	// Handle when the DOM is ready
 	ready: function( wait ) {
 
@@ -3955,7 +3918,7 @@ var access = function( elems, fn, key, value, chainable, emptyGet, raw ) {
 		bulk = key == null;
 
 	// Sets many values
-	if ( jQuery.type( key ) === "object" ) {
+	if ( toType( key ) === "object" ) {
 		chainable = true;
 		for ( i in key ) {
 			access( elems, fn, i, key[ i ], true, emptyGet, raw );
@@ -3965,7 +3928,7 @@ var access = function( elems, fn, key, value, chainable, emptyGet, raw ) {
 	} else if ( value !== undefined ) {
 		chainable = true;
 
-		if ( !jQuery.isFunction( value ) ) {
+		if ( !isFunction( value ) ) {
 			raw = true;
 		}
 
@@ -4007,6 +3970,23 @@ var access = function( elems, fn, key, value, chainable, emptyGet, raw ) {
 
 	return len ? fn( elems[ 0 ], key ) : emptyGet;
 };
+
+
+// Matches dashed string for camelizing
+var rmsPrefix = /^-ms-/,
+	rdashAlpha = /-([a-z])/g;
+
+// Used by camelCase as callback to replace()
+function fcamelCase( all, letter ) {
+	return letter.toUpperCase();
+}
+
+// Convert dashed to camelCase; used by the css and data modules
+// Support: IE <=9 - 11, Edge 12 - 15
+// Microsoft forgot to hump their vendor prefix (#9572)
+function camelCase( string ) {
+	return string.replace( rmsPrefix, "ms-" ).replace( rdashAlpha, fcamelCase );
+}
 var acceptData = function( owner ) {
 
 	// Accepts only:
@@ -4069,14 +4049,14 @@ Data.prototype = {
 		// Handle: [ owner, key, value ] args
 		// Always use camelCase key (gh-2257)
 		if ( typeof data === "string" ) {
-			cache[ jQuery.camelCase( data ) ] = value;
+			cache[ camelCase( data ) ] = value;
 
 		// Handle: [ owner, { properties } ] args
 		} else {
 
 			// Copy the properties one-by-one to the cache object
 			for ( prop in data ) {
-				cache[ jQuery.camelCase( prop ) ] = data[ prop ];
+				cache[ camelCase( prop ) ] = data[ prop ];
 			}
 		}
 		return cache;
@@ -4086,7 +4066,7 @@ Data.prototype = {
 			this.cache( owner ) :
 
 			// Always use camelCase key (gh-2257)
-			owner[ this.expando ] && owner[ this.expando ][ jQuery.camelCase( key ) ];
+			owner[ this.expando ] && owner[ this.expando ][ camelCase( key ) ];
 	},
 	access: function( owner, key, value ) {
 
@@ -4130,13 +4110,13 @@ Data.prototype = {
 		if ( key !== undefined ) {
 
 			// Support array or space separated string of keys
-			if ( jQuery.isArray( key ) ) {
+			if ( Array.isArray( key ) ) {
 
 				// If key is an array of keys...
 				// We always set camelCase keys, so remove that.
-				key = key.map( jQuery.camelCase );
+				key = key.map( camelCase );
 			} else {
-				key = jQuery.camelCase( key );
+				key = camelCase( key );
 
 				// If a key with the spaces exists, use it.
 				// Otherwise, create an array by matching non-whitespace
@@ -4282,7 +4262,7 @@ jQuery.fn.extend( {
 						if ( attrs[ i ] ) {
 							name = attrs[ i ].name;
 							if ( name.indexOf( "data-" ) === 0 ) {
-								name = jQuery.camelCase( name.slice( 5 ) );
+								name = camelCase( name.slice( 5 ) );
 								dataAttr( elem, name, data[ name ] );
 							}
 						}
@@ -4356,7 +4336,7 @@ jQuery.extend( {
 
 			// Speed up dequeue by getting out quickly if this is just a lookup
 			if ( data ) {
-				if ( !queue || jQuery.isArray( data ) ) {
+				if ( !queue || Array.isArray( data ) ) {
 					queue = dataPriv.access( elem, type, jQuery.makeArray( data ) );
 				} else {
 					queue.push( data );
@@ -4529,8 +4509,7 @@ var swap = function( elem, options, callback, args ) {
 
 
 function adjustCSS( elem, prop, valueParts, tween ) {
-	var adjusted,
-		scale = 1,
+	var adjusted, scale,
 		maxIterations = 20,
 		currentValue = tween ?
 			function() {
@@ -4548,30 +4527,33 @@ function adjustCSS( elem, prop, valueParts, tween ) {
 
 	if ( initialInUnit && initialInUnit[ 3 ] !== unit ) {
 
+		// Support: Firefox <=54
+		// Halve the iteration target value to prevent interference from CSS upper bounds (gh-2144)
+		initial = initial / 2;
+
 		// Trust units reported by jQuery.css
 		unit = unit || initialInUnit[ 3 ];
-
-		// Make sure we update the tween properties later on
-		valueParts = valueParts || [];
 
 		// Iteratively approximate from a nonzero starting point
 		initialInUnit = +initial || 1;
 
-		do {
+		while ( maxIterations-- ) {
 
-			// If previous iteration zeroed out, double until we get *something*.
-			// Use string for doubling so we don't accidentally see scale as unchanged below
-			scale = scale || ".5";
-
-			// Adjust and apply
-			initialInUnit = initialInUnit / scale;
+			// Evaluate and update our best guess (doubling guesses that zero out).
+			// Finish if the scale equals or crosses 1 (making the old*new product non-positive).
 			jQuery.style( elem, prop, initialInUnit + unit );
+			if ( ( 1 - scale ) * ( 1 - ( scale = currentValue() / initial || 0.5 ) ) <= 0 ) {
+				maxIterations = 0;
+			}
+			initialInUnit = initialInUnit / scale;
 
-		// Update scale, tolerating zero or NaN from tween.cur()
-		// Break the loop if scale is unchanged or perfect, or if we've just had enough.
-		} while (
-			scale !== ( scale = currentValue() / initial ) && scale !== 1 && --maxIterations
-		);
+		}
+
+		initialInUnit = initialInUnit * 2;
+		jQuery.style( elem, prop, initialInUnit + unit );
+
+		// Make sure we update the tween properties later on
+		valueParts = valueParts || [];
 	}
 
 	if ( valueParts ) {
@@ -4689,7 +4671,7 @@ var rcheckableType = ( /^(?:checkbox|radio)$/i );
 
 var rtagName = ( /<([a-z][^\/\0>\x20\t\r\n\f]+)/i );
 
-var rscriptType = ( /^$|\/(?:java|ecma)script/i );
+var rscriptType = ( /^$|^module$|\/(?:java|ecma)script/i );
 
 
 
@@ -4733,7 +4715,7 @@ function getAll( context, tag ) {
 		ret = [];
 	}
 
-	if ( tag === undefined || tag && jQuery.nodeName( context, tag ) ) {
+	if ( tag === undefined || tag && nodeName( context, tag ) ) {
 		return jQuery.merge( [ context ], ret );
 	}
 
@@ -4771,7 +4753,7 @@ function buildFragment( elems, context, scripts, selection, ignored ) {
 		if ( elem || elem === 0 ) {
 
 			// Add nodes directly
-			if ( jQuery.type( elem ) === "object" ) {
+			if ( toType( elem ) === "object" ) {
 
 				// Support: Android <=4.0 only, PhantomJS 1 only
 				// push.apply(_, arraylike) throws on ancient WebKit
@@ -5281,7 +5263,7 @@ jQuery.event = {
 			enumerable: true,
 			configurable: true,
 
-			get: jQuery.isFunction( hook ) ?
+			get: isFunction( hook ) ?
 				function() {
 					if ( this.originalEvent ) {
 							return hook( this.originalEvent );
@@ -5340,7 +5322,7 @@ jQuery.event = {
 
 			// For checkbox, fire native event so checked state will be right
 			trigger: function() {
-				if ( this.type === "checkbox" && this.click && jQuery.nodeName( this, "input" ) ) {
+				if ( this.type === "checkbox" && this.click && nodeName( this, "input" ) ) {
 					this.click();
 					return false;
 				}
@@ -5348,7 +5330,7 @@ jQuery.event = {
 
 			// For cross-browser consistency, don't fire native .click() on links
 			_default: function( event ) {
-				return jQuery.nodeName( event.target, "a" );
+				return nodeName( event.target, "a" );
 			}
 		},
 
@@ -5416,7 +5398,7 @@ jQuery.Event = function( src, props ) {
 	}
 
 	// Create a timestamp if incoming event doesn't have one
-	this.timeStamp = src && src.timeStamp || jQuery.now();
+	this.timeStamp = src && src.timeStamp || Date.now();
 
 	// Mark it as fixed
 	this[ jQuery.expando ] = true;
@@ -5615,21 +5597,21 @@ var
 
 	/* eslint-enable */
 
-	// Support: IE <=10 - 11, Edge 12 - 13
+	// Support: IE <=10 - 11, Edge 12 - 13 only
 	// In IE/Edge using regex groups here causes severe slowdowns.
 	// See https://connect.microsoft.com/IE/feedback/details/1736512/
 	rnoInnerhtml = /<script|<style|<link/i,
 
 	// checked="checked" or checked
 	rchecked = /checked\s*(?:[^=]|=\s*.checked.)/i,
-	rscriptTypeMasked = /^true\/(.*)/,
 	rcleanScript = /^\s*<!(?:\[CDATA\[|--)|(?:\]\]|--)>\s*$/g;
 
+// Prefer a tbody over its parent table for containing new rows
 function manipulationTarget( elem, content ) {
-	if ( jQuery.nodeName( elem, "table" ) &&
-		jQuery.nodeName( content.nodeType !== 11 ? content : content.firstChild, "tr" ) ) {
+	if ( nodeName( elem, "table" ) &&
+		nodeName( content.nodeType !== 11 ? content : content.firstChild, "tr" ) ) {
 
-		return elem.getElementsByTagName( "tbody" )[ 0 ] || elem;
+		return jQuery( elem ).children( "tbody" )[ 0 ] || elem;
 	}
 
 	return elem;
@@ -5641,10 +5623,8 @@ function disableScript( elem ) {
 	return elem;
 }
 function restoreScript( elem ) {
-	var match = rscriptTypeMasked.exec( elem.type );
-
-	if ( match ) {
-		elem.type = match[ 1 ];
+	if ( ( elem.type || "" ).slice( 0, 5 ) === "true/" ) {
+		elem.type = elem.type.slice( 5 );
 	} else {
 		elem.removeAttribute( "type" );
 	}
@@ -5710,15 +5690,15 @@ function domManip( collection, args, callback, ignored ) {
 		l = collection.length,
 		iNoClone = l - 1,
 		value = args[ 0 ],
-		isFunction = jQuery.isFunction( value );
+		valueIsFunction = isFunction( value );
 
 	// We can't cloneNode fragments that contain checked, in WebKit
-	if ( isFunction ||
+	if ( valueIsFunction ||
 			( l > 1 && typeof value === "string" &&
 				!support.checkClone && rchecked.test( value ) ) ) {
 		return collection.each( function( index ) {
 			var self = collection.eq( index );
-			if ( isFunction ) {
+			if ( valueIsFunction ) {
 				args[ 0 ] = value.call( this, index, self.html() );
 			}
 			domManip( self, args, callback, ignored );
@@ -5772,14 +5752,14 @@ function domManip( collection, args, callback, ignored ) {
 						!dataPriv.access( node, "globalEval" ) &&
 						jQuery.contains( doc, node ) ) {
 
-						if ( node.src ) {
+						if ( node.src && ( node.type || "" ).toLowerCase()  !== "module" ) {
 
 							// Optional AJAX dependency, but won't run scripts if not present
 							if ( jQuery._evalUrl ) {
 								jQuery._evalUrl( node.src );
 							}
 						} else {
-							DOMEval( node.textContent.replace( rcleanScript, "" ), doc );
+							DOMEval( node.textContent.replace( rcleanScript, "" ), doc, node );
 						}
 					}
 				}
@@ -6059,8 +6039,6 @@ jQuery.each( {
 		return this.pushStack( ret );
 	};
 } );
-var rmargin = ( /^margin/ );
-
 var rnumnonpx = new RegExp( "^(" + pnum + ")(?!px)[a-z%]+$", "i" );
 
 var getStyles = function( elem ) {
@@ -6077,6 +6055,8 @@ var getStyles = function( elem ) {
 		return view.getComputedStyle( elem );
 	};
 
+var rboxStyle = new RegExp( cssExpand.join( "|" ), "i" );
+
 
 
 ( function() {
@@ -6090,25 +6070,33 @@ var getStyles = function( elem ) {
 			return;
 		}
 
+		container.style.cssText = "position:absolute;left:-11111px;width:60px;" +
+			"margin-top:1px;padding:0;border:0";
 		div.style.cssText =
-			"box-sizing:border-box;" +
-			"position:relative;display:block;" +
+			"position:relative;display:block;box-sizing:border-box;overflow:scroll;" +
 			"margin:auto;border:1px;padding:1px;" +
-			"top:1%;width:50%";
-		div.innerHTML = "";
-		documentElement.appendChild( container );
+			"width:60%;top:1%";
+		documentElement.appendChild( container ).appendChild( div );
 
 		var divStyle = window.getComputedStyle( div );
 		pixelPositionVal = divStyle.top !== "1%";
 
 		// Support: Android 4.0 - 4.3 only, Firefox <=3 - 44
-		reliableMarginLeftVal = divStyle.marginLeft === "2px";
-		boxSizingReliableVal = divStyle.width === "4px";
+		reliableMarginLeftVal = roundPixelMeasures( divStyle.marginLeft ) === 12;
 
-		// Support: Android 4.0 - 4.3 only
+		// Support: Android 4.0 - 4.3 only, Safari <=9.1 - 10.1, iOS <=7.0 - 9.3
 		// Some styles come back with percentage values, even though they shouldn't
-		div.style.marginRight = "50%";
-		pixelMarginRightVal = divStyle.marginRight === "4px";
+		div.style.right = "60%";
+		pixelBoxStylesVal = roundPixelMeasures( divStyle.right ) === 36;
+
+		// Support: IE 9 - 11 only
+		// Detect misreporting of content dimensions for box-sizing:border-box elements
+		boxSizingReliableVal = roundPixelMeasures( divStyle.width ) === 36;
+
+		// Support: IE 9 only
+		// Detect overflow:scroll screwiness (gh-3699)
+		div.style.position = "absolute";
+		scrollboxSizeVal = div.offsetWidth === 36 || "absolute";
 
 		documentElement.removeChild( container );
 
@@ -6117,7 +6105,12 @@ var getStyles = function( elem ) {
 		div = null;
 	}
 
-	var pixelPositionVal, boxSizingReliableVal, pixelMarginRightVal, reliableMarginLeftVal,
+	function roundPixelMeasures( measure ) {
+		return Math.round( parseFloat( measure ) );
+	}
+
+	var pixelPositionVal, boxSizingReliableVal, scrollboxSizeVal, pixelBoxStylesVal,
+		reliableMarginLeftVal,
 		container = document.createElement( "div" ),
 		div = document.createElement( "div" );
 
@@ -6132,26 +6125,26 @@ var getStyles = function( elem ) {
 	div.cloneNode( true ).style.backgroundClip = "";
 	support.clearCloneStyle = div.style.backgroundClip === "content-box";
 
-	container.style.cssText = "border:0;width:8px;height:0;top:0;left:-9999px;" +
-		"padding:0;margin-top:1px;position:absolute";
-	container.appendChild( div );
-
 	jQuery.extend( support, {
-		pixelPosition: function() {
-			computeStyleTests();
-			return pixelPositionVal;
-		},
 		boxSizingReliable: function() {
 			computeStyleTests();
 			return boxSizingReliableVal;
 		},
-		pixelMarginRight: function() {
+		pixelBoxStyles: function() {
 			computeStyleTests();
-			return pixelMarginRightVal;
+			return pixelBoxStylesVal;
+		},
+		pixelPosition: function() {
+			computeStyleTests();
+			return pixelPositionVal;
 		},
 		reliableMarginLeft: function() {
 			computeStyleTests();
 			return reliableMarginLeftVal;
+		},
+		scrollboxSize: function() {
+			computeStyleTests();
+			return scrollboxSizeVal;
 		}
 	} );
 } )();
@@ -6159,12 +6152,18 @@ var getStyles = function( elem ) {
 
 function curCSS( elem, name, computed ) {
 	var width, minWidth, maxWidth, ret,
+
+		// Support: Firefox 51+
+		// Retrieving style before computed somehow
+		// fixes an issue with getting wrong values
+		// on detached elements
 		style = elem.style;
 
 	computed = computed || getStyles( elem );
 
-	// Support: IE <=9 only
-	// getPropertyValue is only needed for .css('filter') (#12537)
+	// getPropertyValue is needed for:
+	//   .css('filter') (IE 9 only, #12537)
+	//   .css('--customProperty) (#3144)
 	if ( computed ) {
 		ret = computed.getPropertyValue( name ) || computed[ name ];
 
@@ -6177,7 +6176,7 @@ function curCSS( elem, name, computed ) {
 		// but width seems to be reliably pixels.
 		// This is against the CSSOM draft spec:
 		// https://drafts.csswg.org/cssom/#resolved-values
-		if ( !support.pixelMarginRight() && rnumnonpx.test( ret ) && rmargin.test( name ) ) {
+		if ( !support.pixelBoxStyles() && rnumnonpx.test( ret ) && rboxStyle.test( name ) ) {
 
 			// Remember the original values
 			width = style.width;
@@ -6230,6 +6229,7 @@ var
 	// except "table", "table-cell", or "table-caption"
 	// See here for display values: https://developer.mozilla.org/en-US/docs/CSS/display
 	rdisplayswap = /^(none|table(?!-c[ea]).+)/,
+	rcustomProp = /^--/,
 	cssShow = { position: "absolute", visibility: "hidden", display: "block" },
 	cssNormalTransform = {
 		letterSpacing: "0",
@@ -6259,6 +6259,16 @@ function vendorPropName( name ) {
 	}
 }
 
+// Return a property mapped along what jQuery.cssProps suggests or to
+// a vendor prefixed property.
+function finalPropName( name ) {
+	var ret = jQuery.cssProps[ name ];
+	if ( !ret ) {
+		ret = jQuery.cssProps[ name ] = vendorPropName( name ) || name;
+	}
+	return ret;
+}
+
 function setPositiveNumber( elem, value, subtract ) {
 
 	// Any relative (+/-) values have already been
@@ -6271,100 +6281,120 @@ function setPositiveNumber( elem, value, subtract ) {
 		value;
 }
 
-function augmentWidthOrHeight( elem, name, extra, isBorderBox, styles ) {
-	var i,
-		val = 0;
+function boxModelAdjustment( elem, dimension, box, isBorderBox, styles, computedVal ) {
+	var i = dimension === "width" ? 1 : 0,
+		extra = 0,
+		delta = 0;
 
-	// If we already have the right measurement, avoid augmentation
-	if ( extra === ( isBorderBox ? "border" : "content" ) ) {
-		i = 4;
-
-	// Otherwise initialize for horizontal or vertical properties
-	} else {
-		i = name === "width" ? 1 : 0;
+	// Adjustment may not be necessary
+	if ( box === ( isBorderBox ? "border" : "content" ) ) {
+		return 0;
 	}
 
 	for ( ; i < 4; i += 2 ) {
 
-		// Both box models exclude margin, so add it if we want it
-		if ( extra === "margin" ) {
-			val += jQuery.css( elem, extra + cssExpand[ i ], true, styles );
+		// Both box models exclude margin
+		if ( box === "margin" ) {
+			delta += jQuery.css( elem, box + cssExpand[ i ], true, styles );
 		}
 
-		if ( isBorderBox ) {
+		// If we get here with a content-box, we're seeking "padding" or "border" or "margin"
+		if ( !isBorderBox ) {
 
-			// border-box includes padding, so remove it if we want content
-			if ( extra === "content" ) {
-				val -= jQuery.css( elem, "padding" + cssExpand[ i ], true, styles );
+			// Add padding
+			delta += jQuery.css( elem, "padding" + cssExpand[ i ], true, styles );
+
+			// For "border" or "margin", add border
+			if ( box !== "padding" ) {
+				delta += jQuery.css( elem, "border" + cssExpand[ i ] + "Width", true, styles );
+
+			// But still keep track of it otherwise
+			} else {
+				extra += jQuery.css( elem, "border" + cssExpand[ i ] + "Width", true, styles );
 			}
 
-			// At this point, extra isn't border nor margin, so remove border
-			if ( extra !== "margin" ) {
-				val -= jQuery.css( elem, "border" + cssExpand[ i ] + "Width", true, styles );
-			}
+		// If we get here with a border-box (content + padding + border), we're seeking "content" or
+		// "padding" or "margin"
 		} else {
 
-			// At this point, extra isn't content, so add padding
-			val += jQuery.css( elem, "padding" + cssExpand[ i ], true, styles );
+			// For "content", subtract padding
+			if ( box === "content" ) {
+				delta -= jQuery.css( elem, "padding" + cssExpand[ i ], true, styles );
+			}
 
-			// At this point, extra isn't content nor padding, so add border
-			if ( extra !== "padding" ) {
-				val += jQuery.css( elem, "border" + cssExpand[ i ] + "Width", true, styles );
+			// For "content" or "padding", subtract border
+			if ( box !== "margin" ) {
+				delta -= jQuery.css( elem, "border" + cssExpand[ i ] + "Width", true, styles );
 			}
 		}
 	}
 
-	return val;
+	// Account for positive content-box scroll gutter when requested by providing computedVal
+	if ( !isBorderBox && computedVal >= 0 ) {
+
+		// offsetWidth/offsetHeight is a rounded sum of content, padding, scroll gutter, and border
+		// Assuming integer scroll gutter, subtract the rest and round down
+		delta += Math.max( 0, Math.ceil(
+			elem[ "offset" + dimension[ 0 ].toUpperCase() + dimension.slice( 1 ) ] -
+			computedVal -
+			delta -
+			extra -
+			0.5
+		) );
+	}
+
+	return delta;
 }
 
-function getWidthOrHeight( elem, name, extra ) {
+function getWidthOrHeight( elem, dimension, extra ) {
 
-	// Start with offset property, which is equivalent to the border-box value
-	var val,
-		valueIsBorderBox = true,
-		styles = getStyles( elem ),
-		isBorderBox = jQuery.css( elem, "boxSizing", false, styles ) === "border-box";
+	// Start with computed style
+	var styles = getStyles( elem ),
+		val = curCSS( elem, dimension, styles ),
+		isBorderBox = jQuery.css( elem, "boxSizing", false, styles ) === "border-box",
+		valueIsBorderBox = isBorderBox;
 
-	// Support: IE <=11 only
-	// Running getBoundingClientRect on a disconnected node
-	// in IE throws an error.
-	if ( elem.getClientRects().length ) {
-		val = elem.getBoundingClientRect()[ name ];
-	}
-
-	// Some non-html elements return undefined for offsetWidth, so check for null/undefined
-	// svg - https://bugzilla.mozilla.org/show_bug.cgi?id=649285
-	// MathML - https://bugzilla.mozilla.org/show_bug.cgi?id=491668
-	if ( val <= 0 || val == null ) {
-
-		// Fall back to computed then uncomputed css if necessary
-		val = curCSS( elem, name, styles );
-		if ( val < 0 || val == null ) {
-			val = elem.style[ name ];
-		}
-
-		// Computed unit is not pixels. Stop here and return.
-		if ( rnumnonpx.test( val ) ) {
+	// Support: Firefox <=54
+	// Return a confounding non-pixel value or feign ignorance, as appropriate.
+	if ( rnumnonpx.test( val ) ) {
+		if ( !extra ) {
 			return val;
 		}
-
-		// Check for style in case a browser which returns unreliable values
-		// for getComputedStyle silently falls back to the reliable elem.style
-		valueIsBorderBox = isBorderBox &&
-			( support.boxSizingReliable() || val === elem.style[ name ] );
-
-		// Normalize "", auto, and prepare for extra
-		val = parseFloat( val ) || 0;
+		val = "auto";
 	}
 
-	// Use the active box-sizing model to add/subtract irrelevant styles
+	// Check for style in case a browser which returns unreliable values
+	// for getComputedStyle silently falls back to the reliable elem.style
+	valueIsBorderBox = valueIsBorderBox &&
+		( support.boxSizingReliable() || val === elem.style[ dimension ] );
+
+	// Fall back to offsetWidth/offsetHeight when value is "auto"
+	// This happens for inline elements with no explicit setting (gh-3571)
+	// Support: Android <=4.1 - 4.3 only
+	// Also use offsetWidth/offsetHeight for misreported inline dimensions (gh-3602)
+	if ( val === "auto" ||
+		!parseFloat( val ) && jQuery.css( elem, "display", false, styles ) === "inline" ) {
+
+		val = elem[ "offset" + dimension[ 0 ].toUpperCase() + dimension.slice( 1 ) ];
+
+		// offsetWidth/offsetHeight provide border-box values
+		valueIsBorderBox = true;
+	}
+
+	// Normalize "" and auto
+	val = parseFloat( val ) || 0;
+
+	// Adjust for the element's box model
 	return ( val +
-		augmentWidthOrHeight(
+		boxModelAdjustment(
 			elem,
-			name,
+			dimension,
 			extra || ( isBorderBox ? "border" : "content" ),
 			valueIsBorderBox,
-			styles
+			styles,
+
+			// Provide the current computed size to request scroll gutter calculation (gh-3589)
+			val
 		)
 	) + "px";
 }
@@ -6405,9 +6435,7 @@ jQuery.extend( {
 
 	// Add in properties whose names you wish to fix before
 	// setting or getting the value
-	cssProps: {
-		"float": "cssFloat"
-	},
+	cssProps: {},
 
 	// Get and set the style property on a DOM Node
 	style: function( elem, name, value, extra ) {
@@ -6419,11 +6447,16 @@ jQuery.extend( {
 
 		// Make sure that we're working with the right name
 		var ret, type, hooks,
-			origName = jQuery.camelCase( name ),
+			origName = camelCase( name ),
+			isCustomProp = rcustomProp.test( name ),
 			style = elem.style;
 
-		name = jQuery.cssProps[ origName ] ||
-			( jQuery.cssProps[ origName ] = vendorPropName( origName ) || origName );
+		// Make sure that we're working with the right name. We don't
+		// want to query the value if it is a CSS custom property
+		// since they are user-defined.
+		if ( !isCustomProp ) {
+			name = finalPropName( origName );
+		}
 
 		// Gets hook for the prefixed version, then unprefixed version
 		hooks = jQuery.cssHooks[ name ] || jQuery.cssHooks[ origName ];
@@ -6459,7 +6492,11 @@ jQuery.extend( {
 			if ( !hooks || !( "set" in hooks ) ||
 				( value = hooks.set( elem, value, extra ) ) !== undefined ) {
 
-				style[ name ] = value;
+				if ( isCustomProp ) {
+					style.setProperty( name, value );
+				} else {
+					style[ name ] = value;
+				}
 			}
 
 		} else {
@@ -6478,11 +6515,15 @@ jQuery.extend( {
 
 	css: function( elem, name, extra, styles ) {
 		var val, num, hooks,
-			origName = jQuery.camelCase( name );
+			origName = camelCase( name ),
+			isCustomProp = rcustomProp.test( name );
 
-		// Make sure that we're working with the right name
-		name = jQuery.cssProps[ origName ] ||
-			( jQuery.cssProps[ origName ] = vendorPropName( origName ) || origName );
+		// Make sure that we're working with the right name. We don't
+		// want to modify the value if it is a CSS custom property
+		// since they are user-defined.
+		if ( !isCustomProp ) {
+			name = finalPropName( origName );
+		}
 
 		// Try prefixed name followed by the unprefixed name
 		hooks = jQuery.cssHooks[ name ] || jQuery.cssHooks[ origName ];
@@ -6507,12 +6548,13 @@ jQuery.extend( {
 			num = parseFloat( val );
 			return extra === true || isFinite( num ) ? num || 0 : val;
 		}
+
 		return val;
 	}
 } );
 
-jQuery.each( [ "height", "width" ], function( i, name ) {
-	jQuery.cssHooks[ name ] = {
+jQuery.each( [ "height", "width" ], function( i, dimension ) {
+	jQuery.cssHooks[ dimension ] = {
 		get: function( elem, computed, extra ) {
 			if ( computed ) {
 
@@ -6528,29 +6570,41 @@ jQuery.each( [ "height", "width" ], function( i, name ) {
 					// in IE throws an error.
 					( !elem.getClientRects().length || !elem.getBoundingClientRect().width ) ?
 						swap( elem, cssShow, function() {
-							return getWidthOrHeight( elem, name, extra );
+							return getWidthOrHeight( elem, dimension, extra );
 						} ) :
-						getWidthOrHeight( elem, name, extra );
+						getWidthOrHeight( elem, dimension, extra );
 			}
 		},
 
 		set: function( elem, value, extra ) {
 			var matches,
-				styles = extra && getStyles( elem ),
-				subtract = extra && augmentWidthOrHeight(
+				styles = getStyles( elem ),
+				isBorderBox = jQuery.css( elem, "boxSizing", false, styles ) === "border-box",
+				subtract = extra && boxModelAdjustment(
 					elem,
-					name,
+					dimension,
 					extra,
-					jQuery.css( elem, "boxSizing", false, styles ) === "border-box",
+					isBorderBox,
 					styles
 				);
+
+			// Account for unreliable border-box dimensions by comparing offset* to computed and
+			// faking a content-box to get border and padding (gh-3699)
+			if ( isBorderBox && support.scrollboxSize() === styles.position ) {
+				subtract -= Math.ceil(
+					elem[ "offset" + dimension[ 0 ].toUpperCase() + dimension.slice( 1 ) ] -
+					parseFloat( styles[ dimension ] ) -
+					boxModelAdjustment( elem, dimension, "border", false, styles ) -
+					0.5
+				);
+			}
 
 			// Convert to pixels if value adjustment is needed
 			if ( subtract && ( matches = rcssNum.exec( value ) ) &&
 				( matches[ 3 ] || "px" ) !== "px" ) {
 
-				elem.style[ name ] = value;
-				value = jQuery.css( elem, name );
+				elem.style[ dimension ] = value;
+				value = jQuery.css( elem, dimension );
 			}
 
 			return setPositiveNumber( elem, value, subtract );
@@ -6594,7 +6648,7 @@ jQuery.each( {
 		}
 	};
 
-	if ( !rmargin.test( prefix ) ) {
+	if ( prefix !== "margin" ) {
 		jQuery.cssHooks[ prefix + suffix ].set = setPositiveNumber;
 	}
 } );
@@ -6606,7 +6660,7 @@ jQuery.fn.extend( {
 				map = {},
 				i = 0;
 
-			if ( jQuery.isArray( name ) ) {
+			if ( Array.isArray( name ) ) {
 				styles = getStyles( elem );
 				len = name.length;
 
@@ -6744,13 +6798,18 @@ jQuery.fx.step = {};
 
 
 var
-	fxNow, timerId,
+	fxNow, inProgress,
 	rfxtypes = /^(?:toggle|show|hide)$/,
 	rrun = /queueHooks$/;
 
-function raf() {
-	if ( timerId ) {
-		window.requestAnimationFrame( raf );
+function schedule() {
+	if ( inProgress ) {
+		if ( document.hidden === false && window.requestAnimationFrame ) {
+			window.requestAnimationFrame( schedule );
+		} else {
+			window.setTimeout( schedule, jQuery.fx.interval );
+		}
+
 		jQuery.fx.tick();
 	}
 }
@@ -6760,7 +6819,7 @@ function createFxNow() {
 	window.setTimeout( function() {
 		fxNow = undefined;
 	} );
-	return ( fxNow = jQuery.now() );
+	return ( fxNow = Date.now() );
 }
 
 // Generate parameters to create a standard animation
@@ -6864,9 +6923,10 @@ function defaultPrefilter( elem, props, opts ) {
 	// Restrict "overflow" and "display" styles during box animations
 	if ( isBox && elem.nodeType === 1 ) {
 
-		// Support: IE <=9 - 11, Edge 12 - 13
+		// Support: IE <=9 - 11, Edge 12 - 15
 		// Record all 3 overflow attributes because IE does not infer the shorthand
-		// from identically-valued overflowX and overflowY
+		// from identically-valued overflowX and overflowY and Edge just mirrors
+		// the overflowX value there.
 		opts.overflow = [ style.overflow, style.overflowX, style.overflowY ];
 
 		// Identify a display type, preferring old show/hide data over the CSS cascade
@@ -6974,10 +7034,10 @@ function propFilter( props, specialEasing ) {
 
 	// camelCase, specialEasing and expand cssHook pass
 	for ( index in props ) {
-		name = jQuery.camelCase( index );
+		name = camelCase( index );
 		easing = specialEasing[ name ];
 		value = props[ index ];
-		if ( jQuery.isArray( value ) ) {
+		if ( Array.isArray( value ) ) {
 			easing = value[ 1 ];
 			value = props[ index ] = value[ 0 ];
 		}
@@ -7036,12 +7096,19 @@ function Animation( elem, properties, options ) {
 
 			deferred.notifyWith( elem, [ animation, percent, remaining ] );
 
+			// If there's more to do, yield
 			if ( percent < 1 && length ) {
 				return remaining;
-			} else {
-				deferred.resolveWith( elem, [ animation ] );
-				return false;
 			}
+
+			// If this was an empty animation, synthesize a final progress notification
+			if ( !length ) {
+				deferred.notifyWith( elem, [ animation, 1, 0 ] );
+			}
+
+			// Resolve the animation and report its conclusion
+			deferred.resolveWith( elem, [ animation ] );
+			return false;
 		},
 		animation = deferred.promise( {
 			elem: elem,
@@ -7092,9 +7159,9 @@ function Animation( elem, properties, options ) {
 	for ( ; index < length; index++ ) {
 		result = Animation.prefilters[ index ].call( animation, elem, props, animation.opts );
 		if ( result ) {
-			if ( jQuery.isFunction( result.stop ) ) {
+			if ( isFunction( result.stop ) ) {
 				jQuery._queueHooks( animation.elem, animation.opts.queue ).stop =
-					jQuery.proxy( result.stop, result );
+					result.stop.bind( result );
 			}
 			return result;
 		}
@@ -7102,9 +7169,16 @@ function Animation( elem, properties, options ) {
 
 	jQuery.map( props, createTween, animation );
 
-	if ( jQuery.isFunction( animation.opts.start ) ) {
+	if ( isFunction( animation.opts.start ) ) {
 		animation.opts.start.call( elem, animation );
 	}
+
+	// Attach callbacks from options
+	animation
+		.progress( animation.opts.progress )
+		.done( animation.opts.done, animation.opts.complete )
+		.fail( animation.opts.fail )
+		.always( animation.opts.always );
 
 	jQuery.fx.timer(
 		jQuery.extend( tick, {
@@ -7114,11 +7188,7 @@ function Animation( elem, properties, options ) {
 		} )
 	);
 
-	// attach callbacks from options
-	return animation.progress( animation.opts.progress )
-		.done( animation.opts.done, animation.opts.complete )
-		.fail( animation.opts.fail )
-		.always( animation.opts.always );
+	return animation;
 }
 
 jQuery.Animation = jQuery.extend( Animation, {
@@ -7132,7 +7202,7 @@ jQuery.Animation = jQuery.extend( Animation, {
 	},
 
 	tweener: function( props, callback ) {
-		if ( jQuery.isFunction( props ) ) {
+		if ( isFunction( props ) ) {
 			callback = props;
 			props = [ "*" ];
 		} else {
@@ -7164,13 +7234,13 @@ jQuery.Animation = jQuery.extend( Animation, {
 jQuery.speed = function( speed, easing, fn ) {
 	var opt = speed && typeof speed === "object" ? jQuery.extend( {}, speed ) : {
 		complete: fn || !fn && easing ||
-			jQuery.isFunction( speed ) && speed,
+			isFunction( speed ) && speed,
 		duration: speed,
-		easing: fn && easing || easing && !jQuery.isFunction( easing ) && easing
+		easing: fn && easing || easing && !isFunction( easing ) && easing
 	};
 
-	// Go to the end state if fx are off or if document is hidden
-	if ( jQuery.fx.off || document.hidden ) {
+	// Go to the end state if fx are off
+	if ( jQuery.fx.off ) {
 		opt.duration = 0;
 
 	} else {
@@ -7193,7 +7263,7 @@ jQuery.speed = function( speed, easing, fn ) {
 	opt.old = opt.complete;
 
 	opt.complete = function() {
-		if ( jQuery.isFunction( opt.old ) ) {
+		if ( isFunction( opt.old ) ) {
 			opt.old.call( this );
 		}
 
@@ -7357,12 +7427,12 @@ jQuery.fx.tick = function() {
 		i = 0,
 		timers = jQuery.timers;
 
-	fxNow = jQuery.now();
+	fxNow = Date.now();
 
 	for ( ; i < timers.length; i++ ) {
 		timer = timers[ i ];
 
-		// Checks the timer has not already been removed
+		// Run the timer and safely remove it when done (allowing for external removal)
 		if ( !timer() && timers[ i ] === timer ) {
 			timers.splice( i--, 1 );
 		}
@@ -7376,30 +7446,21 @@ jQuery.fx.tick = function() {
 
 jQuery.fx.timer = function( timer ) {
 	jQuery.timers.push( timer );
-	if ( timer() ) {
-		jQuery.fx.start();
-	} else {
-		jQuery.timers.pop();
-	}
+	jQuery.fx.start();
 };
 
 jQuery.fx.interval = 13;
 jQuery.fx.start = function() {
-	if ( !timerId ) {
-		timerId = window.requestAnimationFrame ?
-			window.requestAnimationFrame( raf ) :
-			window.setInterval( jQuery.fx.tick, jQuery.fx.interval );
+	if ( inProgress ) {
+		return;
 	}
+
+	inProgress = true;
+	schedule();
 };
 
 jQuery.fx.stop = function() {
-	if ( window.cancelAnimationFrame ) {
-		window.cancelAnimationFrame( timerId );
-	} else {
-		window.clearInterval( timerId );
-	}
-
-	timerId = null;
+	inProgress = null;
 };
 
 jQuery.fx.speeds = {
@@ -7516,7 +7577,7 @@ jQuery.extend( {
 		type: {
 			set: function( elem, value ) {
 				if ( !support.radioValue && value === "radio" &&
-					jQuery.nodeName( elem, "input" ) ) {
+					nodeName( elem, "input" ) ) {
 					var val = elem.value;
 					elem.setAttribute( "type", value );
 					if ( val ) {
@@ -7719,7 +7780,7 @@ jQuery.each( [
 
 
 	// Strip and collapse whitespace according to HTML spec
-	// https://html.spec.whatwg.org/multipage/infrastructure.html#strip-and-collapse-whitespace
+	// https://infra.spec.whatwg.org/#strip-and-collapse-ascii-whitespace
 	function stripAndCollapse( value ) {
 		var tokens = value.match( rnothtmlwhite ) || [];
 		return tokens.join( " " );
@@ -7730,20 +7791,30 @@ function getClass( elem ) {
 	return elem.getAttribute && elem.getAttribute( "class" ) || "";
 }
 
+function classesToArray( value ) {
+	if ( Array.isArray( value ) ) {
+		return value;
+	}
+	if ( typeof value === "string" ) {
+		return value.match( rnothtmlwhite ) || [];
+	}
+	return [];
+}
+
 jQuery.fn.extend( {
 	addClass: function( value ) {
 		var classes, elem, cur, curValue, clazz, j, finalValue,
 			i = 0;
 
-		if ( jQuery.isFunction( value ) ) {
+		if ( isFunction( value ) ) {
 			return this.each( function( j ) {
 				jQuery( this ).addClass( value.call( this, j, getClass( this ) ) );
 			} );
 		}
 
-		if ( typeof value === "string" && value ) {
-			classes = value.match( rnothtmlwhite ) || [];
+		classes = classesToArray( value );
 
+		if ( classes.length ) {
 			while ( ( elem = this[ i++ ] ) ) {
 				curValue = getClass( elem );
 				cur = elem.nodeType === 1 && ( " " + stripAndCollapse( curValue ) + " " );
@@ -7772,7 +7843,7 @@ jQuery.fn.extend( {
 		var classes, elem, cur, curValue, clazz, j, finalValue,
 			i = 0;
 
-		if ( jQuery.isFunction( value ) ) {
+		if ( isFunction( value ) ) {
 			return this.each( function( j ) {
 				jQuery( this ).removeClass( value.call( this, j, getClass( this ) ) );
 			} );
@@ -7782,9 +7853,9 @@ jQuery.fn.extend( {
 			return this.attr( "class", "" );
 		}
 
-		if ( typeof value === "string" && value ) {
-			classes = value.match( rnothtmlwhite ) || [];
+		classes = classesToArray( value );
 
+		if ( classes.length ) {
 			while ( ( elem = this[ i++ ] ) ) {
 				curValue = getClass( elem );
 
@@ -7814,13 +7885,14 @@ jQuery.fn.extend( {
 	},
 
 	toggleClass: function( value, stateVal ) {
-		var type = typeof value;
+		var type = typeof value,
+			isValidValue = type === "string" || Array.isArray( value );
 
-		if ( typeof stateVal === "boolean" && type === "string" ) {
+		if ( typeof stateVal === "boolean" && isValidValue ) {
 			return stateVal ? this.addClass( value ) : this.removeClass( value );
 		}
 
-		if ( jQuery.isFunction( value ) ) {
+		if ( isFunction( value ) ) {
 			return this.each( function( i ) {
 				jQuery( this ).toggleClass(
 					value.call( this, i, getClass( this ), stateVal ),
@@ -7832,12 +7904,12 @@ jQuery.fn.extend( {
 		return this.each( function() {
 			var className, i, self, classNames;
 
-			if ( type === "string" ) {
+			if ( isValidValue ) {
 
 				// Toggle individual class names
 				i = 0;
 				self = jQuery( this );
-				classNames = value.match( rnothtmlwhite ) || [];
+				classNames = classesToArray( value );
 
 				while ( ( className = classNames[ i++ ] ) ) {
 
@@ -7896,7 +7968,7 @@ var rreturn = /\r/g;
 
 jQuery.fn.extend( {
 	val: function( value ) {
-		var hooks, ret, isFunction,
+		var hooks, ret, valueIsFunction,
 			elem = this[ 0 ];
 
 		if ( !arguments.length ) {
@@ -7925,7 +7997,7 @@ jQuery.fn.extend( {
 			return;
 		}
 
-		isFunction = jQuery.isFunction( value );
+		valueIsFunction = isFunction( value );
 
 		return this.each( function( i ) {
 			var val;
@@ -7934,7 +8006,7 @@ jQuery.fn.extend( {
 				return;
 			}
 
-			if ( isFunction ) {
+			if ( valueIsFunction ) {
 				val = value.call( this, i, jQuery( this ).val() );
 			} else {
 				val = value;
@@ -7947,7 +8019,7 @@ jQuery.fn.extend( {
 			} else if ( typeof val === "number" ) {
 				val += "";
 
-			} else if ( jQuery.isArray( val ) ) {
+			} else if ( Array.isArray( val ) ) {
 				val = jQuery.map( val, function( value ) {
 					return value == null ? "" : value + "";
 				} );
@@ -8006,7 +8078,7 @@ jQuery.extend( {
 							// Don't return options that are disabled or in a disabled optgroup
 							!option.disabled &&
 							( !option.parentNode.disabled ||
-								!jQuery.nodeName( option.parentNode, "optgroup" ) ) ) {
+								!nodeName( option.parentNode, "optgroup" ) ) ) {
 
 						// Get the specific value for the option
 						value = jQuery( option ).val();
@@ -8058,7 +8130,7 @@ jQuery.extend( {
 jQuery.each( [ "radio", "checkbox" ], function() {
 	jQuery.valHooks[ this ] = {
 		set: function( elem, value ) {
-			if ( jQuery.isArray( value ) ) {
+			if ( Array.isArray( value ) ) {
 				return ( elem.checked = jQuery.inArray( jQuery( elem ).val(), value ) > -1 );
 			}
 		}
@@ -8076,18 +8148,24 @@ jQuery.each( [ "radio", "checkbox" ], function() {
 // Return jQuery for attributes-only inclusion
 
 
-var rfocusMorph = /^(?:focusinfocus|focusoutblur)$/;
+support.focusin = "onfocusin" in window;
+
+
+var rfocusMorph = /^(?:focusinfocus|focusoutblur)$/,
+	stopPropagationCallback = function( e ) {
+		e.stopPropagation();
+	};
 
 jQuery.extend( jQuery.event, {
 
 	trigger: function( event, data, elem, onlyHandlers ) {
 
-		var i, cur, tmp, bubbleType, ontype, handle, special,
+		var i, cur, tmp, bubbleType, ontype, handle, special, lastElement,
 			eventPath = [ elem || document ],
 			type = hasOwn.call( event, "type" ) ? event.type : event,
 			namespaces = hasOwn.call( event, "namespace" ) ? event.namespace.split( "." ) : [];
 
-		cur = tmp = elem = elem || document;
+		cur = lastElement = tmp = elem = elem || document;
 
 		// Don't do events on text and comment nodes
 		if ( elem.nodeType === 3 || elem.nodeType === 8 ) {
@@ -8139,7 +8217,7 @@ jQuery.extend( jQuery.event, {
 
 		// Determine event propagation path in advance, per W3C events spec (#9951)
 		// Bubble up to document, then to window; watch for a global ownerDocument var (#9724)
-		if ( !onlyHandlers && !special.noBubble && !jQuery.isWindow( elem ) ) {
+		if ( !onlyHandlers && !special.noBubble && !isWindow( elem ) ) {
 
 			bubbleType = special.delegateType || type;
 			if ( !rfocusMorph.test( bubbleType + type ) ) {
@@ -8159,7 +8237,7 @@ jQuery.extend( jQuery.event, {
 		// Fire handlers on the event path
 		i = 0;
 		while ( ( cur = eventPath[ i++ ] ) && !event.isPropagationStopped() ) {
-
+			lastElement = cur;
 			event.type = i > 1 ?
 				bubbleType :
 				special.bindType || type;
@@ -8191,7 +8269,7 @@ jQuery.extend( jQuery.event, {
 
 				// Call a native DOM method on the target with the same name as the event.
 				// Don't do default actions on window, that's where global variables be (#6170)
-				if ( ontype && jQuery.isFunction( elem[ type ] ) && !jQuery.isWindow( elem ) ) {
+				if ( ontype && isFunction( elem[ type ] ) && !isWindow( elem ) ) {
 
 					// Don't re-trigger an onFOO event when we call its FOO() method
 					tmp = elem[ ontype ];
@@ -8202,7 +8280,17 @@ jQuery.extend( jQuery.event, {
 
 					// Prevent re-triggering of the same event, since we already bubbled it above
 					jQuery.event.triggered = type;
+
+					if ( event.isPropagationStopped() ) {
+						lastElement.addEventListener( type, stopPropagationCallback );
+					}
+
 					elem[ type ]();
+
+					if ( event.isPropagationStopped() ) {
+						lastElement.removeEventListener( type, stopPropagationCallback );
+					}
+
 					jQuery.event.triggered = undefined;
 
 					if ( tmp ) {
@@ -8248,31 +8336,6 @@ jQuery.fn.extend( {
 } );
 
 
-jQuery.each( ( "blur focus focusin focusout resize scroll click dblclick " +
-	"mousedown mouseup mousemove mouseover mouseout mouseenter mouseleave " +
-	"change select submit keydown keypress keyup contextmenu" ).split( " " ),
-	function( i, name ) {
-
-	// Handle event binding
-	jQuery.fn[ name ] = function( data, fn ) {
-		return arguments.length > 0 ?
-			this.on( name, null, data, fn ) :
-			this.trigger( name );
-	};
-} );
-
-jQuery.fn.extend( {
-	hover: function( fnOver, fnOut ) {
-		return this.mouseenter( fnOver ).mouseleave( fnOut || fnOver );
-	}
-} );
-
-
-
-
-support.focusin = "onfocusin" in window;
-
-
 // Support: Firefox <=44
 // Firefox doesn't have focus(in | out) events
 // Related ticket - https://bugzilla.mozilla.org/show_bug.cgi?id=687787
@@ -8316,7 +8379,7 @@ if ( !support.focusin ) {
 }
 var location = window.location;
 
-var nonce = jQuery.now();
+var nonce = Date.now();
 
 var rquery = ( /\?/ );
 
@@ -8353,7 +8416,7 @@ var
 function buildParams( prefix, obj, traditional, add ) {
 	var name;
 
-	if ( jQuery.isArray( obj ) ) {
+	if ( Array.isArray( obj ) ) {
 
 		// Serialize array item.
 		jQuery.each( obj, function( i, v ) {
@@ -8374,7 +8437,7 @@ function buildParams( prefix, obj, traditional, add ) {
 			}
 		} );
 
-	} else if ( !traditional && jQuery.type( obj ) === "object" ) {
+	} else if ( !traditional && toType( obj ) === "object" ) {
 
 		// Serialize object item.
 		for ( name in obj ) {
@@ -8396,7 +8459,7 @@ jQuery.param = function( a, traditional ) {
 		add = function( key, valueOrFunction ) {
 
 			// If value is a function, invoke it and use its return value
-			var value = jQuery.isFunction( valueOrFunction ) ?
+			var value = isFunction( valueOrFunction ) ?
 				valueOrFunction() :
 				valueOrFunction;
 
@@ -8405,7 +8468,7 @@ jQuery.param = function( a, traditional ) {
 		};
 
 	// If an array was passed in, assume that it is an array of form elements.
-	if ( jQuery.isArray( a ) || ( a.jquery && !jQuery.isPlainObject( a ) ) ) {
+	if ( Array.isArray( a ) || ( a.jquery && !jQuery.isPlainObject( a ) ) ) {
 
 		// Serialize the form elements
 		jQuery.each( a, function() {
@@ -8451,7 +8514,7 @@ jQuery.fn.extend( {
 				return null;
 			}
 
-			if ( jQuery.isArray( val ) ) {
+			if ( Array.isArray( val ) ) {
 				return jQuery.map( val, function( val ) {
 					return { name: elem.name, value: val.replace( rCRLF, "\r\n" ) };
 				} );
@@ -8514,7 +8577,7 @@ function addToPrefiltersOrTransports( structure ) {
 			i = 0,
 			dataTypes = dataTypeExpression.toLowerCase().match( rnothtmlwhite ) || [];
 
-		if ( jQuery.isFunction( func ) ) {
+		if ( isFunction( func ) ) {
 
 			// For each dataType in the dataTypeExpression
 			while ( ( dataType = dataTypes[ i++ ] ) ) {
@@ -8986,7 +9049,7 @@ jQuery.extend( {
 		if ( s.crossDomain == null ) {
 			urlAnchor = document.createElement( "a" );
 
-			// Support: IE <=8 - 11, Edge 12 - 13
+			// Support: IE <=8 - 11, Edge 12 - 15
 			// IE throws exception on accessing the href property if url is malformed,
 			// e.g. http://example.com:80x/
 			try {
@@ -9044,8 +9107,8 @@ jQuery.extend( {
 			// Remember the hash so we can put it back
 			uncached = s.url.slice( cacheURL.length );
 
-			// If data is available, append data to url
-			if ( s.data ) {
+			// If data is available and should be processed, append data to url
+			if ( s.data && ( s.processData || typeof s.data === "string" ) ) {
 				cacheURL += ( rquery.test( cacheURL ) ? "&" : "?" ) + s.data;
 
 				// #9682: remove data so that it's not used in an eventual retry
@@ -9282,7 +9345,7 @@ jQuery.each( [ "get", "post" ], function( i, method ) {
 	jQuery[ method ] = function( url, data, callback, type ) {
 
 		// Shift arguments if data argument was omitted
-		if ( jQuery.isFunction( data ) ) {
+		if ( isFunction( data ) ) {
 			type = type || callback;
 			callback = data;
 			data = undefined;
@@ -9320,7 +9383,7 @@ jQuery.fn.extend( {
 		var wrap;
 
 		if ( this[ 0 ] ) {
-			if ( jQuery.isFunction( html ) ) {
+			if ( isFunction( html ) ) {
 				html = html.call( this[ 0 ] );
 			}
 
@@ -9346,7 +9409,7 @@ jQuery.fn.extend( {
 	},
 
 	wrapInner: function( html ) {
-		if ( jQuery.isFunction( html ) ) {
+		if ( isFunction( html ) ) {
 			return this.each( function( i ) {
 				jQuery( this ).wrapInner( html.call( this, i ) );
 			} );
@@ -9366,10 +9429,10 @@ jQuery.fn.extend( {
 	},
 
 	wrap: function( html ) {
-		var isFunction = jQuery.isFunction( html );
+		var htmlIsFunction = isFunction( html );
 
 		return this.each( function( i ) {
-			jQuery( this ).wrapAll( isFunction ? html.call( this, i ) : html );
+			jQuery( this ).wrapAll( htmlIsFunction ? html.call( this, i ) : html );
 		} );
 	},
 
@@ -9461,7 +9524,8 @@ jQuery.ajaxTransport( function( options ) {
 					return function() {
 						if ( callback ) {
 							callback = errorCallback = xhr.onload =
-								xhr.onerror = xhr.onabort = xhr.onreadystatechange = null;
+								xhr.onerror = xhr.onabort = xhr.ontimeout =
+									xhr.onreadystatechange = null;
 
 							if ( type === "abort" ) {
 								xhr.abort();
@@ -9501,7 +9565,7 @@ jQuery.ajaxTransport( function( options ) {
 
 				// Listen to events
 				xhr.onload = callback();
-				errorCallback = xhr.onerror = callback( "error" );
+				errorCallback = xhr.onerror = xhr.ontimeout = callback( "error" );
 
 				// Support: IE 9 only
 				// Use onreadystatechange to replace onabort
@@ -9655,7 +9719,7 @@ jQuery.ajaxPrefilter( "json jsonp", function( s, originalSettings, jqXHR ) {
 	if ( jsonProp || s.dataTypes[ 0 ] === "jsonp" ) {
 
 		// Get callback name, remembering preexisting value associated with it
-		callbackName = s.jsonpCallback = jQuery.isFunction( s.jsonpCallback ) ?
+		callbackName = s.jsonpCallback = isFunction( s.jsonpCallback ) ?
 			s.jsonpCallback() :
 			s.jsonpCallback;
 
@@ -9706,7 +9770,7 @@ jQuery.ajaxPrefilter( "json jsonp", function( s, originalSettings, jqXHR ) {
 			}
 
 			// Call if it was a function and we have a response
-			if ( responseContainer && jQuery.isFunction( overwritten ) ) {
+			if ( responseContainer && isFunction( overwritten ) ) {
 				overwritten( responseContainer[ 0 ] );
 			}
 
@@ -9798,7 +9862,7 @@ jQuery.fn.load = function( url, params, callback ) {
 	}
 
 	// If it's a function
-	if ( jQuery.isFunction( params ) ) {
+	if ( isFunction( params ) ) {
 
 		// We assume that it's the callback
 		callback = params;
@@ -9876,13 +9940,6 @@ jQuery.expr.pseudos.animated = function( elem ) {
 
 
 
-/**
- * Gets a window from an element
- */
-function getWindow( elem ) {
-	return jQuery.isWindow( elem ) ? elem : elem.nodeType === 9 && elem.defaultView;
-}
-
 jQuery.offset = {
 	setOffset: function( elem, options, i ) {
 		var curPosition, curLeft, curCSSTop, curTop, curOffset, curCSSLeft, calculatePosition,
@@ -9913,7 +9970,7 @@ jQuery.offset = {
 			curLeft = parseFloat( curCSSLeft ) || 0;
 		}
 
-		if ( jQuery.isFunction( options ) ) {
+		if ( isFunction( options ) ) {
 
 			// Use jQuery.extend here to allow modification of coordinates argument (gh-1848)
 			options = options.call( elem, i, jQuery.extend( {}, curOffset ) );
@@ -9936,6 +9993,8 @@ jQuery.offset = {
 };
 
 jQuery.fn.extend( {
+
+	// offset() relates an element's border box to the document origin
 	offset: function( options ) {
 
 		// Preserve chaining for setter
@@ -9947,13 +10006,14 @@ jQuery.fn.extend( {
 				} );
 		}
 
-		var docElem, win, rect, doc,
+		var rect, win,
 			elem = this[ 0 ];
 
 		if ( !elem ) {
 			return;
 		}
 
+		// Return zeros for disconnected and hidden (display: none) elements (gh-2310)
 		// Support: IE <=11 only
 		// Running getBoundingClientRect on a
 		// disconnected node in IE throws an error
@@ -9961,56 +10021,52 @@ jQuery.fn.extend( {
 			return { top: 0, left: 0 };
 		}
 
+		// Get document-relative position by adding viewport scroll to viewport-relative gBCR
 		rect = elem.getBoundingClientRect();
-
-		// Make sure element is not hidden (display: none)
-		if ( rect.width || rect.height ) {
-			doc = elem.ownerDocument;
-			win = getWindow( doc );
-			docElem = doc.documentElement;
-
-			return {
-				top: rect.top + win.pageYOffset - docElem.clientTop,
-				left: rect.left + win.pageXOffset - docElem.clientLeft
-			};
-		}
-
-		// Return zeros for disconnected and hidden elements (gh-2310)
-		return rect;
+		win = elem.ownerDocument.defaultView;
+		return {
+			top: rect.top + win.pageYOffset,
+			left: rect.left + win.pageXOffset
+		};
 	},
 
+	// position() relates an element's margin box to its offset parent's padding box
+	// This corresponds to the behavior of CSS absolute positioning
 	position: function() {
 		if ( !this[ 0 ] ) {
 			return;
 		}
 
-		var offsetParent, offset,
+		var offsetParent, offset, doc,
 			elem = this[ 0 ],
 			parentOffset = { top: 0, left: 0 };
 
-		// Fixed elements are offset from window (parentOffset = {top:0, left: 0},
-		// because it is its only offset parent
+		// position:fixed elements are offset from the viewport, which itself always has zero offset
 		if ( jQuery.css( elem, "position" ) === "fixed" ) {
 
-			// Assume getBoundingClientRect is there when computed position is fixed
+			// Assume position:fixed implies availability of getBoundingClientRect
 			offset = elem.getBoundingClientRect();
 
 		} else {
-
-			// Get *real* offsetParent
-			offsetParent = this.offsetParent();
-
-			// Get correct offsets
 			offset = this.offset();
-			if ( !jQuery.nodeName( offsetParent[ 0 ], "html" ) ) {
-				parentOffset = offsetParent.offset();
-			}
 
-			// Add offsetParent borders
-			parentOffset = {
-				top: parentOffset.top + jQuery.css( offsetParent[ 0 ], "borderTopWidth", true ),
-				left: parentOffset.left + jQuery.css( offsetParent[ 0 ], "borderLeftWidth", true )
-			};
+			// Account for the *real* offset parent, which can be the document or its root element
+			// when a statically positioned element is identified
+			doc = elem.ownerDocument;
+			offsetParent = elem.offsetParent || doc.documentElement;
+			while ( offsetParent &&
+				( offsetParent === doc.body || offsetParent === doc.documentElement ) &&
+				jQuery.css( offsetParent, "position" ) === "static" ) {
+
+				offsetParent = offsetParent.parentNode;
+			}
+			if ( offsetParent && offsetParent !== elem && offsetParent.nodeType === 1 ) {
+
+				// Incorporate borders into its offset, since they are outside its content origin
+				parentOffset = jQuery( offsetParent ).offset();
+				parentOffset.top += jQuery.css( offsetParent, "borderTopWidth", true );
+				parentOffset.left += jQuery.css( offsetParent, "borderLeftWidth", true );
+			}
 		}
 
 		// Subtract parent offsets and element margins
@@ -10049,7 +10105,14 @@ jQuery.each( { scrollLeft: "pageXOffset", scrollTop: "pageYOffset" }, function( 
 
 	jQuery.fn[ method ] = function( val ) {
 		return access( this, function( elem, method, val ) {
-			var win = getWindow( elem );
+
+			// Coalesce documents and windows
+			var win;
+			if ( isWindow( elem ) ) {
+				win = elem;
+			} else if ( elem.nodeType === 9 ) {
+				win = elem.defaultView;
+			}
 
 			if ( val === undefined ) {
 				return win ? win[ prop ] : elem[ method ];
@@ -10103,7 +10166,7 @@ jQuery.each( { Height: "height", Width: "width" }, function( name, type ) {
 			return access( this, function( elem, type, value ) {
 				var doc;
 
-				if ( jQuery.isWindow( elem ) ) {
+				if ( isWindow( elem ) ) {
 
 					// $( window ).outerWidth/Height return w/h including scrollbars (gh-1729)
 					return funcName.indexOf( "outer" ) === 0 ?
@@ -10137,6 +10200,28 @@ jQuery.each( { Height: "height", Width: "width" }, function( name, type ) {
 } );
 
 
+jQuery.each( ( "blur focus focusin focusout resize scroll click dblclick " +
+	"mousedown mouseup mousemove mouseover mouseout mouseenter mouseleave " +
+	"change select submit keydown keypress keyup contextmenu" ).split( " " ),
+	function( i, name ) {
+
+	// Handle event binding
+	jQuery.fn[ name ] = function( data, fn ) {
+		return arguments.length > 0 ?
+			this.on( name, null, data, fn ) :
+			this.trigger( name );
+	};
+} );
+
+jQuery.fn.extend( {
+	hover: function( fnOver, fnOut ) {
+		return this.mouseenter( fnOver ).mouseleave( fnOut || fnOver );
+	}
+} );
+
+
+
+
 jQuery.fn.extend( {
 
 	bind: function( types, data, fn ) {
@@ -10158,7 +10243,67 @@ jQuery.fn.extend( {
 	}
 } );
 
+// Bind a function to a context, optionally partially applying any
+// arguments.
+// jQuery.proxy is deprecated to promote standards (specifically Function#bind)
+// However, it is not slated for removal any time soon
+jQuery.proxy = function( fn, context ) {
+	var tmp, args, proxy;
+
+	if ( typeof context === "string" ) {
+		tmp = fn[ context ];
+		context = fn;
+		fn = tmp;
+	}
+
+	// Quick check to determine if target is callable, in the spec
+	// this throws a TypeError, but we will just return undefined.
+	if ( !isFunction( fn ) ) {
+		return undefined;
+	}
+
+	// Simulated bind
+	args = slice.call( arguments, 2 );
+	proxy = function() {
+		return fn.apply( context || this, args.concat( slice.call( arguments ) ) );
+	};
+
+	// Set the guid of unique handler to the same of original handler, so it can be removed
+	proxy.guid = fn.guid = fn.guid || jQuery.guid++;
+
+	return proxy;
+};
+
+jQuery.holdReady = function( hold ) {
+	if ( hold ) {
+		jQuery.readyWait++;
+	} else {
+		jQuery.ready( true );
+	}
+};
+jQuery.isArray = Array.isArray;
 jQuery.parseJSON = JSON.parse;
+jQuery.nodeName = nodeName;
+jQuery.isFunction = isFunction;
+jQuery.isWindow = isWindow;
+jQuery.camelCase = camelCase;
+jQuery.type = toType;
+
+jQuery.now = Date.now;
+
+jQuery.isNumeric = function( obj ) {
+
+	// As of jQuery 3.0, isNumeric is limited to
+	// strings and numbers (primitives or objects)
+	// that can be coerced to finite numbers (gh-2662)
+	var type = jQuery.type( obj );
+	return ( type === "number" || type === "string" ) &&
+
+		// parseFloat NaNs numeric-cast false positives ("")
+		// ...but misinterprets leading-number strings, particularly hex literals ("0x...")
+		// subtraction forces infinities to NaN
+		!isNaN( obj - parseFloat( obj ) );
+};
 
 
 
@@ -10215,9 +10360,7195 @@ if ( !noGlobal ) {
 
 
 
-
 return jQuery;
 } );
+;/*! jsviews.js v0.9.90 (Beta) single-file version: http://jsviews.com/ */
+/*! includes JsRender, JsObservable and JsViews - see: http://jsviews.com/#download */
+
+/* Interactive data-driven views using JsRender templates */
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< JsRender >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+/* JsRender:
+ * See http://jsviews.com/#jsrender and http://github.com/BorisMoore/jsrender
+ * Copyright 2017, Boris Moore
+ * Released under the MIT License.
+ */
+
+//jshint -W018, -W041, -W120
+
+(function(factory, global) {
+	// global var is the this object, which is window when running in the usual browser environment
+	var $ = global.jQuery;
+
+	if (typeof exports === "object") { // CommonJS e.g. Browserify
+		module.exports = $
+			? factory(global, $)
+			: function($) { // If no global jQuery, take jQuery passed as parameter: require("jsviews")(jQuery)
+				return factory(global, $);
+			};
+	} else if (typeof define === "function" && define.amd) { // AMD script loader, e.g. RequireJS
+		define(["jquery"], function($) {
+			return factory(global, $);
+		}); // Require jQuery
+	} else { // Browser using plain <script> tag
+		factory(global, false);
+	}
+} (
+
+// factory (for jsviews.js)
+function(global, $) {
+"use strict";
+
+//========================== Top-level vars ==========================
+
+// global var is the this object, which is window when running in the usual browser environment
+var setGlobals = $ === false; // Only set globals if script block in browser (not AMD and not CommonJS)
+
+$ = $ || global.jQuery; // $ is jQuery passed in by CommonJS loader (Browserify), or global jQuery.
+
+if (!$ || !$.fn) {
+	// jQuery is not loaded.
+	throw "JsViews requires jQuery"; // We require jQuery
+}
+
+var versionNumber = "v0.9.90",
+
+	jsvStoreName, rTag, rTmplString, topView, $views, $observe, $observable, $expando,
+	_ocp = "_ocp", // Observable contextual parameter
+
+//TODO	tmplFnsCache = {},
+	$isFunction, $isArray, $templates, $converters, $helpers, $tags, $sub, $subSettings, $subSettingsAdvanced, $viewsSettings, delimOpenChar0, delimOpenChar1, delimCloseChar0, delimCloseChar1, linkChar, setting, baseOnError,
+
+	rPath = /^(!*?)(?:null|true|false|\d[\d.]*|([\w$]+|\.|~([\w$]+)|#(view|([\w$]+))?)([\w$.^]*?)(?:[.[^]([\w$]+)\]?)?)$/g,
+	//        not                               object     helper    view  viewProperty pathTokens      leafToken
+
+	rParams = /(\()(?=\s*\()|(?:([([])\s*)?(?:(\^?)(!*?[#~]?[\w$.^]+)?\s*((\+\+|--)|\+|-|&&|\|\||===|!==|==|!=|<=|>=|[<>%*:?\/]|(=))\s*|(!*?[#~]?[\w$.^]+)([([])?)|(,\s*)|(\(?)\\?(?:(')|("))|(?:\s*(([)\]])(?=\s*[.^]|\s*$|[^([])|[)\]])([([]?))|(\s+)/g,
+	//          lftPrn0        lftPrn        bound            path    operator err                                                eq             path2       prn    comma   lftPrn2   apos quot      rtPrn rtPrnDot                           prn2  space
+	// (left paren? followed by (path? followed by operator) or (path followed by left paren?)) or comma or apos or quot or right paren or space
+
+	isRenderCall,
+	rNewLine = /[ \t]*(\r\n|\n|\r)/g,
+	rUnescapeQuotes = /\\(['"])/g,
+	rEscapeQuotes = /['"\\]/g, // Escape quotes and \ character
+	rBuildHash = /(?:\x08|^)(onerror:)?(?:(~?)(([\w$_\.]+):)?([^\x08]+))\x08(,)?([^\x08]+)/gi,
+	rTestElseIf = /^if\s/,
+	rFirstElem = /<(\w+)[>\s]/,
+	rAttrEncode = /[\x00`><"'&=]/g, // Includes > encoding since rConvertMarkers in JsViews does not skip > characters in attribute strings
+	rIsHtml = /[\x00`><\"'&=]/,
+	rHasHandlers = /^on[A-Z]|^convert(Back)?$/,
+	rWrappedInViewMarker = /^\#\d+_`[\s\S]*\/\d+_`$/,
+	rHtmlEncode = rAttrEncode,
+	viewId = 0,
+	charEntities = {
+		"&": "&amp;",
+		"<": "&lt;",
+		">": "&gt;",
+		"\x00": "&#0;",
+		"'": "&#39;",
+		'"': "&#34;",
+		"`": "&#96;",
+		"=": "&#61;"
+	},
+	HTML = "html",
+	OBJECT = "object",
+	tmplAttr = "data-jsv-tmpl",
+	jsvTmpl = "jsvTmpl",
+	indexStr = "For #index in nested block use #getIndex().",
+	$render = {},
+
+	jsr = global.jsrender,
+	jsrToJq = jsr && $ && !$.render, // JsRender already loaded, without jQuery. but we will re-load it now to attach to jQuery
+
+	jsvStores = {
+		template: {
+			compile: compileTmpl
+		},
+		tag: {
+			compile: compileTag
+		},
+		viewModel: {
+			compile: compileViewModel
+		},
+		helper: {},
+		converter: {}
+	};
+
+	// views object ($.views if jQuery is loaded, jsrender.views if no jQuery, e.g. in Node.js)
+	$views = {
+		jsviews: versionNumber,
+		sub: {
+			// subscription, e.g. JsViews integration
+			View: View,
+			Err: JsViewsError,
+			tmplFn: tmplFn,
+			parse: parseParams,
+			extend: $extend,
+			extendCtx: extendCtx,
+			syntaxErr: syntaxError,
+			onStore: {
+				template: function(name, item) {
+					if (item === null) {
+						delete $render[name];
+					} else {
+						$render[name] = item;
+					}
+				}
+			},
+			addSetting: addSetting,
+			settings: {
+				allowCode: false
+			},
+			advSet: noop, // Update advanced settings
+			_ths: tagHandlersFromProps,
+			_gm: getMethod,
+			_tg: function() {}, // Constructor for tagDef
+			_cnvt: convertVal,
+			_tag: renderTag,
+			_er: error,
+			_err: onRenderError,
+			_cp: retVal, // Get observable contextual parameters (or properties) ~foo=expr. In JsRender, simply returns val.
+			_sq: function(token) {
+				if (token === "constructor") {
+					syntaxError("");
+				}
+				return token;
+			}
+		},
+		settings: {
+			delimiters: $viewsDelimiters,
+			advanced: function(value) {
+				return value
+					? (
+							$extend($subSettingsAdvanced, value),
+							$sub.advSet(),
+							$viewsSettings
+						)
+						: $subSettingsAdvanced;
+				}
+		},
+		map: dataMap    // If jsObservable loaded first, use that definition of dataMap
+	};
+
+function getDerivedMethod(baseMethod, method) {
+	return function() {
+		var ret,
+			tag = this,
+			prevBase = tag.base;
+
+		tag.base = baseMethod; // Within method call, calling this.base will call the base method
+		ret = method.apply(tag, arguments); // Call the method
+		tag.base = prevBase; // Replace this.base to be the base method of the previous call, for chained calls
+		return ret;
+	};
+}
+
+function getMethod(baseMethod, method) {
+	// For derived methods (or handlers declared declaratively as in {{:foo onChange=~fooChanged}} replace by a derived method, to allow using this.base(...)
+	// or this.baseApply(arguments) to call the base implementation. (Equivalent to this._super(...) and this._superApply(arguments) in jQuery UI)
+	if ($isFunction(method)) {
+		method = getDerivedMethod(
+				!baseMethod
+					? noop // no base method implementation, so use noop as base method
+					: baseMethod._d
+						? baseMethod // baseMethod is a derived method, so use it
+						: getDerivedMethod(noop, baseMethod), // baseMethod is not derived so make its base method be the noop method
+				method
+			);
+		method._d = 1; // Add flag that this is a derived method
+	}
+	return method;
+}
+
+function tagHandlersFromProps(tag, tagCtx) {
+	var prop,
+		props = tagCtx.props;
+	for (prop in props) {
+		if (rHasHandlers.test(prop) && !(tag[prop] && tag[prop].fix)) { // Don't override handlers with fix expando (used in datepicker and spinner)
+			tag[prop] = prop !== "convert" ? getMethod(tag.constructor.prototype[prop], props[prop]) : props[prop];
+			// Copy over the onFoo props, convert and convertBack from tagCtx.props to tag (overrides values in tagDef).
+			// Note: unsupported scenario: if handlers are dynamically added ^onFoo=expression this will work, but dynamically removing will not work.
+		}
+	}
+}
+
+function retVal(val) {
+	return val;
+}
+
+function noop() {
+	return "";
+}
+
+function dbgBreak(val) {
+	// Usage examples: {{dbg:...}}, {{:~dbg(...)}}, {{dbg .../}}, {^{for ... onAfterLink=~dbg}} etc.
+	try {
+		console.log("JsRender dbg breakpoint: " + val);
+		throw "dbg breakpoint"; // To break here, stop on caught exceptions.
+	}
+	catch (e) {}
+	return this.base ? this.baseApply(arguments) : val;
+}
+
+function JsViewsError(message) {
+	// Error exception type for JsViews/JsRender
+	// Override of $.views.sub.Error is possible
+	this.name = ($.link ? "JsViews" : "JsRender") + " Error";
+	this.message = message || this.name;
+}
+
+function $extend(target, source) {
+	if (target) {
+		for (var name in source) {
+			target[name] = source[name];
+		}
+		return target;
+	}
+}
+
+(JsViewsError.prototype = new Error()).constructor = JsViewsError;
+
+//========================== Top-level functions ==========================
+
+//===================
+// views.delimiters
+//===================
+
+function $viewsDelimiters(openChars, closeChars, link) {
+	// Set the tag opening and closing delimiters and 'link' character. Default is "{{", "}}" and "^"
+	// openChars, closeChars: opening and closing strings, each with two characters
+	if (!openChars) {
+		return $subSettings.delimiters;
+	}
+	if ($isArray(openChars)) {
+		return $viewsDelimiters.apply($views, openChars);
+	}
+
+	$subSettings.delimiters = [openChars, closeChars, linkChar = link ? link.charAt(0) : linkChar];
+
+	delimOpenChar0 = openChars.charAt(0); // Escape the characters - since they could be regex special characters
+	delimOpenChar1 = openChars.charAt(1);
+	delimCloseChar0 = closeChars.charAt(0);
+	delimCloseChar1 = closeChars.charAt(1);
+	openChars = "\\" + delimOpenChar0 + "(\\" + linkChar + ")?\\" + delimOpenChar1; // Default is "{^{"
+	closeChars = "\\" + delimCloseChar0 + "\\" + delimCloseChar1;                   // Default is "}}"
+	// Build regex with new delimiters
+	//          [tag    (followed by / space or })  or cvtr+colon or html or code] followed by space+params then convertBack?
+	rTag = "(?:(\\w+(?=[\\/\\s\\" + delimCloseChar0 + "]))|(\\w+)?(:)|(>)|(\\*))\\s*((?:[^\\"
+		+ delimCloseChar0 + "]|\\" + delimCloseChar0 + "(?!\\" + delimCloseChar1 + "))*?)";
+
+	// Make rTag available to JsViews (or other components) for parsing binding expressions
+	$sub.rTag = "(?:" + rTag + ")";
+	//                        { ^? {   tag+params slash?  or closingTag                                                   or comment
+	rTag = new RegExp("(?:" + openChars + rTag + "(\\/)?|\\" + delimOpenChar0 + "(\\" + linkChar + ")?\\" + delimOpenChar1 + "(?:(?:\\/(\\w+))\\s*|!--[\\s\\S]*?--))" + closeChars, "g");
+
+	// Default:  bind     tagName         cvt   cln html code    params            slash   bind2         closeBlk  comment
+	//      /(?:{(\^)?{(?:(\w+(?=[\/\s}]))|(\w+)?(:)|(>)|(\*))\s*((?:[^}]|}(?!}))*?)(\/)?|{(\^)?{(?:(?:\/(\w+))\s*|!--[\s\S]*?--))}}
+
+	$sub.rTmpl = new RegExp("^\\s|\\s$|<.*>|([^\\\\]|^)[{}]|" + openChars + ".*" + closeChars);
+	// $sub.rTmpl looks for initial or final white space, html tags or { or } char not preceded by \\, or JsRender tags {{xxx}}.
+	// Each of these strings are considered NOT to be jQuery selectors
+	return $viewsSettings;
+}
+
+//=========
+// View.get
+//=========
+
+function getView(inner, type) { //view.get(inner, type)
+	if (!type && inner !== true) {
+		// view.get(type)
+		type = inner;
+		inner = undefined;
+	}
+
+	var views, i, l, found,
+		view = this,
+		root = !type || type === "root";
+		// If type is undefined, returns root view (view under top view).
+
+	if (inner) {
+		// Go through views - this one, and all nested ones, depth-first - and return first one with given type.
+		// If type is undefined, i.e. view.get(true), return first child view.
+		found = type && view.type === type && view;
+		if (!found) {
+			views = view.views;
+			if (view._.useKey) {
+				for (i in views) {
+					if (found = type ? views[i].get(inner, type) : views[i]) {
+						break;
+					}
+				}
+			} else {
+				for (i = 0, l = views.length; !found && i < l; i++) {
+					found = type ? views[i].get(inner, type) : views[i];
+				}
+			}
+		}
+	} else if (root) {
+		// Find root view. (view whose parent is top view)
+		found = view.root;
+	} else {
+		while (view && !found) {
+			// Go through views - this one, and all parent ones - and return first one with given type.
+			found = view.type === type ? view : undefined;
+			view = view.parent;
+		}
+	}
+	return found;
+}
+
+function getNestedIndex() {
+	var view = this.get("item");
+	return view ? view.index : undefined;
+}
+
+getNestedIndex.depends = function() {
+	return [this.get("item"), "index"];
+};
+
+function getIndex() {
+	return this.index;
+}
+
+getIndex.depends = "index";
+
+//==========
+// View.hlp
+//==========
+
+function contextParameter(key, value, isContextCb) {
+	// Helper method called as view.ctxPrm(key) for helpers or template parameters ~foo - from compiled template or from context callback
+	var wrapped, deps, res, obsCtxPrm,
+		storeView = this,
+		isUpdate = !isRenderCall && value !== undefined,
+		store = storeView.ctx;
+
+	if (key in store || key in (store = $helpers)) {
+		res = store && store[key];
+		if (key === "tag" || key === "root" || key === "parentTags" || storeView._.it === key ) {
+			return res;
+		}
+	} else {
+		store = undefined;
+	}
+	if (!res || !$isFunction(res) && storeView.linked || storeView.tagCtx) { // Data-linked view, or tag instance
+		if (!res || !res._cxp) {
+			// Not a contextual parameter
+			if (store !== $helpers) {
+				// Set storeView to tag (if this is a tag.ctxPrm() call) or to root view ("data" view of linked template)
+				storeView = storeView.tagCtx
+					? storeView // Is a tag, not a view
+					: (storeView = storeView.scope || storeView, !storeView.isTop && storeView.ctx.tag || storeView);
+				store = storeView._ocps;
+				res = store && store[key] || res;
+			}
+			if (!(res && res._cxp) && (isContextCb || isUpdate)) {
+				res = $sub._crcp(key, res, storeView, store); // Create observable contextual parameter
+			}
+		}
+		if (obsCtxPrm = res && res._cxp) {
+			if (isUpdate) {
+				return $sub._ucp(key, value, storeView, obsCtxPrm); // Update observable contextual parameter
+			}
+			if (isContextCb) { // If this helper resource is an observable contextual parameter
+				// In a context callback for a contextual param, return the [view, dependencies...] array - needed for observe call
+				deps = res[1] ? $sub._ceo(res[1].deps) : [_ocp]; // fn deps (with any exprObs cloned using $sub._ceo)
+				deps.unshift(res[0]); // view
+				deps._cxp = obsCtxPrm;
+				return deps;
+			}
+			res = res[1] // linkFn for compiled expression
+				? obsCtxPrm.tag && obsCtxPrm.tag.cvtArgs
+					? obsCtxPrm.tag.cvtArgs(true, obsCtxPrm.tagElse)[obsCtxPrm.ind] // = tag.bndArgs() - for tag contextual parameter
+					: res[1](res[0].data, res[0], $sub)    // = fn(data, view, $sub) for compiled binding expression
+				: res[0]._ocp; // Observable contextual parameter (uninitialized, or initialized as static expression, so no path dependencies)
+		}
+	}
+	if (res && $isFunction(res)) {
+		// If a helper is of type function, and not already wrapped, we will wrap it, so if called with no this pointer it will be called with the
+		// view as 'this' context. If the helper ~foo() was in a data-link expression, the view will have a 'temporary' linkCtx property too.
+		// Note that helper functions on deeper paths will have specific this pointers, from the preceding path.
+		// For example, ~util.foo() will have the ~util object as 'this' pointer
+		wrapped = function() {
+			return res.apply((!this || this === global) ? storeView : this, arguments);
+		};
+		$extend(wrapped, res); // Attach same expandos (if any) to the wrapped function
+		wrapped._vw = storeView;
+	}
+	return wrapped || res;
+}
+
+function getTemplate(tmpl) {
+	return tmpl && (tmpl.fn
+		? tmpl
+		: this.getRsc("templates", tmpl) || $templates(tmpl)); // not yet compiled
+}
+
+//==============
+// views._cnvt
+//==============
+
+function convertVal(converter, view, tagCtx, onError) {
+	// Called from compiled template code for {{:}}
+	// self is template object or linkCtx object
+	var tag, value, argsLen, bindTo,
+		// If tagCtx is an integer, then it is the key for the compiled function to return the boundTag tagCtx
+		boundTag = typeof tagCtx === "number" && view.tmpl.bnds[tagCtx-1],
+		linkCtx = view.linkCtx; // For data-link="{cvt:...}"...
+
+	if (onError === undefined && boundTag && boundTag._lr) { // lateRender
+		onError = "";
+	}
+	if (onError !== undefined) {
+		tagCtx = onError = {props: {}, args: [onError]};
+	} else if (boundTag) {
+		tagCtx = boundTag(view.data, view, $sub);
+	}
+	boundTag = boundTag._bd && boundTag;
+	value = tagCtx.args[0];
+	if (converter || boundTag) {
+		tag = linkCtx && linkCtx.tag;
+		tagCtx.view = view;
+		if (!tag) {
+			tag = $extend(new $sub._tg(), {
+				_: {
+					bnd: boundTag,
+					unlinked: true
+				},
+				inline: !linkCtx,
+				tagName: ":",
+				convert: converter,
+				flow: true,
+				tagCtx: tagCtx
+			});
+			argsLen = tagCtx.args.length;
+			if (argsLen>1) {
+				bindTo = tag.bindTo = [];
+				while (argsLen--) {
+					bindTo.unshift(argsLen); // Bind to all the arguments - generate bindTo array: [0,1,2...]
+				}
+			}
+			if (linkCtx) {
+				linkCtx.tag = tag;
+				tag.linkCtx = linkCtx;
+			}
+			tagCtx.ctx = extendCtx(tagCtx.ctx, (linkCtx ? linkCtx.view : view).ctx);
+			tagHandlersFromProps(tag, tagCtx);
+		}
+		tag._er = onError && value;
+		tag.ctx = tagCtx.ctx || tag.ctx || {};
+		tagCtx.ctx = undefined;
+
+		value = tag.cvtArgs()[0]; // If there is a convertBack but no convert, converter will be "true"
+	}
+
+	// Call onRender (used by JsViews if present, to add binding annotations around rendered content)
+	value = boundTag && view._.onRender
+		? view._.onRender(value, view, tag)
+		: value;
+	return value != undefined ? value : "";
+}
+
+function convertArgs(bound, tagElse) { // tag.cvtArgs()
+	var l, key, boundArgs, args, bindTo, tag, converter,
+		tagCtx = this;
+
+	if (tagCtx.tagName) {
+		tag = tagCtx;
+		tagCtx = tag.tagCtxs ? tag.tagCtxs[tagElse || 0] : tag.tagCtx;
+	} else {
+		tag = tagCtx.tag;
+	}
+
+	bindTo = tag.bindTo;
+	args = tagCtx.args;
+
+	if ((converter = tag.convert) && "" + converter === converter) {
+		converter = converter === "true"
+			? undefined
+			: (tagCtx.view.getRsc("converters", converter) || error("Unknown converter: '" + converter + "'"));
+	}
+
+	if (bound && bound.length) {
+	 args = bound;
+	} else {
+		if (converter && !bound) { // If there is a converter, use a copy of the tagCtx.args array for rendering, and replace the args[0] in
+			args = args.slice(); // the copied array with the converted value. But we do not modify the value of tag.tagCtx.args[0] (the original args array)
+		}
+		if (bindTo) { // Get the values of the boundArgs
+			boundArgs = [];
+			l = bindTo.length;
+			while (l--) {
+				key = bindTo[l];
+				boundArgs.unshift(argOrProp(tagCtx, key));
+			}
+			if (bound) {
+				args = boundArgs; // Call to convertBoundArgs() - returns the boundArgs
+			}
+		}
+	}
+	if (converter) {
+		bindTo = bindTo || [0];
+		l = bindTo.length;
+		converter = converter.apply(tag, boundArgs || args);
+		if (!$isArray(converter) || converter.length !== l) {
+			converter = [converter];
+			bindTo = [0];
+			l = 1;
+		}
+		if (bound) {        // Call to bndArgs convertBoundArgs() - so apply converter to all boundArgs
+			args = converter; // The array of values returned from the converter
+		} else {            // Call to cvtArgs()
+			while (l--) {
+				key = bindTo[l];
+				if (+key === key) {
+					args[key] = converter[l];
+				}
+			}
+		}
+	}
+	return args;
+}
+
+function argOrProp(context, key) {
+	context = context[+key === key ? "args" : "props"];
+	return context && context[key];
+}
+
+function convertBoundArgs(tagElse) { // tag.bndArgs()
+	return this.cvtArgs(true, tagElse);
+}
+
+//=============
+// views._tag
+//=============
+
+function getResource(resourceType, itemName) {
+	var res, store,
+		view = this;
+	if ("" + itemName === itemName) {
+		while ((res === undefined) && view) {
+			store = view.tmpl && view.tmpl[resourceType];
+			res = store && store[itemName];
+			view = view.parent;
+		}
+		return res || $views[resourceType][itemName];
+	}
+}
+
+function renderTag(tagName, parentView, tmpl, tagCtxs, isUpdate, onError) {
+	function makeArray(type) {
+		var linkedElement;
+		if (linkedElement = tag[type]) {
+			tag[type] = linkedElement = $isArray(linkedElement) ? linkedElement: [linkedElement];
+
+			if (bindToLength !== linkedElement.length) {
+				error(type + " length not same as bindTo ");
+			}
+		}
+	}
+
+	parentView = parentView || topView;
+	var tag, tag_, tagDef, template, tags, attr, parentTag, l, m, n, itemRet, tagCtx, tagCtxCtx, ctxPrm, bindTo,
+		content, callInit, mapDef, thisMap, args, props, tagDataMap, contentCtx, key, bindToLength,
+		i = 0,
+		ret = "",
+		linkCtx = parentView.linkCtx || 0,
+		ctx = parentView.ctx,
+		parentTmpl = tmpl || parentView.tmpl,
+		// If tagCtxs is an integer, then it is the key for the compiled function to return the boundTag tagCtxs
+		boundTag = typeof tagCtxs === "number" && parentView.tmpl.bnds[tagCtxs-1];
+
+	if (tagName._is === "tag") {
+		tag = tagName;
+		tagName = tag.tagName;
+		tagCtxs = tag.tagCtxs;
+		template = tag.template;
+	} else {
+		tagDef = parentView.getRsc("tags", tagName) || error("Unknown tag: {{" + tagName + "}} ");
+		template = tagDef.template;
+	}
+	if (onError === undefined && boundTag) {
+		if (boundTag._lr = (tagDef.lateRender || boundTag._lr) && boundTag._lr !== "false") {
+			onError = ""; // If lateRender, set temporary onError, to skip initial rendering (and render just "")
+		}
+	}
+	if (onError !== undefined) {
+		ret += onError;
+		tagCtxs = onError = [{props: {}, args: [], params: {}}];
+	} else if (boundTag) {
+		tagCtxs = boundTag(parentView.data, parentView, $sub);
+	}
+
+	l = tagCtxs.length;
+	for (; i < l; i++) {
+		tagCtx = tagCtxs[i];
+		content = tagCtx.tmpl;
+		if (!linkCtx || !linkCtx.tag || i && !linkCtx.tag.inline || tag._er || content && +content===content) {
+			// Initialize tagCtx
+			// For block tags, tagCtx.tmpl is an integer > 0
+			if (content && parentTmpl.tmpls) {
+				tagCtx.tmpl = tagCtx.content = parentTmpl.tmpls[content - 1]; // Set the tmpl property to the content of the block tag
+			}
+			tagCtx.index = i;
+			tagCtx.render = renderContent;
+			tagCtx.view = parentView;
+			tagCtx.ctx = extendCtx(tagCtx.ctx, ctx); // Clone and extend parentView.ctx
+		}
+		if (tmpl = tagCtx.props.tmpl) {
+			// If the tmpl property is overridden, set the value (when initializing, or, in case of binding: ^tmpl=..., when updating)
+			tagCtx.tmpl = parentView.getTmpl(tmpl);
+			tagCtx.content = tagCtx.content || tagCtx.tmpl;
+		}
+
+		if (!tag) {
+			// This will only be hit for initial tagCtx (not for {{else}}) - if the tag instance does not exist yet
+			// If the tag has not already been instantiated, we will create a new instance.
+			// ~tag will access the tag, even within the rendering of the template content of this tag.
+			// From child/descendant tags, can access using ~tag.parent, or ~parentTags.tagName
+			tag = new tagDef._ctr();
+			callInit = !!tag.init;
+
+			tag.parent = parentTag = ctx && ctx.tag;
+			tag.tagCtxs = tagCtxs;
+			tagDataMap = tag.dataMap;
+
+			if (linkCtx) {
+				tag.inline = false;
+				linkCtx.tag = tag;
+				tag.linkCtx = linkCtx;
+			}
+			if (tag._.bnd = boundTag || linkCtx.fn) {
+				// Bound if {^{tag...}} or data-link="{tag...}"
+				tag._.arrVws = {};
+			} else if (tag.dataBoundOnly) {
+				error(tagName + " must be data-bound:\n{^{" + tagName + "}}");
+			}
+			//TODO better perf for childTags() - keep child tag.tags array, (and remove child, when disposed)
+			// tag.tags = [];
+		}
+		tagCtxs = tag.tagCtxs;
+		tagDataMap = tag.dataMap;
+
+		tagCtx.tag = tag;
+		if (tagDataMap && tagCtxs) {
+			tagCtx.map = tagCtxs[i].map; // Copy over the compiled map instance from the previous tagCtxs to the refreshed ones
+		}
+		if (!tag.flow) {
+			tagCtxCtx = tagCtx.ctx = tagCtx.ctx || {};
+
+			// tags hash: tag.ctx.tags, merged with parentView.ctx.tags,
+			tags = tag.parents = tagCtxCtx.parentTags = ctx && extendCtx(tagCtxCtx.parentTags, ctx.parentTags) || {};
+			if (parentTag) {
+				tags[parentTag.tagName] = parentTag;
+				//TODO better perf for childTags: parentTag.tags.push(tag);
+			}
+			tags[tag.tagName] = tagCtxCtx.tag = tag;
+		}
+	}
+	if (!(tag._er = onError)) {
+		tagHandlersFromProps(tag, tagCtxs[0]);
+		tag.rendering = {}; // Provide object for state during render calls to tag and elses. (Used by {{if}} and {{for}}...)
+		for (i = 0; i < l; i++) { // Iterate tagCtx for each {{else}} block
+			tagCtx = tag.tagCtx = tagCtxs[i];
+			props = tagCtx.props;
+			tag.ctx = tagCtx.ctx;
+
+			if (!i) {
+				if (callInit) {
+					tag.init(tagCtx, linkCtx, tag.ctx);
+					callInit = undefined;
+				}
+				if (!tagCtx.args.length && tag.argDefault !== false) {
+					tagCtx.args = args = [tagCtx.view.data]; // Missing first arg defaults to the current data context
+					tagCtx.params.args = ["#data"];
+				}
+
+				bindTo = tag.bindTo;
+
+				if (bindTo !== undefined) {
+					bindTo = tag.bindTo = $isArray(bindTo) ? bindTo : [bindTo];
+					m = bindTo.length;
+					while (m--) {
+						key = bindTo[m];
+						if (!isNaN(parseInt(key))) {
+							key = parseInt(key); // Convert "0" to 0,  etc.
+						}
+						bindTo[m] = key;
+					}
+				}
+
+				bindTo = tag.bindTo || [0];
+				bindToLength = bindTo.length;
+				if (tag._.bnd){
+					makeArray("linkedElement");
+					makeArray("linkedCtxParam");
+				}
+
+				if (linkCtx) {
+					// Set attr on linkCtx to ensure outputting to the correct target attribute.
+					// Setting either linkCtx.attr or this.attr in the init() allows per-instance choice of target attrib.
+					linkCtx.attr = tag.attr = linkCtx.attr || tag.attr;
+				}
+				attr = tag.attr;
+				tag._.noVws = attr && attr !== HTML;
+			}
+			args = tag.cvtArgs(undefined, i);
+			if (tag.linkedCtxParam) {
+				m = bindToLength;
+				while (m--) {
+					if (ctxPrm = tag.linkedCtxParam[m]) {
+						key = bindTo[m];
+						// Create tag contextual parameter
+						tagCtx.ctx[ctxPrm] = $sub._cp(argOrProp(tagCtx, key), argOrProp(tagCtx.params, key), tagCtx.view, tag._.bnd && {tag: tag, ind: m, tagElse: i});
+					}
+				}
+			}
+			if (mapDef = props.dataMap || tagDataMap) {
+				if (args.length || props.dataMap) {
+					thisMap = tagCtx.map;
+					if (!thisMap || thisMap.src !== args[0] || isUpdate) {
+						if (thisMap && thisMap.src) {
+							thisMap.unmap(); // only called if observable map - not when only used in JsRender, e.g. by {{props}}
+						}
+						thisMap = tagCtx.map = mapDef.map(args[0], props, undefined, !tag._.bnd);
+					}
+					args = [thisMap.tgt];
+				}
+			}
+
+			itemRet = undefined;
+			if (tag.render) {
+				itemRet = tag.render.apply(tag, args);
+				if (parentView.linked && itemRet && !rWrappedInViewMarker.test(itemRet)) {
+					// When a tag renders content from the render method, with data linking then we need to wrap with view markers, if absent,
+					// to provide a contentView for the tag, which will correctly dispose bindings if deleted. The 'tmpl' for this view will
+					// be a dumbed-down template which will always return the  itemRet string (no matter what the data is). The itemRet string
+					// is not compiled as template markup, so can include "{{" or "}}" without triggering syntax errors
+					tmpl = { // 'Dumbed-down' template which always renders 'static' itemRet string
+						links: []
+					};
+					tmpl.render = tmpl.fn = function() {
+						return itemRet;
+					};
+					itemRet = renderWithViews(tmpl, parentView.data, undefined, true, parentView, undefined, undefined, tag);
+				}
+			}
+			if (!args.length) {
+				args = [parentView]; // no arguments - (e.g. {{else}}) get data context from view.
+			}
+			if (itemRet === undefined) {
+				contentCtx = args[0]; // Default data context for wrapped block content is the first argument
+				if (tag.contentCtx) { // Set tag.contentCtx to true, to inherit parent context, or to a function to provide alternate context.
+					contentCtx = tag.contentCtx === true ? parentView : tag.contentCtx(contentCtx);
+				}
+				itemRet = tagCtx.render(contentCtx, true) || (isUpdate ? undefined : "");
+			}
+			// No return value from render, and no template/content tagCtx.render(...), so return undefined
+			ret = ret ? ret + (itemRet || "") : itemRet; // If no rendered content, this will be undefined
+		}
+		tag.rendering = undefined;
+	}
+	tag.tagCtx = tagCtxs[0];
+	tag.ctx = tag.tagCtx.ctx;
+
+	if (tag._.noVws) {
+		if (tag.inline) {
+			// inline tag with attr set to "text" will insert HTML-encoded content - as if it was element-based innerText
+			ret = attr === "text"
+				? $converters.html(ret)
+				: "";
+		}
+	}
+	return boundTag && parentView._.onRender
+		// Call onRender (used by JsViews if present, to add binding annotations around rendered content)
+		? parentView._.onRender(ret, parentView, tag)
+		: ret;
+}
+
+//=================
+// View constructor
+//=================
+
+function View(context, type, parentView, data, template, key, onRender, contentTmpl) {
+	// Constructor for view object in view hierarchy. (Augmented by JsViews if JsViews is loaded)
+	var views, parentView_, tag, self_,
+		self = this,
+		isArray = type === "array";
+		// If the data is an array, this is an 'array view' with a views array for each child 'item view'
+		// If the data is not an array, this is an 'item view' with a views 'hash' object for any child nested views
+
+	self.content = contentTmpl;
+	self.views = isArray ? [] : {};
+	self.data = data;
+	self.tmpl = template;
+	self_ = self._ = {
+		key: 0,
+		// ._.useKey is non zero if is not an 'array view' (owning a data array). Use this as next key for adding to child views hash
+		useKey: isArray ? 0 : 1,
+		id: "" + viewId++,
+		onRender: onRender,
+		bnds: {}
+	};
+	self.linked = !!onRender;
+	self.type = type || "top";
+	if (self.parent = parentView) {
+		self.root = parentView.root || self; // view whose parent is top view
+		views = parentView.views;
+		parentView_ = parentView._;
+		self.isTop = parentView_.scp; // Is top content view of a link("#container", ...) call
+		self.scope = (!context.tag || context.tag === parentView.ctx.tag) && !self.isTop && parentView.scope || self;
+		if (parentView_.useKey) {
+			// Parent is not an 'array view'. Add this view to its views object
+			// self._key = is the key in the parent view hash
+			views[self_.key = "_" + parentView_.useKey++] = self;
+			self.index = indexStr;
+			self.getIndex = getNestedIndex;
+		} else if (views.length === (self_.key = self.index = key)) { // Parent is an 'array view'. Add this view to its views array
+			views.push(self); // Adding to end of views array. (Using push when possible - better perf than splice)
+		} else {
+			views.splice(key, 0, self); // Inserting in views array
+		}
+		// If no context was passed in, use parent context
+		// If context was passed in, it should have been merged already with parent context
+		self.ctx = context || parentView.ctx;
+	} else {
+		self.ctx = context || {};
+	}
+}
+
+View.prototype = {
+	get: getView,
+	getIndex: getIndex,
+	getRsc: getResource,
+	getTmpl: getTemplate,
+	ctxPrm: contextParameter,
+	_is: "view"
+};
+
+//====================================================
+// Registration
+//====================================================
+
+function compileChildResources(parentTmpl) {
+	var storeName, storeNames, resources;
+	for (storeName in jsvStores) {
+		storeNames = storeName + "s";
+		if (parentTmpl[storeNames]) {
+			resources = parentTmpl[storeNames];    // Resources not yet compiled
+			parentTmpl[storeNames] = {};               // Remove uncompiled resources
+			$views[storeNames](resources, parentTmpl); // Add back in the compiled resources
+		}
+	}
+}
+
+//===============
+// compileTag
+//===============
+
+function compileTag(name, tagDef, parentTmpl) {
+	var tmpl, baseTag, prop, l, key, bindToLength,
+		bindTo = tagDef.bindTo,
+		compiledDef = new $sub._tg();
+
+	function Tag() {
+		var tag = this;
+		tag._ = {
+			unlinked: true
+		};
+		tag.inline = true;
+		tag.tagName = name;
+	}
+
+	if ($isFunction(tagDef)) {
+		// Simple tag declared as function. No presenter instantation.
+		tagDef = {
+			depends: tagDef.depends,
+			render: tagDef
+		};
+	} else if ("" + tagDef === tagDef) {
+		tagDef = {template: tagDef};
+	}
+
+	if (baseTag = tagDef.baseTag) {
+		tagDef.flow = !!tagDef.flow; // Set flow property, so defaults to false even if baseTag has flow=true
+		tagDef.baseTag = baseTag = "" + baseTag === baseTag
+			? (parentTmpl && parentTmpl.tags[baseTag] || $tags[baseTag])
+			: baseTag;
+
+		compiledDef = $extend(compiledDef, baseTag);
+
+		for (prop in tagDef) {
+			compiledDef[prop] = getMethod(baseTag[prop], tagDef[prop]);
+		}
+	} else {
+		compiledDef = $extend(compiledDef, tagDef);
+	}
+
+	// Tag declared as object, used as the prototype for tag instantiation (control/presenter)
+	if ((tmpl = compiledDef.template) !== undefined) {
+		compiledDef.template = "" + tmpl === tmpl ? ($templates[tmpl] || $templates(tmpl)) : tmpl;
+	}
+	(Tag.prototype = compiledDef).constructor = compiledDef._ctr = Tag;
+
+	if (parentTmpl) {
+		compiledDef._parentTmpl = parentTmpl;
+	}
+	return compiledDef;
+}
+
+function baseApply(args) {
+	// In derived method (or handler declared declaratively as in {{:foo onChange=~fooChanged}} can call base method,
+	// using this.baseApply(arguments) (Equivalent to this._superApply(arguments) in jQuery UI)
+	return this.base.apply(this, args);
+}
+
+//===============
+// compileTmpl
+//===============
+
+function compileTmpl(name, tmpl, parentTmpl, options) {
+	// tmpl is either a template object, a selector for a template script block, the name of a compiled template, or a template object
+
+	//==== nested functions ====
+	function lookupTemplate(value) {
+		// If value is of type string - treat as selector, or name of compiled template
+		// Return the template object, if already compiled, or the markup string
+		var currentName, tmpl;
+		if (("" + value === value) || value.nodeType > 0 && (elem = value)) {
+			if (!elem) {
+				if (/^\.\/[^\\:*?"<>]*$/.test(value)) {
+					// tmpl="./some/file.html"
+					// If the template is not named, use "./some/file.html" as name.
+					if (tmpl = $templates[name = name || value]) {
+						value = tmpl;
+					} else {
+						// BROWSER-SPECIFIC CODE (not on Node.js):
+						// Look for server-generated script block with id "./some/file.html"
+						elem = document.getElementById(value);
+					}
+				} else if ($.fn && !$sub.rTmpl.test(value)) {
+					try {
+						elem = $ (value, document)[0]; // if jQuery is loaded, test for selector returning elements, and get first element
+					} catch (e) {}
+				}// END BROWSER-SPECIFIC CODE
+			} //BROWSER-SPECIFIC CODE
+			if (elem) {
+				// Generally this is a script element.
+				// However we allow it to be any element, so you can for example take the content of a div,
+				// use it as a template, and replace it by the same content rendered against data.
+				// e.g. for linking the content of a div to a container, and using the initial content as template:
+				// $.link("#content", model, {tmpl: "#content"});
+				if (options) {
+					// We will compile a new template using the markup in the script element
+					value = elem.innerHTML;
+				} else {
+					// We will cache a single copy of the compiled template, and associate it with the name
+					// (renaming from a previous name if there was one).
+					currentName = elem.getAttribute(tmplAttr);
+					if (currentName) {
+						if (currentName !== jsvTmpl) {
+							value = $templates[currentName];
+							delete $templates[currentName];
+						} else if ($.fn) {
+							value = $.data(elem)[jsvTmpl]; // Get cached compiled template
+						}
+					}
+					if (!currentName || !value) { // Not yet compiled, or cached version lost
+						name = name || ($.fn ? jsvTmpl : value);
+						value = compileTmpl(name, elem.innerHTML, parentTmpl, options);
+					}
+					value.tmplName = name = name || currentName;
+					if (name !== jsvTmpl) {
+						$templates[name] = value;
+					}
+					elem.setAttribute(tmplAttr, name);
+					if ($.fn) {
+						$.data(elem, jsvTmpl, value);
+					}
+				}
+			} // END BROWSER-SPECIFIC CODE
+			elem = undefined;
+		} else if (!value.fn) {
+			value = undefined;
+			// If value is not a string. HTML element, or compiled template, return undefined
+		}
+		return value;
+	}
+
+	var elem, compiledTmpl,
+		tmplOrMarkup = tmpl = tmpl || "";
+	$sub._html = $converters.html;
+
+	//==== Compile the template ====
+	if (options === 0) {
+		options = undefined;
+		tmplOrMarkup = lookupTemplate(tmplOrMarkup); // Top-level compile so do a template lookup
+	}
+
+	// If options, then this was already compiled from a (script) element template declaration.
+	// If not, then if tmpl is a template object, use it for options
+	options = options || (tmpl.markup ? tmpl : {});
+	options.tmplName = name;
+	if (parentTmpl) {
+		options._parentTmpl = parentTmpl;
+	}
+	// If tmpl is not a markup string or a selector string, then it must be a template object
+	// In that case, get it from the markup property of the object
+	if (!tmplOrMarkup && tmpl.markup && (tmplOrMarkup = lookupTemplate(tmpl.markup))) {
+		if (tmplOrMarkup.fn) {
+			// If the string references a compiled template object, need to recompile to merge any modified options
+			tmplOrMarkup = tmplOrMarkup.markup;
+		}
+	}
+	if (tmplOrMarkup !== undefined) {
+		if (tmplOrMarkup.fn || tmpl.fn) {
+			// tmpl is already compiled, so use it
+			if (tmplOrMarkup.fn) {
+				compiledTmpl = tmplOrMarkup;
+			}
+		} else {
+			// tmplOrMarkup is a markup string, not a compiled template
+			// Create template object
+			tmpl = tmplObject(tmplOrMarkup, options);
+			// Compile to AST and then to compiled function
+			tmplFn(tmplOrMarkup.replace(rEscapeQuotes, "\\$&"), tmpl);
+		}
+		if (!compiledTmpl) {
+			compiledTmpl = $extend(function() {
+				return compiledTmpl.render.apply(compiledTmpl, arguments);
+			}, tmpl);
+
+			compileChildResources(compiledTmpl);
+		}
+		return compiledTmpl;
+	}
+}
+
+//==== /end of function compileTmpl ====
+
+//=================
+// compileViewModel
+//=================
+
+function getDefaultVal(defaultVal, data) {
+	return $isFunction(defaultVal)
+		? defaultVal.call(data)
+		: defaultVal;
+}
+
+function unmapArray(modelArr) {
+		var arr = [],
+			i = 0,
+			l = modelArr.length;
+		for (; i<l; i++) {
+			arr.push(modelArr[i].unmap());
+		}
+		return arr;
+}
+
+function compileViewModel(name, type) {
+	var i, constructor,
+		viewModels = this,
+		getters = type.getters,
+		extend = type.extend,
+		id = type.id,
+		proto = $.extend({
+			_is: name || "unnamed",
+			unmap: unmap,
+			merge: merge
+		}, extend),
+		args = "",
+		body = "",
+		g = getters ? getters.length : 0,
+		$observable = $.observable,
+		getterNames = {};
+
+	function GetNew(args) {
+		constructor.apply(this, args);
+	}
+
+	function vm() {
+		return new GetNew(arguments);
+	}
+
+	function iterate(data, action) {
+		var getterType, defaultVal, prop, ob,
+			j = 0;
+		for (; j<g; j++) {
+			prop = getters[j];
+			getterType = undefined;
+			if (prop + "" !== prop) {
+				getterType = prop;
+				prop = getterType.getter;
+			}
+			if ((ob = data[prop]) === undefined && getterType && (defaultVal = getterType.defaultVal) !== undefined) {
+				ob = getDefaultVal(defaultVal, data);
+			}
+			action(ob, getterType && viewModels[getterType.type], prop);
+		}
+	}
+
+	function map(data) {
+		data = data + "" === data
+			? JSON.parse(data) // Accept JSON string
+			: data;            // or object/array
+		var l, prop,
+			j = 0,
+			ob = data,
+			arr = [];
+
+		if ($isArray(data)) {
+			data = data || [];
+			l = data.length;
+			for (; j<l; j++) {
+				arr.push(this.map(data[j]));
+			}
+			arr._is = name;
+			arr.unmap = unmap;
+			arr.merge = merge;
+			return arr;
+		}
+
+		if (data) {
+			iterate(data, function(ob, viewModel) {
+				if (viewModel) { // Iterate to build getters arg array (value, or mapped value)
+					ob = viewModel.map(ob);
+				}
+				arr.push(ob);
+			});
+
+			ob = this.apply(this, arr); // Insantiate this View Model, passing getters args array to constructor
+			for (prop in data) { // Copy over any other properties. that are not get/set properties
+				if (prop !== $expando && !getterNames[prop]) {
+					ob[prop] = data[prop];
+				}
+			}
+		}
+		return ob;
+	}
+
+	function merge(data) {
+		data = data + "" === data
+			? JSON.parse(data) // Accept JSON string
+			: data;            // or object/array
+		var j, l, m, prop, mod, found, assigned, ob, newModArr,
+			k = 0,
+			model = this;
+
+		if ($isArray(model)) {
+			assigned = {};
+			newModArr = [];
+			l = data.length;
+			m = model.length;
+			for (; k<l; k++) {
+				ob = data[k];
+				found = false;
+				for (j=0; j<m && !found; j++) {
+					if (assigned[j]) {
+						continue;
+					}
+					mod = model[j];
+
+					if (id) {
+						assigned[j] = found = id + "" === id
+						? (ob[id] && (getterNames[id] ? mod[id]() : mod[id]) === ob[id])
+						: id(mod, ob);
+					}
+				}
+				if (found) {
+					mod.merge(ob);
+					newModArr.push(mod);
+				} else {
+					newModArr.push(vm.map(ob));
+				}
+			}
+			if ($observable) {
+				$observable(model).refresh(newModArr, true);
+			} else {
+				model.splice.apply(model, [0, model.length].concat(newModArr));
+			}
+			return;
+		}
+		iterate(data, function(ob, viewModel, getter) {
+			if (viewModel) {
+				model[getter]().merge(ob); // Update typed property
+			} else {
+				model[getter](ob); // Update non-typed property
+			}
+		});
+		for (prop in data) {
+			if (prop !== $expando && !getterNames[prop]) {
+				model[prop] = data[prop];
+			}
+		}
+	}
+
+	function unmap() {
+		var ob, prop, getterType, arr, value,
+			k = 0,
+			model = this;
+
+		if ($isArray(model)) {
+			return unmapArray(model);
+		}
+		ob = {};
+		for (; k<g; k++) {
+			prop = getters[k];
+			getterType = undefined;
+			if (prop + "" !== prop) {
+				getterType = prop;
+				prop = getterType.getter;
+			}
+			value = model[prop]();
+			ob[prop] = getterType && value && viewModels[getterType.type]
+				? $isArray(value)
+					? unmapArray(value)
+					: value.unmap()
+				: value;
+		}
+		for (prop in model) {
+			if (prop !== "_is" && !getterNames[prop] && prop !== $expando  && (prop.charAt(0) !== "_" || !getterNames[prop.slice(1)]) && !$isFunction(model[prop])) {
+				ob[prop] = model[prop];
+			}
+		}
+		return ob;
+	}
+
+	GetNew.prototype = proto;
+
+	for (i=0; i<g; i++) {
+		(function(getter) {
+			getter = getter.getter || getter;
+			getterNames[getter] = i+1;
+			var privField = "_" + getter;
+
+			args += (args ? "," : "") + getter;
+			body += "this." + privField + " = " + getter + ";\n";
+			proto[getter] = proto[getter] || function(val) {
+				if (!arguments.length) {
+					return this[privField]; // If there is no argument, use as a getter
+				}
+				if ($observable) {
+					$observable(this).setProperty(getter, val);
+				} else {
+					this[privField] = val;
+				}
+			};
+
+			if ($observable) {
+				proto[getter].set = proto[getter].set || function(val) {
+					this[privField] = val; // Setter called by observable property change
+				};
+			}
+		})(getters[i]);
+	}
+
+	constructor = new Function(args, body.slice(0, -1));
+	constructor.prototype = proto;
+	proto.constructor = constructor;
+
+	vm.map = map;
+	vm.getters = getters;
+	vm.extend = extend;
+	vm.id = id;
+	return vm;
+}
+
+function tmplObject(markup, options) {
+	// Template object constructor
+	var htmlTag,
+		wrapMap = $subSettingsAdvanced._wm || {}, // Only used in JsViews. Otherwise empty: {}
+		tmpl = $extend(
+			{
+				tmpls: [],
+				links: {}, // Compiled functions for link expressions
+				bnds: [],
+				_is: "template",
+				render: renderContent
+			},
+			options
+		);
+
+	tmpl.markup = markup;
+	if (!options.htmlTag) {
+		// Set tmpl.tag to the top-level HTML tag used in the template, if any...
+		htmlTag = rFirstElem.exec(markup);
+		tmpl.htmlTag = htmlTag ? htmlTag[1].toLowerCase() : "";
+	}
+	htmlTag = wrapMap[tmpl.htmlTag];
+	if (htmlTag && htmlTag !== wrapMap.div) {
+		// When using JsViews, we trim templates which are inserted into HTML contexts where text nodes are not rendered (i.e. not 'Phrasing Content').
+		// Currently not trimmed for <li> tag. (Not worth adding perf cost)
+		tmpl.markup = $.trim(tmpl.markup);
+	}
+
+	return tmpl;
+}
+
+//==============
+// registerStore
+//==============
+
+function registerStore(storeName, storeSettings) {
+
+	function theStore(name, item, parentTmpl) {
+		// The store is also the function used to add items to the store. e.g. $.templates, or $.views.tags
+
+		// For store of name 'thing', Call as:
+		//    $.views.things(items[, parentTmpl]),
+		// or $.views.things(name, item[, parentTmpl])
+
+		var compile, itemName, thisStore, cnt,
+			onStore = $sub.onStore[storeName];
+
+		if (name && typeof name === OBJECT && !name.nodeType && !name.markup && !name.getTgt && !(storeName === "viewModel" && name.getters || name.extend)) {
+			// Call to $.views.things(items[, parentTmpl]),
+
+			// Adding items to the store
+			// If name is a hash, then item is parentTmpl. Iterate over hash and call store for key.
+			for (itemName in name) {
+				theStore(itemName, name[itemName], item);
+			}
+			return item || $views;
+		}
+		// Adding a single unnamed item to the store
+		if (item === undefined) {
+			item = name;
+			name = undefined;
+		}
+		if (name && "" + name !== name) { // name must be a string
+			parentTmpl = item;
+			item = name;
+			name = undefined;
+		}
+		thisStore = parentTmpl
+			? storeName === "viewModel"
+				? parentTmpl
+				: (parentTmpl[storeNames] = parentTmpl[storeNames] || {})
+			: theStore;
+		compile = storeSettings.compile;
+
+		if (item === null) {
+			// If item is null, delete this entry
+			if (name) {
+				delete thisStore[name];
+			}
+		} else {
+			if (compile) {
+				item = compile.call(thisStore, name, item, parentTmpl, 0) || {};
+				item._is = storeName; // Only do this for compiled objects (tags, templates...)
+			}
+			if (name) {
+				thisStore[name] = item;
+			}
+		}
+		if (onStore) {
+			// e.g. JsViews integration
+			onStore(name, item, parentTmpl, compile);
+		}
+		return item;
+	}
+
+	var storeNames = storeName + "s";
+	$views[storeNames] = theStore;
+}
+
+function addSetting(st) {
+	$viewsSettings[st] = function(value) {
+		return arguments.length
+			? ($subSettings[st] = value, $viewsSettings)
+			: $subSettings[st];
+	};
+}
+
+//=========
+// dataMap
+//=========
+
+function dataMap(mapDef) {
+	function Map(source, options) {
+		this.tgt = mapDef.getTgt(source, options);
+	}
+
+	if ($isFunction(mapDef)) {
+		// Simple map declared as function
+		mapDef = {
+			getTgt: mapDef
+		};
+	}
+
+	if (mapDef.baseMap) {
+		mapDef = $extend($extend({}, mapDef.baseMap), mapDef);
+	}
+
+	mapDef.map = function(source, options) {
+		return new Map(source, options);
+	};
+	return mapDef;
+}
+
+//==============
+// renderContent
+//==============
+
+function renderContent(data, context, noIteration, parentView, key, onRender) {
+	var i, l, tag, tmpl, tagCtx, isTopRenderCall, prevData, prevIndex,
+		view = parentView,
+		result = "";
+
+	if (context === true) {
+		noIteration = context; // passing boolean as second param - noIteration
+		context = undefined;
+	} else if (typeof context !== OBJECT) {
+		context = undefined; // context must be a boolean (noIteration) or a plain object
+	}
+
+	if (tag = this.tag) {
+		// This is a call from renderTag or tagCtx.render(...)
+		tagCtx = this;
+		view = view || tagCtx.view;
+		tmpl = view.getTmpl(tag.template || tagCtx.tmpl);
+		if (!arguments.length) {
+			data = view;
+		}
+	} else {
+		// This is a template.render(...) call
+		tmpl = this;
+	}
+
+	if (tmpl) {
+		if (!parentView && data && data._is === "view") {
+			view = data; // When passing in a view to render or link (and not passing in a parent view) use the passed-in view as parentView
+		}
+
+		if (view && data === view) {
+			// Inherit the data from the parent view.
+			data = view.data;
+		}
+
+		isTopRenderCall = !view;
+		isRenderCall = isRenderCall || isTopRenderCall;
+		if (!view) {
+			(context = context || {}).root = data; // Provide ~root as shortcut to top-level data.
+		}
+		if (!isRenderCall || $subSettingsAdvanced.useViews || tmpl.useViews || view && view !== topView) {
+			result = renderWithViews(tmpl, data, context, noIteration, view, key, onRender, tag);
+		} else {
+			if (view) { // In a block
+				prevData = view.data;
+				prevIndex = view.index;
+				view.index = indexStr;
+			} else {
+				view = topView;
+				prevData = view.data;
+				view.data = data;
+				view.ctx = context;
+			}
+			if ($isArray(data) && !noIteration) {
+				// Create a view for the array, whose child views correspond to each data item. (Note: if key and parentView are passed in
+				// along with parent view, treat as insert -e.g. from view.addViews - so parentView is already the view item for array)
+				for (i = 0, l = data.length; i < l; i++) {
+					view.index = i;
+					view.data = data[i];
+					result += tmpl.fn(data[i], view, $sub);
+				}
+			} else {
+				view.data = data;
+				result += tmpl.fn(data, view, $sub);
+			}
+			view.data = prevData;
+			view.index = prevIndex;
+		}
+		if (isTopRenderCall) {
+			isRenderCall = undefined;
+		}
+	}
+	return result;
+}
+
+function renderWithViews(tmpl, data, context, noIteration, view, key, onRender, tag) {
+	function setItemVar(item) {
+		// When itemVar is specified, set modified ctx with user-named ~item
+		newCtx = $extend({}, context);
+		newCtx[itemVar] = item;
+	}
+
+	// Render template against data as a tree of subviews (nested rendered template instances), or as a string (top-level template).
+	// If the data is the parent view, treat as noIteration, re-render with the same data context.
+	// tmpl can be a string (e.g. rendered by a tag.render() method), or a compiled template.
+	var i, l, newView, childView, itemResult, swapContent, contentTmpl, outerOnRender, tmplName, itemVar, newCtx, tagCtx,
+		result = "";
+
+	if (tag) {
+		// This is a call from renderTag or tagCtx.render(...)
+		tmplName = tag.tagName;
+		tagCtx = tag.tagCtx;
+		context = context ? extendCtx(context, tag.ctx) : tag.ctx;
+
+		if (tmpl === view.content) { // {{xxx tmpl=#content}}
+			contentTmpl = tmpl !== view.ctx._wrp // We are rendering the #content
+				? view.ctx._wrp // #content was the tagCtx.props.tmpl wrapper of the block content - so within this view, #content will now be the view.ctx._wrp block content
+				: undefined; // #content was the view.ctx._wrp block content - so within this view, there is no longer any #content to wrap.
+		} else if (tmpl !== tagCtx.content) {
+			if (tmpl === tag.template) { // Rendering {{tag}} tag.template, replacing block content.
+				contentTmpl = tagCtx.tmpl; // Set #content to block content (or wrapped block content if tagCtx.props.tmpl is set)
+				context._wrp = tagCtx.content; // Pass wrapped block content to nested views
+			} else { // Rendering tagCtx.props.tmpl wrapper
+				contentTmpl = tagCtx.content || view.content; // Set #content to wrapped block content
+			}
+		} else {
+			contentTmpl = view.content; // Nested views inherit same wrapped #content property
+		}
+
+		if (tagCtx.props.link === false) {
+			// link=false setting on block tag
+			// We will override inherited value of link by the explicit setting link=false taken from props
+			// The child views of an unlinked view are also unlinked. So setting child back to true will not have any effect.
+			context = context || {};
+			context.link = false;
+		}
+
+		if (itemVar = tagCtx.props.itemVar) {
+			if (itemVar.charAt(0) !== "~") {
+				syntaxError("Use itemVar='~myItem'");
+			}
+			itemVar = itemVar.slice(1);
+		}
+	}
+
+	if (view) {
+		onRender = onRender || view._.onRender;
+		context = extendCtx(context, view.ctx);
+	}
+
+	if (key === true) {
+		swapContent = true;
+		key = 0;
+	}
+
+	// If link===false, do not call onRender, so no data-linking marker nodes
+	if (onRender && (context && context.link === false || tag && tag._.noVws)) {
+		onRender = undefined;
+	}
+	outerOnRender = onRender;
+	if (onRender === true) {
+		// Used by view.refresh(). Don't create a new wrapper view.
+		outerOnRender = undefined;
+		onRender = view._.onRender;
+	}
+	// Set additional context on views created here, (as modified context inherited from the parent, and to be inherited by child views)
+	context = tmpl.helpers
+		? extendCtx(tmpl.helpers, context)
+		: context;
+
+	newCtx = context;
+	if ($isArray(data) && !noIteration) {
+		// Create a view for the array, whose child views correspond to each data item. (Note: if key and view are passed in
+		// along with parent view, treat as insert -e.g. from view.addViews - so view is already the view item for array)
+		newView = swapContent
+			? view
+			: (key !== undefined && view)
+				|| new View(context, "array", view, data, tmpl, key, onRender, contentTmpl);
+		if (view && view._.useKey) {
+			// Parent is not an 'array view'
+			newView._.bnd = !tag || tag._.bnd && tag; // For array views that are data bound for collection change events, set the
+			// view._.bnd property to true for top-level link() or data-link="{for}", or to the tag instance for a data-bound tag, e.g. {^{for ...}}
+		}
+		for (i = 0, l = data.length; i < l; i++) {
+			// Create a view for each data item.
+			if (itemVar) {
+				setItemVar(data[i]); // use modified ctx with user-named ~item
+			}
+			childView = new View(newCtx, "item", newView, data[i], tmpl, (key || 0) + i, onRender, newView.content);
+			childView._.it = itemVar;
+
+			itemResult = tmpl.fn(data[i], childView, $sub);
+			result += newView._.onRender ? newView._.onRender(itemResult, childView) : itemResult;
+		}
+	} else {
+		// Create a view for singleton data object. The type of the view will be the tag name, e.g. "if" or "mytag" except for
+		// "item", "array" and "data" views. A "data" view is from programmatic render(object) against a 'singleton'.
+		if (itemVar) {
+			setItemVar(data);
+		}
+		newView = swapContent ? view : new View(newCtx, tmplName || "data", view, data, tmpl, key, onRender, contentTmpl);
+		newView._.it = itemVar;
+		result += tmpl.fn(data, newView, $sub);
+	}
+	if (tag) {
+		newView.tag = tag;
+		newView.tagElse = tagCtx.index;
+		tagCtx.contentView = newView;
+	}
+	return outerOnRender ? outerOnRender(result, newView) : result;
+}
+
+//===========================
+// Build and compile template
+//===========================
+
+// Generate a reusable function that will serve to render a template against data
+// (Compile AST then build template function)
+
+function onRenderError(e, view, fallback) {
+	var message = fallback !== undefined
+		? $isFunction(fallback)
+			? fallback.call(view.data, e, view)
+			: fallback || ""
+		: "{Error: " + (e.message||e) + "}";
+
+	if ($subSettings.onError && (fallback = $subSettings.onError.call(view.data, e, fallback && message, view)) !== undefined) {
+		message = fallback; // There is a settings.debugMode(handler) onError override. Call it, and use return value (if any) to replace message
+	}
+
+	return view && !view.linkCtx ? $converters.html(message) : message;
+}
+
+function error(message) {
+	throw new $sub.Err(message);
+}
+
+function syntaxError(message) {
+	error("Syntax error\n" + message);
+}
+
+function tmplFn(markup, tmpl, isLinkExpr, convertBack, hasElse) {
+	// Compile markup to AST (abtract syntax tree) then build the template function code from the AST nodes
+	// Used for compiling templates, and also by JsViews to build functions for data link expressions
+
+	//==== nested functions ====
+	function pushprecedingContent(shift) {
+		shift -= loc;
+		if (shift) {
+			content.push(markup.substr(loc, shift).replace(rNewLine, "\\n"));
+		}
+	}
+
+	function blockTagCheck(tagName, block) {
+		if (tagName) {
+			tagName += '}}';
+			//			'{{include}} block has {{/for}} with no open {{for}}'
+			syntaxError((
+				block
+					? '{{' + block + '}} block has {{/' + tagName + ' without {{' + tagName
+					: 'Unmatched or missing {{/' + tagName) + ', in template:\n' + markup);
+		}
+	}
+
+	function parseTag(all, bind, tagName, converter, colon, html, codeTag, params, slash, bind2, closeBlock, index) {
+/*
+
+     bind     tagName         cvt   cln html code    params            slash   bind2         closeBlk  comment
+/(?:{(\^)?{(?:(\w+(?=[\/\s}]))|(\w+)?(:)|(>)|(\*))\s*((?:[^}]|}(?!}))*?)(\/)?|{(\^)?{(?:(?:\/(\w+))\s*|!--[\s\S]*?--))}}/g
+
+(?:
+  {(\^)?{            bind
+  (?:
+    (\w+             tagName
+      (?=[\/\s}])
+    )
+    |
+    (\w+)?(:)        converter colon
+    |
+    (>)              html
+    |
+    (\*)             codeTag
+  )
+  \s*
+  (                  params
+    (?:[^}]|}(?!}))*?
+  )
+  (\/)?              slash
+  |
+  {(\^)?{            bind2
+  (?:
+    (?:\/(\w+))\s*   closeBlock
+    |
+    !--[\s\S]*?--    comment
+  )
+)
+}}/g
+
+*/
+		if (codeTag && bind || slash && !tagName || params && params.slice(-1) === ":" || bind2) {
+			syntaxError(all);
+		}
+
+		// Build abstract syntax tree (AST): [tagName, converter, params, content, hash, bindings, contentMarkup]
+		if (html) {
+			colon = ":";
+			converter = HTML;
+		}
+		slash = slash || isLinkExpr && !hasElse;
+
+		var late,
+			pathBindings = (bind || isLinkExpr) && [[]], // pathBindings is an array of arrays for arg bindings and a hash of arrays for prop bindings
+			props = "",
+			args = "",
+			ctxProps = "",
+			paramsArgs = "",
+			paramsProps = "",
+			paramsCtxProps = "",
+			onError = "",
+			useTrigger = "",
+			// Block tag if not self-closing and not {{:}} or {{>}} (special case) and not a data-link expression
+			block = !slash && !colon;
+
+		//==== nested helper function ====
+		tagName = tagName || (params = params || "#data", colon); // {{:}} is equivalent to {{:#data}}
+		pushprecedingContent(index);
+		loc = index + all.length; // location marker - parsed up to here
+		if (codeTag) {
+			if (allowCode) {
+				content.push(["*", "\n" + params.replace(/^:/, "ret+= ").replace(rUnescapeQuotes, "$1") + ";\n"]);
+			}
+		} else if (tagName) {
+			if (tagName === "else") {
+				if (rTestElseIf.test(params)) {
+					syntaxError('for "{{else if expr}}" use "{{else expr}}"');
+				}
+				pathBindings = current[8] && [[]];
+				current[9] = markup.substring(current[9], index); // contentMarkup for block tag
+				current = stack.pop();
+				content = current[2];
+				block = true;
+			}
+			if (params) {
+				// remove newlines from the params string, to avoid compiled code errors for unterminated strings
+				parseParams(params.replace(rNewLine, " "), pathBindings, tmpl)
+					.replace(rBuildHash, function(all, onerror, isCtx, key, keyToken, keyValue, arg, param) {
+						key = "'" + keyToken + "':";
+						if (arg) {
+							args += keyValue + ",";
+							paramsArgs += "'" + param + "',";
+						} else if (isCtx) {
+							ctxProps += key + 'j._cp(' + keyValue + ',"' + param + '",view),';
+							// Compiled code for evaluating tagCtx on a tag will have: ctx:{'foo':j._cp(compiledExpr, "expr", view)}
+							paramsCtxProps += key + "'" + param + "',";
+						} else if (onerror) {
+							onError += keyValue;
+						} else {
+							if (keyToken === "trigger") {
+								useTrigger += keyValue;
+							}
+							if (keyToken === "lateRender") {
+								late = param; // Render after first pass
+							}
+							props += key + keyValue + ",";
+							paramsProps += key + "'" + param + "',";
+							hasHandlers = hasHandlers || rHasHandlers.test(keyToken);
+						}
+						return "";
+					}).slice(0, -1);
+			}
+
+			if (pathBindings && pathBindings[0]) {
+				pathBindings.pop(); // Remove the binding that was prepared for next arg. (There is always an extra one ready).
+			}
+
+			newNode = [
+					tagName,
+					converter || !!convertBack || hasHandlers || "",
+					block && [],
+					parsedParam(paramsArgs || (tagName === ":" ? "'#data'," : ""), paramsProps, paramsCtxProps), // {{:}} equivalent to {{:#data}}
+					parsedParam(args || (tagName === ":" ? "data," : ""), props, ctxProps),
+					onError,
+					useTrigger,
+					late,
+					pathBindings || 0
+				];
+			content.push(newNode);
+			if (block) {
+				stack.push(current);
+				current = newNode;
+				current[9] = loc; // Store current location of open tag, to be able to add contentMarkup when we reach closing tag
+			}
+		} else if (closeBlock) {
+			blockTagCheck(closeBlock !== current[0] && current[0] !== "else" && closeBlock, current[0]);
+			current[9] = markup.substring(current[9], index); // contentMarkup for block tag
+			current = stack.pop();
+		}
+		blockTagCheck(!current && closeBlock);
+		content = current[2];
+	}
+	//==== /end of nested functions ====
+
+	var i, result, newNode, hasHandlers, bindings,
+		allowCode = $subSettings.allowCode || tmpl && tmpl.allowCode
+			|| $viewsSettings.allowCode === true, // include direct setting of settings.allowCode true for backward compat only
+		astTop = [],
+		loc = 0,
+		stack = [],
+		content = astTop,
+		current = [,,astTop];
+
+	if (allowCode && tmpl._is) {
+		tmpl.allowCode = allowCode;
+	}
+
+//TODO	result = tmplFnsCache[markup]; // Only cache if template is not named and markup length < ...,
+//and there are no bindings or subtemplates?? Consider standard optimization for data-link="a.b.c"
+//		if (result) {
+//			tmpl.fn = result;
+//		} else {
+
+//		result = markup;
+	if (isLinkExpr) {
+		if (convertBack !== undefined) {
+			markup = markup.slice(0, -convertBack.length - 2) + delimCloseChar0;
+		}
+		markup = delimOpenChar0 + markup + delimCloseChar1;
+	}
+
+	blockTagCheck(stack[0] && stack[0][2].pop()[0]);
+	// Build the AST (abstract syntax tree) under astTop
+	markup.replace(rTag, parseTag);
+
+	pushprecedingContent(markup.length);
+
+	if (loc = astTop[astTop.length - 1]) {
+		blockTagCheck("" + loc !== loc && (+loc[9] === loc[9]) && loc[0]);
+	}
+//			result = tmplFnsCache[markup] = buildCode(astTop, tmpl);
+//		}
+
+	if (isLinkExpr) {
+		result = buildCode(astTop, markup, isLinkExpr);
+		bindings = [];
+		i = astTop.length;
+		while (i--) {
+			bindings.unshift(astTop[i][8]); // With data-link expressions, pathBindings array for tagCtx[i] is astTop[i][8]
+		}
+		setPaths(result, bindings);
+	} else {
+		result = buildCode(astTop, tmpl);
+	}
+	return result;
+}
+
+function setPaths(fn, pathsArr) {
+	var key, paths,
+		i = 0,
+		l = pathsArr.length;
+	fn.deps = [];
+	fn.paths = []; // The array of path binding (array/dictionary)s for each tag/else block's args and props
+	for (; i < l; i++) {
+		fn.paths.push(paths = pathsArr[i]);
+		for (key in paths) {
+			if (key !== "_jsvto" && paths.hasOwnProperty(key) && paths[key].length && !paths[key].skp) {
+				fn.deps = fn.deps.concat(paths[key]); // deps is the concatenation of the paths arrays for the different bindings
+			}
+		}
+	}
+}
+
+function parsedParam(args, props, ctx) {
+	return [args.slice(0, -1), props.slice(0, -1), ctx.slice(0, -1)];
+}
+
+function paramStructure(parts, type) {
+	return '\n\t'
+		+ (type
+			? type + ':{'
+			: '')
+		+ 'args:[' + parts[0] + ']'
+		+ (parts[1] || !type
+			? ',\n\tprops:{' + parts[1] + '}'
+			: "")
+		+ (parts[2] ? ',\n\tctx:{' + parts[2] + '}' : "");
+}
+
+function parseParams(params, pathBindings, tmpl) {
+
+	function parseTokens(all, lftPrn0, lftPrn, bound, path, operator, err, eq, path2, prn, comma, lftPrn2, apos, quot, rtPrn, rtPrnDot, prn2, space, index, full) {
+	// /(\()(?=\s*\()|(?:([([])\s*)?(?:(\^?)(!*?[#~]?[\w$.^]+)?\s*((\+\+|--)|\+|-|&&|\|\||===|!==|==|!=|<=|>=|[<>%*:?\/]|(=))\s*|(!*?[#~]?[\w$.^]+)([([])?)|(,\s*)|(\(?)\\?(?:(')|("))|(?:\s*(([)\]])(?=\s*[.^]|\s*$|[^([])|[)\]])([([]?))|(\s+)/g,
+	//   lftPrn0        lftPrn        bound            path    operator err                                                eq             path2       prn    comma   lftPrn2   apos quot      rtPrn rtPrnDot                        prn2  space
+		// (left paren? followed by (path? followed by operator) or (path followed by paren?)) or comma or apos or quot or right paren or space
+		function parsePath(allPath, not, object, helper, view, viewProperty, pathTokens, leafToken) {
+			//rPath = /^(!*?)(?:null|true|false|\d[\d.]*|([\w$]+|\.|~([\w$]+)|#(view|([\w$]+))?)([\w$.^]*?)(?:[.[^]([\w$]+)\]?)?)$/g,
+			//          not                               object     helper    view  viewProperty pathTokens      leafToken
+			var subPath = object === ".";
+			if (object) {
+				path = path.slice(not.length);
+				if (/^\.?constructor$/.test(leafToken||path)) {
+					syntaxError(allPath);
+				}
+				if (!subPath) {
+					allPath = (helper
+							? 'view.ctxPrm("' + helper + '")'
+							: view
+								? "view"
+								: "data")
+						+ (leafToken
+							? (viewProperty
+								? "." + viewProperty
+								: helper
+									? ""
+									: (view ? "" : "." + object)
+								) + (pathTokens || "")
+							: (leafToken = helper ? "" : view ? viewProperty || "" : object, ""));
+
+					allPath = allPath + (leafToken ? "." + leafToken : "");
+
+					allPath = not + (allPath.slice(0, 9) === "view.data"
+						? allPath.slice(5) // convert #view.data... to data...
+						: allPath);
+				}
+				if (bindings) {
+					binds = named === "linkTo" ? (bindto = pathBindings._jsvto = pathBindings._jsvto || []) : bndCtx.bd;
+					if (theOb = subPath && binds[binds.length-1]) {
+						if (theOb._cpfn) { // Computed property exprOb
+							while (theOb.sb) {
+								theOb = theOb.sb;
+							}
+							if (theOb.bnd) {
+								path = "^" + path.slice(1);
+							}
+							theOb.sb = path;
+							theOb.bnd = theOb.bnd || path.charAt(0) === "^";
+						}
+					} else {
+						binds.push(path);
+					}
+					pathStart[parenDepth] = index + (subPath ? 1 : 0);
+				}
+			}
+			return allPath;
+		}
+
+		//bound = bindings && bound;
+		if (bound && !eq) {
+			path = bound + path; // e.g. some.fn(...)^some.path - so here path is "^some.path"
+		}
+		operator = operator || "";
+		lftPrn = lftPrn || lftPrn0 || lftPrn2;
+		path = path || path2;
+		// Could do this - but not worth perf cost?? :-
+		// if (!path.lastIndexOf("#data.", 0)) { path = path.slice(6); } // If path starts with "#data.", remove that.
+		prn = prn || prn2 || "";
+
+		var expr, exprFn, binds, theOb, newOb,
+			rtSq = ")";
+
+		if (prn === "[") {
+			prn ="[j._sq(";
+			rtSq = ")]";
+		}
+
+		if (err && !aposed && !quoted) {
+			syntaxError(params);
+		} else {
+			if (bindings && rtPrnDot && !aposed && !quoted) {
+				// This is a binding to a path in which an object is returned by a helper/data function/expression, e.g. foo()^x.y or (a?b:c)^x.y
+				// We create a compiled function to get the object instance (which will be called when the dependent data of the subexpression changes, to return the new object, and trigger re-binding of the subsequent path)
+				if (!named || boundName || bindto) {
+					expr = pathStart[parenDepth - 1];
+					if (full.length - 1 > index - (expr || 0)) { // We need to compile a subexpression
+						expr = full.slice(expr, index + all.length);
+						if (exprFn !== true) { // If not reentrant call during compilation
+							binds = bindto || bndStack[parenDepth-1].bd;
+							// Insert exprOb object, to be used during binding to return the computed object
+							theOb = binds[binds.length-1];
+							if (theOb && theOb.prm) {
+								while (theOb.sb && theOb.sb.prm) {
+									theOb = theOb.sb;
+								}
+								newOb = theOb.sb = {path: theOb.sb, bnd: theOb.bnd};
+							} else {
+								binds.push(newOb = {path: binds.pop()}); // Insert exprOb object, to be used during binding to return the computed object
+							}											 // (e.g. "some.object()" in "some.object().a.b" - to be used as context for binding the following tokens "a.b")
+						}
+						rtPrnDot = delimOpenChar1 + ":" + expr // The parameter or function subexpression
+							+ " onerror=''" // set onerror='' in order to wrap generated code with a try catch - returning '' as object instance if there is an error/missing parent
+							+ delimCloseChar0;
+						exprFn = tmplLinks[rtPrnDot];
+						if (!exprFn) {
+							tmplLinks[rtPrnDot] = true; // Flag that this exprFn (for rtPrnDot) is being compiled
+							tmplLinks[rtPrnDot] = exprFn = tmplFn(rtPrnDot, tmpl, true); // Compile the expression (or use cached copy already in tmpl.links)
+						}
+						if (exprFn !== true && newOb) {
+							// If not reentrant call during compilation
+							newOb._cpfn = exprFn;
+							newOb.prm = bndCtx.bd;
+							newOb.bnd = newOb.bnd || newOb.path && newOb.path.indexOf("^") >= 0;
+						}
+					}
+				}
+			}
+			return (aposed
+				// within single-quoted string
+				? (aposed = !apos, (aposed ? all : lftPrn2 + '"'))
+				: quoted
+				// within double-quoted string
+					? (quoted = !quot, (quoted ? all : lftPrn2 + '"'))
+					:
+				(
+					(lftPrn
+						? (pathStart[parenDepth] = index++, bndCtx = bndStack[++parenDepth] = {bd: []}, lftPrn)
+						: "")
+					+ (space
+						? (parenDepth
+							? ""
+				// New arg or prop - so insert backspace \b (\x08) as separator for named params, used subsequently by rBuildHash, and prepare new bindings array
+							: (paramIndex = full.slice(paramIndex, index), named
+								? (named = boundName = bindto = false, "\b")
+								: "\b,") + paramIndex + (paramIndex = index + all.length, bindings && pathBindings.push(bndCtx.bd = []), "\b")
+						)
+						: eq
+				// named param. Remove bindings for arg and create instead bindings array for prop
+							? (parenDepth && syntaxError(params), bindings && pathBindings.pop(), named = path, boundName = bound, paramIndex = index + all.length,
+									bindings && ((bindings = bndCtx.bd = pathBindings[named] = []), bindings.skp = !bound), path + ':')
+							: path
+				// path
+								? (path.split("^").join(".").replace(rPath, parsePath)
+									+ (prn
+				// some.fncall(
+										? (bndCtx = bndStack[++parenDepth] = {bd: []}, fnCall[parenDepth] = rtSq, prn)
+										: operator)
+								)
+								: operator
+				// operator
+									? operator
+									: rtPrn
+				// function
+										? ((rtPrn = fnCall[parenDepth] || rtPrn, fnCall[parenDepth] = false, bndCtx = bndStack[--parenDepth], rtPrn)
+											+ (prn // rtPrn and prn, e.g )( in (a)() or a()(), or )[ in a()[]
+												? (bndCtx = bndStack[++parenDepth], fnCall[parenDepth] = rtSq, prn)
+												: "")
+										)
+										: comma
+											? (fnCall[parenDepth] || syntaxError(params), ",") // We don't allow top-level literal arrays or objects
+											: lftPrn0
+												? ""
+												: (aposed = apos, quoted = quot, '"')
+				))
+			);
+		}
+	}
+
+	var named, bindto, boundName,
+		quoted, // boolean for string content in double quotes
+		aposed, // or in single quotes
+		bindings = pathBindings && pathBindings[0], // bindings array for the first arg
+		bndCtx = {bd: bindings},
+		bndStack = {0: bndCtx},
+		paramIndex = 0, // list,
+		tmplLinks = (tmpl ? tmpl.links : bindings && (bindings.links = bindings.links || {})) || topView.tmpl.links,
+		// The following are used for tracking path parsing including nested paths, such as "a.b(c^d + (e))^f", and chained computed paths such as
+		// "a.b().c^d().e.f().g" - which has four chained paths, "a.b()", "^c.d()", ".e.f()" and ".g"
+		parenDepth = 0,
+		fnCall = {}, // We are in a function call
+		pathStart = {}, // tracks the start of the current path such as c^d() in the above example
+		result = (params + (tmpl ? " " : "")).replace(rParams, parseTokens);
+
+	return !parenDepth && result || syntaxError(params); // Syntax error if unbalanced parens in params expression
+}
+
+function buildCode(ast, tmpl, isLinkExpr) {
+	// Build the template function code from the AST nodes, and set as property on the passed-in template object
+	// Used for compiling templates, and also by JsViews to build functions for data link expressions
+	var i, node, tagName, converter, tagCtx, hasTag, hasEncoder, getsVal, hasCnvt, useCnvt, tmplBindings, pathBindings, params, boundOnErrStart,
+		boundOnErrEnd, tagRender, nestedTmpls, tmplName, nestedTmpl, tagAndElses, content, markup, nextIsElse, oldCode, isElse, isGetVal, tagCtxFn,
+		onError, tagStart, trigger, lateRender,
+		tmplBindingKey = 0,
+		useViews = $subSettingsAdvanced.useViews || tmpl.useViews || tmpl.tags || tmpl.templates || tmpl.helpers || tmpl.converters,
+		code = "",
+		tmplOptions = {},
+		l = ast.length;
+
+	if ("" + tmpl === tmpl) {
+		tmplName = isLinkExpr ? 'data-link="' + tmpl.replace(rNewLine, " ").slice(1, -1) + '"' : tmpl;
+		tmpl = 0;
+	} else {
+		tmplName = tmpl.tmplName || "unnamed";
+		if (tmpl.allowCode) {
+			tmplOptions.allowCode = true;
+		}
+		if (tmpl.debug) {
+			tmplOptions.debug = true;
+		}
+		tmplBindings = tmpl.bnds;
+		nestedTmpls = tmpl.tmpls;
+	}
+	for (i = 0; i < l; i++) {
+		// AST nodes: [0: tagName, 1: converter, 2: content, 3: params, 4: code, 5: onError, 6: trigger, 7:pathBindings, 8: contentMarkup]
+		node = ast[i];
+
+		// Add newline for each callout to t() c() etc. and each markup string
+		if ("" + node === node) {
+			// a markup string to be inserted
+			code += '\n+"' + node + '"';
+		} else {
+			// a compiled tag expression to be inserted
+			tagName = node[0];
+			if (tagName === "*") {
+				// Code tag: {{* }}
+				code += ";\n" + node[1] + "\nret=ret";
+			} else {
+				converter = node[1];
+				content = !isLinkExpr && node[2];
+				tagCtx = paramStructure(node[3], 'params') + '},' + paramStructure(params = node[4]);
+				trigger = node[6];
+				lateRender = node[7];
+				markup = node[9] && node[9].replace(rUnescapeQuotes, "$1");
+				if (isElse = tagName === "else") {
+					if (pathBindings) {
+						pathBindings.push(node[8]);
+					}
+				} else {
+					onError = node[5] || $subSettings.debugMode !== false && "undefined"; // If debugMode not false, set default onError handler on tag to "undefined" (see onRenderError)
+					if (tmplBindings && (pathBindings = node[8])) { // Array of paths, or false if not data-bound
+						pathBindings = [pathBindings];
+						tmplBindingKey = tmplBindings.push(1); // Add placeholder in tmplBindings for compiled function
+					}
+				}
+				useViews = useViews || params[1] || params[2] || pathBindings || /view.(?!index)/.test(params[0]);
+				// useViews is for perf optimization. For render() we only use views if necessary - for the more advanced scenarios.
+				// We use views if there are props, contextual properties or args with #... (other than #index) - but you can force
+				// using the full view infrastructure, (and pay a perf price) by opting in: Set useViews: true on the template, manually...
+				if (isGetVal = tagName === ":") {
+					if (converter) {
+						tagName = converter === HTML ? ">" : converter + tagName;
+					}
+				} else {
+					if (content) { // TODO optimize - if content.length === 0 or if there is a tmpl="..." specified - set content to null / don't run this compilation code - since content won't get used!!
+						// Create template object for nested template
+						nestedTmpl = tmplObject(markup, tmplOptions);
+						nestedTmpl.tmplName = tmplName + "/" + tagName;
+						// Compile to AST and then to compiled function
+						nestedTmpl.useViews = nestedTmpl.useViews || useViews;
+						buildCode(content, nestedTmpl);
+						useViews = nestedTmpl.useViews;
+						nestedTmpls.push(nestedTmpl);
+					}
+
+					if (!isElse) {
+						// This is not an else tag.
+						tagAndElses = tagName;
+						useViews = useViews || tagName && (!$tags[tagName] || !$tags[tagName].flow);
+						// Switch to a new code string for this bound tag (and its elses, if it has any) - for returning the tagCtxs array
+						oldCode = code;
+						code = "";
+					}
+					nextIsElse = ast[i + 1];
+					nextIsElse = nextIsElse && nextIsElse[0] === "else";
+				}
+				tagStart = onError ? ";\ntry{\nret+=" : "\n+";
+				boundOnErrStart = "";
+				boundOnErrEnd = "";
+
+				if (isGetVal && (pathBindings || trigger || converter && converter !== HTML || lateRender)) {
+					// For convertVal we need a compiled function to return the new tagCtx(s)
+					tagCtxFn = new Function("data,view,j,u", "// " + tmplName + " " + (++tmplBindingKey) + " " + tagName
+										+ "\nreturn {" + tagCtx + "};");
+					tagCtxFn._er = onError;
+					tagCtxFn._tag = tagName;
+					tagCtxFn._bd = !!pathBindings; // data-linked tag {^{.../}}
+					tagCtxFn._lr = lateRender;
+
+					if (isLinkExpr) {
+						return tagCtxFn;
+					}
+
+					setPaths(tagCtxFn, pathBindings);
+					tagRender = 'c("' + converter + '",view,';
+					useCnvt = true;
+					boundOnErrStart = tagRender + tmplBindingKey + ",";
+					boundOnErrEnd = ")";
+				}
+				code += (isGetVal
+					? (isLinkExpr ? (onError ? "try{\n" : "") + "return " : tagStart) + (useCnvt // Call _cnvt if there is a converter: {{cnvt: ... }} or {^{cnvt: ... }}
+						? (useCnvt = undefined, useViews = hasCnvt = true, tagRender + (tagCtxFn
+							? ((tmplBindings[tmplBindingKey - 1] = tagCtxFn), tmplBindingKey) // Store the compiled tagCtxFn in tmpl.bnds, and pass the key to convertVal()
+							: "{" + tagCtx + "}") + ")")
+						: tagName === ">"
+							? (hasEncoder = true, "h(" + params[0] + ")")
+							: (getsVal = true, "((v=" + params[0] + ')!=null?v:' + (isLinkExpr ? 'null)' : '"")'))
+							// Non strict equality so data-link="title{:expr}" with expr=null/undefined removes title attribute
+					)
+					: (hasTag = true, "\n{view:view,tmpl:" // Add this tagCtx to the compiled code for the tagCtxs to be passed to renderTag()
+						+ (content ? nestedTmpls.length : "0") + "," // For block tags, pass in the key (nestedTmpls.length) to the nested content template
+						+ tagCtx + "},"));
+
+				if (tagAndElses && !nextIsElse) {
+					// This is a data-link expression or an inline tag without any elses, or the last {{else}} of an inline tag
+					// We complete the code for returning the tagCtxs array
+					code = "[" + code.slice(0, -1) + "]";
+					tagRender = 't("' + tagAndElses + '",view,this,';
+					if (isLinkExpr || pathBindings) {
+						// This is a bound tag (data-link expression or inline bound tag {^{tag ...}}) so we store a compiled tagCtxs function in tmp.bnds
+						code = new Function("data,view,j,u", " // " + tmplName + " " + tmplBindingKey + " " + tagAndElses + "\nreturn " + code + ";");
+						code._er = onError;
+						code._tag = tagAndElses;
+						if (pathBindings) {
+							setPaths(tmplBindings[tmplBindingKey - 1] = code, pathBindings);
+						}
+						code._lr = lateRender;
+						if (isLinkExpr) {
+							return code; // For a data-link expression we return the compiled tagCtxs function
+						}
+						boundOnErrStart = tagRender + tmplBindingKey + ",undefined,";
+						boundOnErrEnd = ")";
+					}
+
+					// This is the last {{else}} for an inline tag.
+					// For a bound tag, pass the tagCtxs fn lookup key to renderTag.
+					// For an unbound tag, include the code directly for evaluating tagCtxs array
+					code = oldCode + tagStart + tagRender + (code.deps && tmplBindingKey || code) + ")";
+					pathBindings = 0;
+					tagAndElses = 0;
+				}
+				if (onError && !nextIsElse) {
+					useViews = true;
+					code += ';\n}catch(e){ret' + (isLinkExpr ? "urn " : "+=") + boundOnErrStart + 'j._err(e,view,' + onError + ')' + boundOnErrEnd + ';}' + (isLinkExpr ? "" : 'ret=ret');
+				}
+			}
+		}
+	}
+	// Include only the var references that are needed in the code
+	code = "// " + tmplName
+
+		+ "\nvar v"
+		+ (hasTag ? ",t=j._tag" : "")                // has tag
+		+ (hasCnvt ? ",c=j._cnvt" : "")              // converter
+		+ (hasEncoder ? ",h=j._html" : "")           // html converter
+		+ (isLinkExpr ? ";\n" : ',ret=""\n')
+		+ (tmplOptions.debug ? "debugger;" : "")
+		+ code
+		+ (isLinkExpr ? "\n" : ";\nreturn ret;");
+
+	try {
+		code = new Function("data,view,j,u", code);
+	} catch (e) {
+		syntaxError("Compiled template code:\n\n" + code + '\n: "' + (e.message||e) + '"');
+	}
+	if (tmpl) {
+		tmpl.fn = code;
+		tmpl.useViews = !!useViews;
+	}
+	return code;
+}
+
+//==========
+// Utilities
+//==========
+
+// Merge objects, in particular contexts which inherit from parent contexts
+function extendCtx(context, parentContext) {
+	// Return copy of parentContext, unless context is defined and is different, in which case return a new merged context
+	// If neither context nor parentContext are defined, return undefined
+	return context && context !== parentContext
+		? (parentContext
+			? $extend($extend({}, parentContext), context)
+			: context)
+		: parentContext && $extend({}, parentContext);
+}
+
+// Get character entity for HTML and Attribute encoding
+function getCharEntity(ch) {
+	return charEntities[ch] || (charEntities[ch] = "&#" + ch.charCodeAt(0) + ";");
+}
+
+function getTargetProps(source) {
+	// this pointer is theMap - which has tagCtx.props too
+	// arguments: tagCtx.args.
+	var key, prop,
+		props = [];
+
+	if (typeof source === OBJECT) {
+		for (key in source) {
+			prop = source[key];
+			if (key !== $expando && source.hasOwnProperty(key) && !$isFunction(prop)) {
+				props.push({key: key, prop: prop});
+			}
+		}
+	}
+	return props;
+}
+
+function $fnRender(data, context, noIteration) {
+	var tmplElem = this.jquery && (this[0] || error('Unknown template')), // Targeted element not found for jQuery template selector such as "#myTmpl"
+		tmpl = tmplElem.getAttribute(tmplAttr);
+
+	return renderContent.call(tmpl && $.data(tmplElem)[jsvTmpl] || $templates(tmplElem),
+		data, context, noIteration);
+}
+
+//========================== Register converters ==========================
+
+function htmlEncode(text) {
+	// HTML encode: Replace < > & ' and " by corresponding entities.
+	return text != undefined ? rIsHtml.test(text) && ("" + text).replace(rHtmlEncode, getCharEntity) || text : "";
+}
+
+//========================== Initialize ==========================
+
+$sub = $views.sub;
+$viewsSettings = $views.settings;
+
+if (!(jsr || $ && $.render)) {
+	// JsRender not already loaded, or loaded without jQuery, and we are now moving from jsrender namespace to jQuery namepace
+	for (jsvStoreName in jsvStores) {
+		registerStore(jsvStoreName, jsvStores[jsvStoreName]);
+	}
+
+	$converters = $views.converters;
+	$helpers = $views.helpers;
+	$tags = $views.tags;
+
+	$sub._tg.prototype = {
+		baseApply: baseApply,
+		cvtArgs: convertArgs,
+		bndArgs: convertBoundArgs,
+		ctxPrm: contextParameter
+	};
+
+	topView = $sub.topView = new View();
+
+	//BROWSER-SPECIFIC CODE
+	if ($) {
+
+		////////////////////////////////////////////////////////////////////////////////////////////////
+		// jQuery (= $) is loaded
+
+		$.fn.render = $fnRender;
+		$expando = $.expando;
+		if ($.observable) {
+			$extend($sub, $.views.sub); // jquery.observable.js was loaded before jsrender.js
+			$views.map = $.views.map;
+		}
+
+	} else {
+		////////////////////////////////////////////////////////////////////////////////////////////////
+		// jQuery is not loaded.
+
+		$ = {};
+
+		if (setGlobals) {
+			global.jsrender = $; // We are loading jsrender.js from a script element, not AMD or CommonJS, so set global
+		}
+
+		// Error warning if jsrender.js is used as template engine on Node.js (e.g. Express or Hapi...)
+		// Use jsrender-node.js instead...
+		$.renderFile = $.__express = $.compile = function() { throw "Node.js: use npm jsrender, or jsrender-node.js"; };
+
+		//END BROWSER-SPECIFIC CODE
+		$.isFunction = function(ob) {
+			return typeof ob === "function";
+		};
+
+		$.isArray = Array.isArray || function(obj) {
+			return ({}.toString).call(obj) === "[object Array]";
+		};
+
+		$sub._jq = function(jq) { // private method to move from JsRender APIs from jsrender namespace to jQuery namespace
+			if (jq !== $) {
+				$extend(jq, $); // map over from jsrender namespace to jQuery namespace
+				$ = jq;
+				$.fn.render = $fnRender;
+				delete $.jsrender;
+				$expando = $.expando;
+			}
+		};
+
+		$.jsrender = versionNumber;
+	}
+	$subSettings = $sub.settings;
+	$subSettings.allowCode = false;
+	$isFunction = $.isFunction;
+	$.render = $render;
+	$.views = $views;
+	$.templates = $templates = $views.templates;
+
+	for (setting in $subSettings) {
+		addSetting(setting);
+	}
+
+	($viewsSettings.debugMode = function(debugMode) {
+		return debugMode === undefined
+			? $subSettings.debugMode
+			: (
+				$subSettings.debugMode = debugMode,
+				$subSettings.onError = debugMode + "" === debugMode
+					? new Function("", "return '" + debugMode + "';")
+					: $isFunction(debugMode)
+						? debugMode
+						: undefined,
+				$viewsSettings);
+	})(false); // jshint ignore:line
+
+	$subSettingsAdvanced = $subSettings.advanced = {
+		useViews: false,
+		_jsv: false // For global access to JsViews store
+	};
+
+	//========================== Register tags ==========================
+
+	$tags({
+		"if": {
+			render: function(val) {
+				// This function is called once for {{if}} and once for each {{else}}.
+				// We will use the tag.rendering object for carrying rendering state across the calls.
+				// If not done (a previous block has not been rendered), look at expression for this block and render the block if expression is truthy
+				// Otherwise return ""
+				var self = this,
+					tagCtx = self.tagCtx,
+					ret = (self.rendering.done || !val && (arguments.length || !tagCtx.index))
+						? ""
+						: (self.rendering.done = true,
+							self.selected = tagCtx.index,
+							undefined); // Test is satisfied, so render content on current context
+				return ret;
+			},
+			contentCtx: true, // Inherit parent view data context
+			flow: true
+		},
+		"for": {
+			render: function(val) {
+				// This function is called once for {{for}} and once for each {{else}}.
+				// We will use the tag.rendering object for carrying rendering state across the calls.
+				var finalElse = !arguments.length,
+					value,
+					self = this,
+					tagCtx = self.tagCtx,
+					result = "",
+					done = 0;
+
+				if (!self.rendering.done) {
+					value = finalElse ? tagCtx.view.data : val; // For the final else, defaults to current data without iteration.
+					if (value !== undefined) {
+						result += tagCtx.render(value, finalElse); // Iterates except on final else, if data is an array. (Use {{include}} to compose templates without array iteration)
+						done += $isArray(value) ? value.length : 1;
+					}
+					if (self.rendering.done = done) {
+						self.selected = tagCtx.index;
+					}
+					// If nothing was rendered we will look at the next {{else}}. Otherwise, we are done.
+				}
+				return result;
+			},
+			flow: true
+		},
+		props: {
+			baseTag: "for",
+			dataMap: dataMap(getTargetProps),
+			flow: true
+		},
+		include: {
+			flow: true
+		},
+		"*": {
+			// {{* code... }} - Ignored if template.allowCode and $.views.settings.allowCode are false. Otherwise include code in compiled template
+			render: retVal,
+			flow: true
+		},
+		":*": {
+			// {{:* returnedExpression }} - Ignored if template.allowCode and $.views.settings.allowCode are false. Otherwise include code in compiled template
+			render: retVal,
+			flow: true
+		},
+		dbg: $helpers.dbg = $converters.dbg = dbgBreak // Register {{dbg/}}, {{dbg:...}} and ~dbg() to throw and catch, as breakpoints for debugging.
+	});
+
+	$converters({
+		html: htmlEncode,
+		attr: htmlEncode, // Includes > encoding since rConvertMarkers in JsViews does not skip > characters in attribute strings
+		url: function(text) {
+			// URL encoding helper.
+			return text != undefined ? encodeURI("" + text) : text === null ? text : ""; // null returns null, e.g. to remove attribute. undefined returns ""
+		}
+	});
+}
+//========================== Define default delimiters ==========================
+$subSettings = $sub.settings;
+$isArray = ($||jsr).isArray;
+$viewsSettings.delimiters("{{", "}}", "^");
+
+
+if (jsrToJq) { // Moving from jsrender namespace to jQuery namepace - copy over the stored items (templates, converters, helpers...)
+	jsr.views.sub._jq($);
+}
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< JsObservable >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+/* JsObservable:
+ * See http://www.jsviews.com/#jsobservable and http://github.com/borismoore/jsviews
+ * Copyright 2017, Boris Moore
+ * Released under the MIT License.
+ */
+
+//========================== Top-level vars ==========================
+
+$views = $.views;
+$sub = $views.sub;
+$isFunction = $.isFunction;
+$isArray = $.isArray;
+$expando = $.expando;
+if (!$.observe) {
+
+	var $eventSpecial = $.event.special,
+		slice = [].slice,
+		splice = [].splice,
+		concat = [].concat,
+		PARSEINT = parseInt,
+		rNotWhite = /\S+/g,
+		propertyChangeStr = $sub.propChng = $sub.propChng || "propertyChange",// These two settings can be overridden on settings after loading
+		arrayChangeStr = $sub.arrChng = $sub.arrChng || "arrayChange",        // jsRender, and prior to loading jquery.observable.js and/or JsViews
+		cbBindingsStore = {},
+		observeStr = propertyChangeStr + ".observe",
+		observeObjKey = 1,
+		observeCbKey = 1,
+		observeInnerCbKey = 1,
+		$hasData = $.hasData,
+		$data = $.data,
+		remove = {}, // flag for removeProperty
+
+	//========================== Top-level functions ==========================
+
+	getCbKey = function(cb) {
+		return cb._cId = cb._cId || (".obs" + observeCbKey++);
+	},
+
+	ObjectObservable = function(ns, data) {
+		this._data = data;
+		this._ns = ns;
+		return this;
+	},
+
+	ArrayObservable = function(ns, data) {
+		this._data = data;
+		this._ns = ns;
+		return this;
+	},
+
+	wrapArray = function(data) {
+		return $isArray(data)
+			? [data]
+			: data;
+	},
+
+	dependsPaths = function(paths, root, callback) {
+		// Process depends = ... paths to resolve objects, and recursively process functions.
+		paths = paths
+			? $isArray(paths)
+				? paths
+				: [paths]
+			: [];
+
+		var i, path, object, rt,
+			nextObj = object = root,
+			l = paths && paths.length,
+			out = [];
+
+		for (i = 0; i < l; i++) {
+			path = paths[i];
+			if ($isFunction(path)) { // path is a depends function, returning [path1, ...]
+				rt = root.tagName
+						? root.linkCtx.data // root is tag instance. rt is current data context of tag
+						: root; // rt = root = current data context of computed prop
+				out = out.concat(dependsPaths(path.call(root, rt, callback), rt, callback));
+				continue;
+			} else if ("" + path !== path) {
+				root = nextObj = path;
+				if (nextObj !== object) {
+					out.push(object = nextObj);
+				}
+				continue;
+			}
+			if (nextObj !== object) {
+				out.push(object = nextObj);
+			}
+			out.push(path);
+		}
+		if (out.length) {
+			out.unshift({_ar: 1}); // Switch on allowArray, for depends paths.
+			out.push({_ar: -1});
+		}
+		return out;
+	},
+
+	removeCbBindings = function(cbBindings, cbBindingsId) {
+		// If the cbBindings collection is empty we will remove it from the cbBindingsStore
+		for (var cb in cbBindings) {
+			return;
+		}
+		delete cbBindingsStore[cbBindingsId]; // This binding collection is empty, so remove from store
+	},
+
+	onDataChange = function(ev, eventArgs) {
+		function isOb(val) {
+			return typeof val === OBJECT && (paths[0] || allowArray && $isArray(val));
+		}
+
+		if (!(ev.data && ev.data.off)) {
+			// Skip if !!ev.data.off: - a handler that has already been removed (maybe was on handler collection at call time - then removed by another handler)
+			var allPath, filter, parentObs,
+				oldValue = eventArgs.oldValue,
+				value = eventArgs.value,
+				ctx = ev.data,
+				observeAll = ctx.observeAll,
+				cb = ctx.cb,
+				allowArray = ctx.arOk,
+				paths = ctx.paths,
+				ns = ctx.ns;
+
+			if (ev.type === arrayChangeStr) {
+				(cb.array || cb).call(ctx, ev, eventArgs); // If there is an arrayHandler expando on the regular handler, use it, otherwise use the regular handler for arrayChange events also - for example: $.observe(array, handler)
+				// or observeAll() with an array in the graph. Note that on data-link bindings we ensure always to have an array handler - $.noop if none is specified e.g. on the data-linked tag.
+			} else if (ctx.prop === eventArgs.path || ctx.prop === "*") {
+				if (observeAll) {
+					allPath = observeAll._path + "." + eventArgs.path;
+					filter = observeAll.filter;
+					parentObs = [ev.target].concat(observeAll.parents());
+
+					if (isOb(oldValue)) {
+						observe_apply(undefined, ns, [oldValue], paths, cb, true, filter, [parentObs], allPath); // unobserve
+					}
+					if (isOb(value)) {
+						observe_apply(undefined, ns, [value], paths, cb, undefined, filter, [parentObs], allPath);
+					}
+				} else {
+					if (isOb(oldValue)) { // oldValue is an object, so unobserve
+						observe_apply(undefined, ns, [oldValue], paths, cb, true); // unobserve
+					}
+					if (isOb(value)) { // value is an object, so observe
+						observe_apply(undefined, ns, [value], paths, cb);
+					}
+				}
+				ctx.cb(ev, eventArgs);
+			}
+		}
+	},
+
+	observe_apply = function() {
+		// $.observe(), but allowing you to include arrays within the arguments - which you want flattened.
+		var args = concat.apply([], arguments); // Flatten the arguments
+		return $observe.apply(args.shift(), args);
+	},
+
+	$observeAll = function(cb, filter, unobserve) {
+		observeAll(this._ns, this._data, cb, filter, [], "root", unobserve);
+	},
+
+	$unobserveAll = function(cb, filter) {
+		$observeAll.call(this, cb, filter, true);
+	},
+
+	observeAll = function(namespace, object, cb, filter, parentObs, allPath, unobserve, objMap) {
+		function observeArrayItems(arr, unobs) {
+			l = arr.length;
+			newAllPath = allPath + "[]";
+			while (l--) {
+				filterAndObserveAll(arr, l, unobs, 1);
+			}
+		}
+
+		function filterAndObserveAll(obj, prop, unobs, nestedArray) {
+			var newObject, newParentObs;
+			if (prop !== $expando) {
+				if (newObject = $observable._fltr(newAllPath, obj[prop], nextParentObs, filter)) {
+					newParentObs = nextParentObs.slice();
+					if (nestedArray && updatedTgt && newParentObs[0] !== updatedTgt) {
+						newParentObs.unshift(updatedTgt); // For array change events when observing an array which is not the root, need to add updated array to parentObs
+					}
+					observeAll(namespace, newObject, cb, filter || (nestedArray ? undefined : 0), newParentObs, newAllPath, unobs, objMap);
+					// If nested array, need to observe the array too - so set filter to undefined
+				}
+			}
+		}
+
+		function wrappedCb(ev, eventArgs) {
+			// This object is changing.
+			allPath = ev.data.observeAll._path;
+			updatedTgt = ev.target;
+			switch (eventArgs.change) { // observeAll/unobserveAll on added or removed objects
+				case "insert":
+					observeArrayItems(eventArgs.items);
+					break;
+				case "remove":
+					observeArrayItems(eventArgs.items, true); // unobserveAll on removed items
+					break;
+				case "set":
+					newAllPath = allPath + "." + eventArgs.path;
+					filterAndObserveAll(eventArgs, "oldValue", true); // unobserve old value
+					filterAndObserveAll(eventArgs, "value"); // observe new value
+			}
+			updatedTgt = undefined;
+			cb.apply(this, arguments); // Observe this object (invoke the callback)
+		}
+		wrappedCb._wrp = 1;
+
+		var l, isObject, newAllPath, nextParentObs, updatedTgt, obId,
+			notRemoving = !objMap || objMap.un || !unobserve; // true unless it is an observeAll call (not unobserveAll) and we are removing a listener (not adding one)
+
+		if (object && typeof object === OBJECT) {
+			nextParentObs = [object].concat(parentObs); // The parentObs chain for the next depth of observeAll
+			isObject = $isArray(object) ? "" : "*";
+			if (objMap && notRemoving && $hasData(object) && objMap[obId = $data(object).obId]) {
+				objMap[obId]++;
+				return; // This object has already being observed/unobserved by this observeAll/unobserveAll call (must be a cyclic object graph) so skip, to avoid
+				// stack overflow/multiple instances of listener. See jsviews/pull/305
+				// NOTE - WE DO NOT support ObserveAll on data with cyclic graphs which include DUPLICATE REFERENCES TO ARRAY PROPERTIES - such as data.children = data.descendants = []
+			}
+			if (!objMap) {
+				objMap = {un: unobserve}; // Map object to register observed objects for this observeAll
+			}
+
+			if (cb) {
+				// Observe this object or array - and also listen for changes to object graph, to add or remove observers from the modified object graph
+				if (isObject || filter !== 0) {
+					// If an object, observe the object. If an array, only add arrayChange binding if has filter or if filter is undefined (!== 0) - which
+					// is the case for top-level calls or for nested array (array item of an array - e.g. member of 2-dimensional array).
+					// For array properties lower in the tree, with no filter, filter is set to 0 in filterAndObserveAll, so no arrayChange binding here,
+					// since they get arrayChange binding added during regular $.observe(array ...) binding.
+					wrappedCb._cId = getCbKey(cb); // Identify wrapped callback with unwrapped callback, so unobserveAll will
+													// remove previous observeAll wrapped callback, if inner callback was the same;
+					if (notRemoving) {
+						$observe(namespace, object, isObject, wrappedCb, unobserve, filter, nextParentObs, allPath);
+						obId = $data(object).obId;
+						objMap[obId] = (objMap[obId] || 0) + 1; // Register on map of objects observed/unobserved by this observeAll/unobserveAll call
+							//- or remove from map if we are removing this object from observeAll call. (Avoid dups, for cyclic graphs)
+					} else {
+						if (--objMap[$data(object).obId]) {
+							// Register on map of objects observed/unobserved by this observeAll/unobserveAll call
+							//- or remove from map if we are removing this object from observeAll call. (Avoid dups, for cyclic graphs)
+							return;
+						}
+						$observe(namespace, object, isObject, wrappedCb, unobserve, filter, nextParentObs, allPath);
+					}
+				}
+			} else {
+				// No callback. Just unobserve if unobserve === true.
+				if (objMap) {
+					objMap[$data(object).obId] = 1; // Register on map of objects unobserved by this unobserveAll call. (Avoid dups, for cyclic graphs)
+				}
+				$observe(namespace, object, isObject, undefined, unobserve, filter, nextParentObs, allPath);
+			}
+
+			if (isObject) {
+				// Continue stepping through object graph, observing object and arrays
+				// To override filtering, pass in filter function, or replace $.observable._fltr
+				for (l in object) {
+					newAllPath = allPath + "." + l;
+					filterAndObserveAll(object, l, unobserve);
+				}
+			} else { // Observe items in Array
+				observeArrayItems(object, unobserve);
+			}
+		}
+	},
+
+	shallowFilter = function(allPath /*, object, parentObs*/) {
+		return allPath.indexOf(".") < 0 && allPath.indexOf("[") < 0;
+	},
+
+	$unobserve = function() {
+		[].push.call(arguments, true); // Add true as additional final argument
+		return $observe.apply(undefined, arguments);
+	};
+
+	$observe = function() {
+		// $.observe([namespace, ]root, [1 or more objects, path or path Array params...], callback[, contextCallback][, unobserve])
+
+		function innerObserve() {
+
+			function observeOnOff(namespace, pathStr, isArrayBinding, off) {
+				var j, evData,
+					obIdExpando = $hasData(object),
+					boundObOrArr = wrapArray(object),
+					prntObs = parentObs,
+					allPth = allPath;
+
+				namespace = initialNs ? namespace + "." + initialNs : namespace;
+
+				if (!unobserve && (off || isArrayBinding)) {
+					events = obIdExpando && $._data(object);
+					events = events && events.events;
+					events = events && events[isArrayBinding ? arrayChangeStr : propertyChangeStr];
+					el = events && events.length;
+					while (el--) { // Skip duplicates
+						data = events[el] && events[el].data;
+						if (data && (off && data.ns !== initialNs
+							// When observing, don't unbind dups unless they have the same namespace
+							|| !off && data.ns === initialNs && data.cb && data.cb._cId === callback._cId && (!callback._wrp || data.cb._wrp)))
+							// When observing and doing array binding, don't bind dups if they have the same namespace (Dups can happen e.g. with {^{for people ^~foo=people}})
+						{
+							return;
+						}
+					}
+				}
+				if (unobserve || off) {
+					$(boundObOrArr).off(namespace, onDataChange);
+				} else {
+					evData = isArrayBinding ? {}
+						: {
+							fullPath: path,
+							paths: pathStr ? [pathStr] : [],
+							prop: prop,
+							arOk: allowArray
+						};
+					evData.ns = initialNs;
+					evData.cb = callback;
+
+					if (allPath) {
+						// This is an observeAll call
+						evData.observeAll = {
+							_path: allPth,
+							path: function() { // Step through path and parentObs parent chain, replacing '[]' by '[n]' based on current index of objects in parent arrays.
+								j = prntObs.length;
+								return allPth.replace(/[[.]/g, function(all) {
+									j--;
+									return all === "["
+										? "[" + $.inArray(prntObs[j - 1], prntObs[j])
+										: ".";
+								});
+							},
+							parents: function() {
+								return prntObs; // The chain of parents between the modified object and the root object used in the observeAll() call
+							},
+							filter: filter
+						};
+					}
+					$(boundObOrArr).on(namespace, null, evData, onDataChange);
+
+					if (cbBindings) {
+						// Add object to cbBindings
+						cbBindings[$data(object).obId || $data(object, "obId", observeObjKey++)] = object;
+					}
+				}
+			}
+
+			function getInnerCb(exprOb) {
+				// Returns the innerCb used for updating a computed in a compiled expression (setting the new instance as exprOb.ob, unobserving the previous object,
+				// and observing the new one), then calling the outerCB - i.e. the handler for the whole compiled expression.
+				// Initialized exprOb.ob to the current object.
+				// Uses the contextCb callback to execute the compiled exprOb template in the context of the view/data etc. to get the returned value, typically an object or array.
+				// If it is an array, registers array binding
+				var origRt = root;
+				// Note: For jsviews/issues/292 ctxCb will need var ctxCb = contextCb || function(exprOb, origRt) {return exprOb._cpfn(origRt);};
+
+				exprOb.ob = contextCb(exprOb, origRt); // Initialize object
+
+				return exprOb.cb = function(ev, eventArgs) {
+					var obj = exprOb.ob, // The old object
+						sub = exprOb.sb,
+						newObj = contextCb(exprOb, origRt);
+
+					if (newObj !== obj) {
+						if (typeof obj === OBJECT) {
+							bindArray(obj, true);
+							if (sub || allowArray && $isArray(obj)) {
+								innerObserve([obj], sub, callback, contextCb, true); // unobserve on the old object
+							}
+						}
+						exprOb.ob = newObj;
+						// Put the updated object instance onto the exprOb in the paths array, so subsequent string paths are relative to this object
+						if (typeof newObj === OBJECT) {
+							bindArray(newObj);
+							if (sub || allowArray && $isArray(newObj)) { // observe on new object
+								innerObserve([newObj], sub, callback, contextCb);
+							}
+						}
+					}
+					// Call the outerCb - to execute the compiled expression that this computed is part of
+					callback(ev, eventArgs);
+				};
+			}
+
+			function bindArray(arr, unbind, isArray, relPath) {
+				if (allowArray) {
+					// allowArray is 1 if this is a call to observe that does not come from observeAndBind (tag binding), or is from a 'depends' path,
+					// so we allow arrayChange binding. Otherwise allowArray is zero.
+					var prevObj = object,
+						prevAllPath = allPath;
+
+					object = arr;
+					if (relPath) {
+						object = arr[relPath];
+						allPath += "." + relPath;
+					}
+					if (filter && object) {
+						object = $observable._fltr(allPath, object, relPath ? [arr].concat(parentObs) : parentObs, filter);
+					}
+					if (object && (isArray || $isArray(object))) {
+						observeOnOff(arrayChangeStr + ".observe" + (callback ? getCbKey(callback) : ""), undefined, true, unbind);
+					}
+					object = prevObj;
+					allPath = prevAllPath;
+				}
+			}
+
+			var i, p, skip, parts, prop, path, dep, unobserve, callback, cbId, inId, el, data, events, contextCb, innerContextCb,
+				items, cbBindings, depth, innerCb, parentObs, allPath, filter, initNsArr, initNsArrLen, view, cbItemCount,
+				ns = observeStr,
+				paths = this != 1 // Using != for IE<10 bug- see jsviews/issues/237
+					? concat.apply([], arguments) // Flatten the arguments - this is a 'recursive call' with params using the 'wrapped array'
+													// style - such as innerObserve([object], path.path, [origRoot], path.prm, innerCb, ...);
+					: slice.call(arguments), // Don't flatten - this is the first 'top-level call, to innerObserve.apply(1, paths)
+				lastArg = paths.pop() || false,
+				root = paths.shift(),
+				object = root,
+				l = paths.length;
+
+			if (lastArg + "" === lastArg) { // If last arg is a string then this observe call is part of an observeAll call,
+				allPath = lastArg;          // and the last three args are the parentObs array, the filter, and the allPath string.
+				parentObs = paths.pop();
+				filter = paths.pop();
+				lastArg = !!paths.pop(); // unobserve
+				l -= 3;
+			}
+			if (lastArg === !!lastArg) {
+				unobserve = lastArg;
+				lastArg = paths[l-1];
+				lastArg = l && lastArg + "" !== lastArg && (!lastArg || $isFunction(lastArg)) ? (l--, paths.pop()) : undefined;
+				if (unobserve && !l && $isFunction(root)) {
+					lastArg = root;
+					root = undefined;
+				}
+			}
+			callback = lastArg;
+			if (l && $isFunction(paths[l - 1])) {
+				innerContextCb = contextCb = callback;
+				callback = paths.pop();
+				l--;
+			}
+
+			if (unobserve && callback && !callback._cId) {
+				return;
+			}
+
+			// Use a unique namespace (e.g. obs7) associated with each observe() callback to allow unobserve to remove handlers
+			ns += callback
+				? ((inId = callback._inId || ""), unobserve)
+					? callback._cId + inId
+					: (cbId = getCbKey(callback)) + inId
+				: "";
+
+			if (cbId && !unobserve) {
+				cbBindings = cbBindingsStore[cbId] = cbBindingsStore[cbId] || {};
+			}
+
+			initNsArr = initialNs && initialNs.match(rNotWhite) || [""];
+			initNsArrLen = initNsArr.length;
+
+			while (initNsArrLen--) {
+				initialNs = initNsArr[initNsArrLen];
+				if (root && !paths[0]) {
+					if ($isArray(root)) {
+						bindArray(root, unobserve, true); // observe(array, handler)
+					}
+					if (unobserve) {
+						observeOnOff(ns, ""); // unobserve(objectOrArray[, handler])
+					}
+				}
+				if (unobserve && !l && !root) { // unobserve() - unobserves all
+					for (p in cbBindingsStore) {
+						p = cbBindingsStore[p];
+						for (data in p) {
+							object = p[data];
+							if ($isArray(object)) {
+								bindArray(object, unobserve, unobserve);
+							} else {
+								observeOnOff(ns, "");
+							}
+						}
+					}
+				}
+				depth = 0;
+				cbItemCount = 0;
+				for (i = 0; i < l; i++) {
+					if (cbItemCount) {
+						cbItemCount--; // contextCb was moved to a contextual parameter outer context. Needs to revert after cbItemCount
+					} else {
+						contextCb = innerContextCb;
+					}
+
+					path = paths[i];
+					if (path === "" || path === root) {
+						continue;
+					}
+					if (path && path._ar) {
+						allowArray += path._ar; // Switch on allowArray for depends paths, and off, afterwards.
+						continue;
+					}
+					object = root;
+					if ("" + path === path) {
+						// Consider support for computed paths: jsviews/issues/292
+						//if (/[\(\[\+]/.test(path)) {
+						//	var b={links:{}}, t = $sub.tmplFn("{:"+path+"}", b, true), items = t.paths[0];
+						//	l += items.length - 1;
+						//	splice.apply(paths, [i--, 1].concat(items));
+						//	continue;
+						//}
+						parts = path.split("^");
+						if (parts[1]) {
+							// We bind the leaf, plus additional nodes based on depth.
+							// "a.b.c^d.e" is depth 2, so listens to changes of e, plus changes of d and of c
+							depth = parts[0].split(".").length;
+							path = parts.join(".");
+							depth = path.split(".").length - depth;
+							// if more than one ^ in the path, the first one determines depth
+						}
+						if (contextCb) {
+							items = contextCb(path, root, depth);
+						}
+						contextCb = innerContextCb;
+						parts = path.split(".");
+					} else if (path && path._cxp) { // contextual parameter
+						view = path.shift();  // Contextual data
+						if (_ocp in view) {
+							root = view; // observable contextual parameter
+							contextCb = 0;
+						} else {
+							contextCb = $sub._gccb(view); // getContextCb: Get context callback for the contextual view (where contextual param evaluated/assigned)
+							root = view.data;
+						}
+						items = path;
+						items.push(origRoot);
+						cbItemCount = items.length;
+					} else {
+						if (!$isFunction(path)) {
+							if (path && path._cpfn) {
+								// Path is an exprOb returned by a computed property - helper/data function (compiled expr function).
+								// Set current object on exprOb.ob, and get innerCb for updating the object
+								innerCb = unobserve ? path.cb : getInnerCb(path);
+								// innerCb._ctx = callback._ctx; Could pass context (e.g. linkCtx) for use in a depends = function() {} call, so depends is different for different linkCtx's
+								innerCb._cId = callback._cId;
+								// Set the same cbBindingsStore key as for callback, so when callback is disposed, disposal of innerCb happens too.
+								innerCb._inId = innerCb._inId || ".obIn" + observeInnerCbKey++;
+								if (path.bnd || path.prm && path.prm.length || !path.sb) {
+									// If the exprOb is bound e.g. foo()^sub.path, or has parameters e.g. foo(bar) or is a leaf object (so no sub path) e.g. foo()
+									// then observe changes on the object, or its parameters and sub-path
+									innerObserve([object], path.path, [path.root||root], path.prm, innerCb, contextCb, unobserve);
+								}
+								if (path.sb) { // subPath
+									if (path.sb.prm) {
+										path.sb.root = root;
+									}
+									innerObserve([path.ob], path.sb, callback, contextCb, unobserve);
+								}
+								path = origRoot;
+								object = undefined;
+							}
+						}
+						parts = [root = path];
+					}
+					if (items) {
+						// If the array of objects and paths returned by contextCb is non empty, insert them
+						// into the sequence, replacing the current item (path). Otherwise simply remove current item (path)
+						l += items.length - 1;
+						splice.apply(paths, [i--, 1].concat(items));
+						items = undefined;
+						continue;
+					}
+					while (object && (prop = parts.shift()) !== undefined) {
+						if (typeof object === OBJECT) {
+							if ("" + prop === prop) {
+								if (prop === "") {
+									continue;
+								}
+								if ((parts.length < depth + 1) && !object.nodeType) {
+									// Add observer for each token in path starting at depth, and on to the leaf
+									if (!unobserve && (events = $hasData(object) && $._data(object))) {
+										events = events.events;
+										events = events && events[propertyChangeStr];
+										el = events && events.length;
+										skip = 0;
+										while (el--) { // Skip duplicates
+											data = events[el].data;
+											if (data
+												&& data.ns === initialNs
+												&& data.cb._cId === callback._cId
+												&& data.cb._inId === callback._inId
+												&& (data.prop === prop || data.prop === "*" || data.prop === "**")) {
+												if (p = parts.join(".")) {
+													data.paths.push(p); // We will skip this binding, but if it is not a leaf binding,
+													// need to keep bindings for rest of path, ready for if the object gets swapped.
+												}
+												skip++;
+											}
+										}
+										if (skip) {
+											// Duplicate binding(s) found, so move on
+											object = object[prop];
+											continue;
+										}
+									}
+									if (prop === "*" || prop === "**") { // "*" => all properties. "**" => all properties and sub-properties (i.e. deep observeAll behavior)
+										if (!unobserve && events && events.length) {
+											// Remove existing bindings, since they will be duplicates with "*" or "**"
+											observeOnOff(ns, "", false, true);
+										}
+										if (prop === "*") {
+											observeOnOff(ns, ""); // observe the object for any property change
+											for (p in object) {
+												// observing "*": So (in addition to listening to prop change, above) listen to arraychange on props of type array
+												if (p !== $expando) {
+													bindArray(object, unobserve, undefined, p);
+												}
+											}
+										} else {
+											$.observable(initialNs, object)[(unobserve ? "un" : "") + "observeAll"](callback); // observe or unobserve the object for any property change
+										}
+										break;
+									} else if (prop) {
+										observeOnOff(ns + ".p_" + prop, parts.join("^")); // By using "^" rather than "." we ensure that deep binding will be used on newly inserted object graphs
+									}
+								}
+								if (allPath) {
+									allPath += "." + prop;
+								}
+								prop = object[prop];
+								if (!parts[0]) {
+									bindArray(prop, unobserve); // [un]observe(object, "arrayProperty") observes array changes on property of type array
+								}
+							}
+							if ($isFunction(prop)) {
+								if (dep = prop.depends) {
+									// This is a computed observable. We will observe any declared dependencies.
+									// Pass {_ar: ...} objects to switch on allowArray, for depends paths, then return to contextual allowArray value
+									innerObserve([object], dependsPaths(dep, object, callback), callback, contextCb, unobserve);
+								}
+								break;
+							}
+							object = prop;
+						}
+					}
+				}
+			}
+			if (cbId) {
+				removeCbBindings(cbBindings, cbId);
+			}
+
+			// Return the cbBindings to the top-level caller, along with the cbId
+			return {cbId: cbId, bnd: cbBindings};
+		}
+
+		var initialNs,
+			allowArray = this == 1 ? 0 : 1, // If this == 1, this is a call from observeAndBind - doing binding of datalink expressions. We don't bind
+			// arrayChange events in this scenario. Instead, {^{for}} and similar do specific arrayChange binding to the tagCtx.args[0] value, in onAfterLink.
+			// Note deliberately using this == 1, rather than this === 1 because of IE<10 bug- see jsviews/issues/237
+			paths = slice.call(arguments),
+			origRoot = paths[0];
+
+		if (origRoot + "" === origRoot && allowArray) {
+			initialNs = origRoot; // The first arg is a namespace, since it is a string, and this call is not from observeAndBind
+			paths.shift();
+			origRoot = paths[0];
+		}
+		return innerObserve.apply(1, paths);
+	};
+
+	$observable = function(ns, data) {
+		if (arguments.length === 1) {
+			data = ns;
+			ns = "";
+		}
+		return $isArray(data)
+			? new ArrayObservable(ns, data)
+			: new ObjectObservable(ns, data);
+	};
+
+	//========================== Initialize ==========================
+
+	$.observable = $observable;
+	$observable._fltr = function(allPath, object, parentObs, filter) {
+		if (filter && $isFunction(filter)
+			? filter(allPath, object, parentObs)
+			: true // TODO Consider supporting filter being a string or strings to do RegEx filtering based on key and/or allPath
+		) {
+			object = $isFunction(object)
+				? object.set && object.call(parentObs[0]) // It is a getter/setter
+				: object;
+			return typeof object === OBJECT && object;
+		}
+	};
+
+	$observable.Object = ObjectObservable;
+	$observable.Array = ArrayObservable;
+	$.observe = $observable.observe = $observe;
+	$.unobserve = $observable.unobserve = $unobserve;
+	$observable._apply = observe_apply;
+
+	ObjectObservable.prototype = {
+		_data: null,
+
+		observeAll: $observeAll,
+		unobserveAll: $unobserveAll,
+
+		data: function() {
+			return this._data;
+		},
+
+		setProperty: function(path, value, nonStrict) {
+			path = path || "";
+			var key, pair, parts,
+				multi = path + "" !== path && !path._is, // Hash of paths, not view object
+				self = this,
+				object = self._data;
+
+			if (object) {
+				if (multi) {
+					nonStrict = value;
+					if ($isArray(path)) {
+						// This is the array format generated by serializeArray. However, this has the problem that it coerces types to string,
+						// and does not provide simple support of convertTo and convertFrom functions.
+						key = path.length;
+						while (key--) {
+							pair = path[key];
+							self.setProperty(pair.name, pair.value, nonStrict === undefined || nonStrict); //If nonStrict not specified, default to true;
+						}
+					} else {
+						// Object representation where property name is path and property value is value.
+						for (key in path) {
+							self.setProperty(key, path[key], nonStrict);
+						}
+					}
+				} else if (path !== $expando) {
+					// Simple single property case.
+					if (path._is) {
+						parts = [path];
+					} else {
+						parts = path.split(/[.^]/);
+						while (object && parts.length > 1) {
+							object = object[parts.shift()];
+						}
+					}
+					if (object) {
+						self._setProperty(object, parts[0], value, nonStrict);
+					}
+				}
+			}
+			return self;
+		},
+
+		removeProperty: function(path) {
+			this.setProperty(path, remove);
+			return this;
+		},
+
+		_setProperty: function(leaf, path, value, nonStrict) {
+			var setter, getter, removeProp,
+				property = path ? leaf[path] : leaf;
+
+			if ($isFunction(property)) {
+				if (property.set) {
+					// Case of property setter/getter - with convention that property is getter and property.set is setter
+					leaf = leaf._vw // Case of JsViews 2-way data-linking to an observable context parameter, with a setter.
+						// The view will be the this pointer for getter and setter. Note: this is the one scenario where path is "".
+					 || leaf;
+					getter = property;
+					setter = getter.set === true ? getter : getter.set;
+					property = getter.call(leaf); // get - only treated as getter if also a setter. Otherwise it is simply a property of type function.
+					// See unit tests 'Can observe properties of type function'.
+				}
+			}
+
+			if ((property !== value || nonStrict && property != value)
+				// Optional non-strict equality, since serializeArray, and form-based editors can map numbers to strings, etc.
+				// Date objects don't support != comparison. Treat as special case.
+				&& (!(property instanceof Date && value instanceof Date) || property > value || property < value)) {
+				if (setter) {
+					setter.call(leaf, value);   //set
+					value = getter.call(leaf);  //get updated value
+				} else if (removeProp = value === remove) {
+					if (property !== undefined) {
+						delete leaf[path];
+						value = undefined;
+					} else {
+						path = undefined; // If value was already undefined, don't trigger handler for removeProp
+					}
+				} else if (path) {
+					leaf[path] = value;
+				}
+				if (path) {
+					this._trigger(leaf, {change: "set", path: path, value: value, oldValue: property, remove: removeProp});
+				}
+			}
+		},
+
+		_trigger: function(target, eventArgs) {
+			$(target).triggerHandler(propertyChangeStr + (this._ns ? "." + /^\S+/.exec(this._ns)[0] : ""), eventArgs); // If white-space separated namespaces, use first one only
+		}
+	};
+
+	ArrayObservable.prototype = {
+		_data: null,
+
+		observeAll: $observeAll,
+		unobserveAll: $unobserveAll,
+
+		data: function() {
+			return this._data;
+		},
+
+		insert: function(index, data) {
+			var _data = this._data;
+			if (arguments.length === 1) {
+				data = index;
+				index = _data.length;
+			}
+			index = PARSEINT(index);
+			if (index > -1) {
+				data = $isArray(data) ? data : [data];
+				// data can be a single item (including a null/undefined value) or an array of items.
+				// Note the provided items are inserted without being cloned, as direct references to the provided objects
+
+				if (data.length) {
+					this._insert(index, data);
+				}
+			}
+			return this;
+		},
+
+		_insert: function(index, data) {
+			var _data = this._data,
+				oldLength = _data.length;
+			if (index > oldLength) {
+				index = oldLength;
+			}
+			splice.apply(_data, [index, 0].concat(data));
+			this._trigger({change: "insert", index: index, items: data}, oldLength);
+		},
+
+		remove: function(index, numToRemove) {
+			var items,
+				_data = this._data;
+
+			if (index === undefined) {
+				index = _data.length - 1;
+			}
+
+			index = PARSEINT(index);
+			numToRemove = numToRemove ? PARSEINT(numToRemove) : numToRemove === 0 ? 0 : 1; // if null or undefined: remove 1
+			if (numToRemove > 0 && index > -1) {
+				items = _data.slice(index, index + numToRemove);
+				if (numToRemove = items.length) {
+					this._remove(index, numToRemove, items);
+				}
+			}
+			return this;
+		},
+
+		_remove: function(index, numToRemove, items) {
+			var _data = this._data,
+				oldLength = _data.length;
+
+			_data.splice(index, numToRemove);
+			this._trigger({change: "remove", index: index, items: items}, oldLength);
+		},
+
+		move: function(oldIndex, newIndex, numToMove) {
+			numToMove = numToMove ? PARSEINT(numToMove) : numToMove === 0 ? 0 : 1; // if null or undefined: move 1
+			oldIndex = PARSEINT(oldIndex);
+			newIndex = PARSEINT(newIndex);
+
+			if (numToMove > 0 && oldIndex > -1 && newIndex > -1 && oldIndex !== newIndex) {
+				this._move(oldIndex, newIndex, numToMove);
+			}
+			return this;
+		},
+
+		_move: function(oldIndex, newIndex, numToMove) {
+			var items,
+				_data = this._data,
+				oldLength = _data.length,
+				excess = oldIndex + numToMove - oldLength;
+			if (excess > 0) {
+				numToMove -= excess;
+			}
+			if (numToMove) {
+				items = _data.splice(oldIndex, numToMove); // remove
+				if (newIndex > _data.length) {
+					newIndex = _data.length;
+				}
+				splice.apply(_data, [newIndex, 0].concat(items)); //re-insert
+				if (newIndex !== oldIndex) {
+					this._trigger({change: "move", oldIndex: oldIndex, index: newIndex, items: items}, oldLength);
+				}
+			}
+		},
+
+		refresh: function(newItems) {
+			function insertAdded() {
+				if (k) {
+					self.insert(j-k, addedItems); // Not found in original array - so insert
+					dataLength += k;
+					i += k;
+					k = 0;
+					addedItems = [];
+				}
+			}
+
+			// For refresh operation we iteratively step through the target array and sort by move/add/remove operations on the source array until they match
+			var i, j, k, newItem, num,
+				self = this,
+				addedItems = [],
+				data = self._data,
+				oldItems = data.slice(),
+				oldLength = data.length,
+				dataLength = oldLength,
+				newLength = newItems.length;
+			self._srt = true; // Flag for sorting during refresh
+			for (j=k=0; j<newLength; j++) {
+				if ((newItem = newItems[j]) === data[j-k]) {
+						insertAdded();
+				} else {
+					for (i=j-k; i<dataLength; i++) {
+						if (newItem === data[i]) {
+							break;
+						}
+					}
+					if (i<dataLength) {
+						insertAdded();
+						num = 0;
+						while (num++ < newLength-i && newItems[j+num] === data[i+num]);
+						self.move(i, j, num); // Found newItem in original array - so move it to new position
+						j += num - 1;
+					} else {
+						k++;
+						addedItems.push(newItem); // Not found in original array - so insert
+					}
+				}
+			}
+			insertAdded();
+			if (dataLength > j) {
+				self.remove(j, dataLength - j);
+			}
+			self._srt = undefined; // We have finished sort operations during refresh
+			self._trigger({change: "refresh", oldItems: oldItems}, oldLength);
+			return self;
+		},
+
+		_trigger: function(eventArgs, oldLength) {
+			var self = this,
+				_data = self._data,
+				length = _data.length,
+				$_data = $([_data]);
+			if (self._srt) {
+				eventArgs.refresh = true; // We are sorting during refresh
+			} else if (length !== oldLength) { // We have finished sort operations during refresh
+				$_data.triggerHandler(propertyChangeStr, {change: "set", path: "length", value: length, oldValue: oldLength});
+			}
+			$_data.triggerHandler(arrayChangeStr + (self._ns ? "." + /^\S+/.exec(self._ns)[0] : ""), eventArgs); // If white-space separated namespaces, use first one only
+		}
+	};
+
+	$eventSpecial[propertyChangeStr] = $eventSpecial[arrayChangeStr] = {
+		// Register a jQuery special 'remove' event, to access the data associated with handlers being removed by jQuery.off().
+		// We get data.cb._cId from the event handleObj and get the corresponding cbBindings hash from the cbBindingsStore,
+		// then remove this object from that bindings hash - if the object does not have any other handlers associated with the same callback.
+		remove: function (handleObj) {
+			var cbBindings, found, events, l, data,
+				evData = handleObj.data;
+			if ((evData) && (evData.off = true, evData = evData.cb)) { //Set off = true as marker for disposed event
+				// Get the cb._cId from handleObj.data.cb._cId
+				if (cbBindings = cbBindingsStore[evData._cId]) {
+					// There were bindings for this callback. If this was the last one, we'll remove it.
+					events = $._data(this).events[handleObj.type];
+					l = events.length;
+					while (l-- && !found) {
+						found = (data = events[l].data) && data.cb && data.cb._cId === evData._cId;
+						// Found another one with same callback (though may be a different innerCallback)
+					}
+					if (!found) {
+						// This was the last handler for this callback and object, so remove the binding entry
+						delete cbBindings[$data(this).obId];
+						removeCbBindings(cbBindings, evData._cId);
+					}
+				}
+			}
+		}
+	};
+
+	$views.map = function(mapDef) {
+		function Map(source, options, target, unbound) {
+			var changing,
+				map = this;
+			if (this.src) {
+				this.unmap(); // We are re-mapping a new source
+			}
+			if (typeof source === OBJECT) {
+				map.src = source;
+				map.tgt = target || map.tgt || [];
+				map.options = options || map.options;
+				map.update();
+				if (!unbound) {
+					if (mapDef.obsSrc) {
+						$observable(map.src).observeAll(map.obs = function(ev, eventArgs) {
+							if (!changing) {
+								changing = true;
+								mapDef.obsSrc(map, ev, eventArgs);
+								changing = undefined;
+							}
+						}, map.srcFlt);
+					}
+					if (mapDef.obsTgt) {
+						$observable(map.tgt).observeAll(map.obt = function(ev, eventArgs) {
+						if (!changing) {
+							changing = true;
+							mapDef.obsTgt(map, ev, eventArgs);
+							changing = undefined;
+						}
+						}, map.tgtFlt);
+					}
+				}
+			}
+		}
+
+		if ($isFunction(mapDef)) {
+			// Simple map declared as function
+			mapDef = {
+				getTgt: mapDef
+			};
+		}
+
+		if (mapDef.baseMap) {
+			mapDef = $.extend({}, mapDef.baseMap, mapDef);
+		}
+
+		mapDef.map = function(source, options, target, unbound) {
+			return new Map(source, options, target, unbound);
+		};
+
+		(Map.prototype = {
+			srcFlt: mapDef.srcFlt || shallowFilter, // default to shallowFilter
+			tgtFlt: mapDef.tgtFlt || shallowFilter,
+			update: function(options) {
+				var map = this;
+				$observable(map.tgt).refresh(mapDef.getTgt(map.src, map.options = options || map.options));
+			},
+			unmap: function() {
+				var map = this;
+				if (map.src) {
+					if (map.obs) {
+						$observable(map.src).unobserveAll(map.obs, map.srcFlt);
+					}
+					if (map.obt) {
+						$observable(map.tgt).unobserveAll(map.obt, map.tgtFlt);
+					}
+					map.src = undefined;
+				}
+			},
+			map: Map,
+			_def: mapDef
+		}).constructor = Map;
+
+		return mapDef;
+	};
+
+	$sub.advSet = function() { // refresh advanced settings
+		$sub._gccb = this._gccb; // getContextCallback method
+		global._jsv = $subSettings.advanced._jsv
+			? { // create global _jsv, for accessing views, etc
+					cbBindings: cbBindingsStore
+				}
+			: undefined; // In IE8 cannot do delete global._jsv
+	};
+	$sub._dp = dependsPaths;
+}
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< JsViews >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+/* JsViews:
+ * Interactive data-driven views using templates and data-linking.
+ * See http://www.jsviews.com/#jsviews and http://github.com/BorisMoore/jsviews
+ * Copyright 2017, Boris Moore
+ * Released under the MIT License.
+ */
+
+//========================== Top-level vars ==========================
+
+$viewsSettings = $views.settings;
+$subSettings = $sub.settings;
+$subSettingsAdvanced = $subSettings.advanced;
+$converters = $views.converters;
+$.templates = $templates = $views.templates;
+$tags = $views.tags;
+rFirstElem = /<(?!script)(\w+)[>\s]/;
+
+if ($.link) { return $; } // JsViews is already loaded
+
+$subSettings.trigger = true;
+var activeBody, rTagDatalink, $view, $viewsLinkAttr, linkViewsSel, wrapMap, viewStore, oldAdvSet, useInput,
+	jsvAttrStr = "data-jsv",
+	elementChangeStr = "change.jsv",
+	onBeforeChangeStr = "onBeforeChange",
+	onAfterChangeStr = "onAfterChange",
+	onAfterCreateStr = "onAfterCreate",
+	CHECKED = "checked",
+	CHECKBOX = "checkbox",
+	RADIO = "radio",
+	NONE = "none",
+	VALUE = "value",
+	SCRIPT = "SCRIPT",
+	TRUE = "true",
+	closeScript = '"></script>',
+	openScript = '<script type="jsv',
+	deferAttr = jsvAttrStr + "-df",
+	bindElsSel = "script,[" + jsvAttrStr + "]",
+	fnSetters = {
+		value: "val",
+		input: "val",
+		html: HTML,
+		text: "text"
+	},
+	valueBinding = {from: VALUE, to: VALUE},
+	isCleanCall = 0,
+	oldCleanData = $.cleanData,
+	oldJsvDelimiters = $viewsSettings.delimiters,
+	safeFragment = document.createDocumentFragment(),
+	qsa = document.querySelector,
+
+	// elContent maps tagNames which have only element content, so may not support script nodes.
+	elContent = {ol: 1, ul: 1, table: 1, tbody: 1, thead: 1, tfoot: 1, tr: 1, colgroup: 1, dl: 1, select: 1, optgroup: 1, svg: 1, svg_ns: 1},
+	badParent = {tr: "table"},
+	voidElems = {br: 1, img: 1, input: 1, hr: 1, area: 1, base: 1, col: 1, link: 1, meta: 1,
+		command: 1, embed: 1, keygen: 1, param: 1, source: 1, track: 1, wbr: 1},
+	displayStyles = {},
+	bindingStore = {},
+	bindingKey = 1,
+	rViewPath = /^#(view\.?)?/,
+	rConvertMarkers = /((\/>)|<\/(\w+)>|)(\s*)([#\/]\d+(?:_|(\^)))`(\s*)(<\w+(?=[\s\/>]))?|\s*(?:(<\w+(?=[\s\/>]))|<\/(\w+)>(\s*)|(\/>)\s*|(>)|$)/g,
+	rOpenViewMarkers = /(#)()(\d+)(_)/g,
+	rOpenMarkers = /(#)()(\d+)([_^])/g,
+	rViewMarkers = /(?:(#)|(\/))(\d+)(_)/g,
+	rOpenTagMarkers = /(#)()(\d+)(\^)/g,
+	rMarkerTokens = /(?:(#)|(\/))(\d+)([_^])([-+@\d]+)?/g,
+	rSplitBindings = /&(\d+)\+?/g,
+	getComputedStyle = global.getComputedStyle;
+
+$observable = $.observable;
+
+if (!$observable) {
+	// JsObservable is not loaded.
+	throw requiresStr + "JsObservable"; // jquery.observable.js must be loaded before JsViews
+}
+
+$observe = $observable.observe;
+
+//========================== Top-level functions ==========================
+
+//===============
+// Event handlers
+//===============
+
+function updateValues(sourceValues, tagElse, bindId, ev) {
+// Observably update data values targeted by bindTo
+// Called when linkedElem changes: called as updateValues(sourceValues, tagElse, bindId, ev) - this: undefined
+// Called directly as tag.updateValues(val1, val2, val3, ...) - this: tag
+	var linkCtx, cvtBack, cnvtName, target, view, binding, sourceValue, origVals, sourceElem, sourceEl,
+		oldLinkCtx, tos, to, tcpTag, exprOb, contextCb, l, tag;
+
+	if (bindId && bindId._tgId) {
+		tag = bindId;
+		bindId = tag._tgId;
+	}
+	if (binding = bindingStore[bindId]) {
+		if (tos = binding.to) {
+			tos = tos[tagElse||0];
+			// The binding has a 'to' field, which is of the form [tosForElse0, tosForElse1, ...]
+			// where tosForElseX is of the form [[[targetObject, toPath], [targetObject, toPath], ...], cvtBack]
+			linkCtx = binding.linkCtx;
+			sourceElem = linkCtx.elem;
+			view = linkCtx.view;
+			tag = linkCtx.tag;
+			if (!tag && tos._cxp) {
+				tag = tos._cxp.path !== _ocp && tos._cxp.tag;
+				sourceValue = sourceValues[0];
+				sourceValues = [];
+				sourceValues[tos._cxp.ind] = sourceValue;
+			}
+
+			if (tag) {
+				tag._.chg = 1; // Set 'changing' marker to prevent tag update from updating itself
+				if (cnvtName = tag.convertBack) {
+					if ($isFunction(cnvtName)) {
+						cvtBack = cnvtName;
+					} else {
+						cvtBack = view.getRsc("converters", cnvtName);
+					}
+				}
+			}
+
+			if (sourceElem.nodeName === "SELECT") {
+				// data-link <select> to string or (multiselect) array of strings
+				if (sourceElem.multiple && sourceValues[0] === null) {
+					// Case where sourceValues was undefined, and set to [null] by $source[setter]() above
+					sourceValues = [[]];
+				}
+				sourceElem._jsvSel = sourceValues;
+			}
+			origVals = sourceValues;
+			if (cvtBack) {
+				sourceValues = cvtBack.apply(tag, sourceValues);
+				if (sourceValues === undefined) {
+					tos = []; // If cvtBack does not return anything, do not update target.
+					//(But cvtBack may be designed to modify observable values from code as a side effect)
+				}
+				sourceValues = $isArray(sourceValues) ? sourceValues : [sourceValues];
+				// If there are multiple tos (e.g. multiple args on data-linked input) then cvtBack can update not only
+				// the first arg, but all of them by returning an array.
+			}
+
+			// Set linkCtx on view, dynamically, just during this handler call
+			oldLinkCtx = view.linkCtx;
+			view.linkCtx = linkCtx;
+			l = tos.length;
+			while (l--) {
+				if (to = tos[l]) {
+					to = to + "" === to ? [linkCtx.data, to] : to; // [object, path]
+					target = to[0];
+					tcpTag = to.tag; // If this is a tag contextual parameter - the owner tag
+					sourceValue = (to[1] === _ocp
+						? origVals  // If to target is for tag contextual parameter set to static expression (or uninitialized) - we are
+						// binding to tag.ctx.foo._ocp - and we use original values, without applying cvtBack converter
+						: sourceValues // Otherwise use the converted value
+					)[l];
+					if (sourceValue !== undefined && (!tag || !tag.onBeforeUpdateVal || tag.onBeforeUpdateVal(ev, {
+							change: "change",
+							data: target,
+							path: to[1],
+							index: l,
+							tagElse: tagElse,
+							value: sourceValue
+						}) !== false)) {
+						if (tcpTag) { // We are modifying a tag contextual parameter ~foo (e.g. from within block) so update 'owner' tag: tcpTag
+							tcpTag.updateValue(sourceValue, to.ind, to.tagElse, undefined, ev);
+							if (tcpTag.setValue) {
+								tcpTag.setValue(sourceValue, to.ind, to.tagElse);
+							}
+						} else if (sourceValue !== undefined && target) {
+							if (tcpTag = ev && (sourceEl = ev.target)._jsvInd === l && sourceEl._jsvLkEl) {
+								// The source is a tag linkedElem (linkedElement: [..., "elemSelector", ...], which is updating
+								tcpTag.setValue(origVals[l], l, sourceEl._jsvElse);
+							}
+							if (target._cpfn) {
+								contextCb = linkCtx._ctxCb; // This is the exprOb for a computed property
+								exprOb = target;
+								target = linkCtx.data;
+								if (exprOb._cpCtx) { // Computed value for a contextual parameter
+									target = exprOb.data; // The data for the contextual view (where contextual param expression evaluated/assigned)
+									contextCb = exprOb._cpCtx; // Context callback for contextual view
+								}
+								while (exprOb && exprOb.sb) { // Step through chained computed values to leaf one...
+									target = contextCb(exprOb, target);
+									exprOb = exprOb.sb;
+								}
+							}
+							$observable(target).setProperty(to[1], sourceValue); // 2way binding change event - observably updating bound object
+						}
+					}
+				}
+			}
+			view.linkCtx = oldLinkCtx;
+		}
+	}
+	if (tag) {
+		tag._.chg = undefined; // Clear marker
+		return tag;
+	}
+}
+
+function onElemChange(ev) {
+	var bindId, val,
+		source = ev.target,
+		fromAttr = defaultAttr(source),
+		setter = fnSetters[fromAttr];
+
+	if (!source._jsvTr || ev.delegateTarget !== activeBody && ev.target.type !== "number" || ev.type === "input") {
+		// If this is an element using trigger, ignore event delegated (bubbled) to activeBody
+		val = $isFunction(fromAttr)
+			? fromAttr(source)
+			: (source = $(source), setter
+				? source[setter]()
+				: source.attr(fromAttr));
+
+		ev.target._jsvChg = 1; // // Set 'changing' marker to prevent linkedElem change event triggering its own refresh
+		rSplitBindings.lastIndex = 0; // Ensure starts at zero
+		while (bindId = rSplitBindings.exec(ev.target._jsvBnd)) {
+			// _jsvBnd is a string with the syntax: "&bindingId1&bindingId2"
+			updateValue(val, source._jsvInd, source._jsvElse, bindId[1], ev);
+		}
+		ev.target._jsvChg = undefined; // Clear marker
+	}
+}
+
+function onDataLinkedTagChange(ev, eventArgs) {
+	// Update or initial rendering of any tag (including {{:}}) whether inline or data-linked element.
+	var attr, sourceValue, noUpdate, forceUpdate, hasError, onError, bindEarly,
+		linkCtx = this,
+		linkFn = linkCtx.fn,
+		tag = linkCtx.tag,
+		source = linkCtx.data,
+		target = linkCtx.elem,
+		cvt = linkCtx.convert,
+		parentElem = target.parentNode,
+		view = linkCtx.view,
+		oldLinkCtx = view.linkCtx,
+		onEvent = eventArgs && changeHandler(view, onBeforeChangeStr, tag);
+
+	// Set linkCtx on view, dynamically, just during this handler call
+	view.linkCtx = linkCtx;
+	if (parentElem && (!onEvent || onEvent.call(tag || linkCtx, ev, eventArgs) !== false)
+			// If data changed, the ev.data is set to be the path. Use that to filter the handler action...
+			&& (!eventArgs || ev.data.prop === "*" || ev.data.prop === eventArgs.path)) {
+
+		if (eventArgs) {
+			linkCtx.eventArgs = eventArgs;
+		}
+		if (eventArgs || linkCtx._toLk) {
+			// If eventArgs are defined, this is a data update
+			// Otherwise this is the initial data-link rendering call. Bind on this the first time it gets called
+			linkCtx._toLk = 0; // Remove flag to skip unneccessary rebinding next time
+			if (linkFn._er) {
+				// data-link="exprUsingTagOrCvt with onerror=..." - e.g. {tag ... {cvt:... {:... convert='cvt'
+				try {
+					sourceValue = linkFn(source, view, $sub); // Compiled link expression
+					// For data-link="{:xxx}" with no cvt or cvtBk returns value. Otherwise returns tagCtxs
+				} catch (e) {
+					hasError = linkFn._er;
+					onError = onRenderError(e,view,(new Function("data,view", "return " + hasError + ";"))(source, view));
+					sourceValue = [{props: {}, args: [onError], tag: tag}];
+				}
+			} else {
+				sourceValue = linkFn(source, view, $sub); // Compiled link expression
+				// For data-link="{:xxx}" with no cvt or cvtBk returns value. Otherwise returns tagCtxs
+			}
+			// Compiled link expression for linkTag: return value for data-link="{:xxx}" with no cvt or cvtBk, otherwise tagCtx or tagCtxs
+			attr = tag && tag.attr || linkCtx.attr || defaultAttr(target, true, cvt !== undefined);
+			if (attr === VALUE && (tag && tag.parentElem || linkCtx.elem).type === CHECKBOX) {
+				attr = CHECKED;
+			}
+			// For {{: ...}} without a convert or convertBack, (tag and linkFn._tag undefined) we already have the sourceValue, and we are done
+			if (tag) {
+				// Existing tag instance
+				forceUpdate = hasError || tag._er;
+				// If the new tagCtxs hasError or the previous tagCtxs had error, then force update
+				sourceValue = sourceValue[0] ? sourceValue : [sourceValue];
+
+				// Tag will update unless tag.onUpdate is false or is a function which returns false
+				noUpdate = !forceUpdate && (tag.onUpdate === false || eventArgs && $isFunction(tag.onUpdate) && tag.onUpdate(ev, eventArgs, sourceValue) === false);
+
+				mergeCtxs(tag, sourceValue, forceUpdate); // Merge new tagCtxs (in sourceValue var) with current tagCtxs on tag instance
+
+				if (tag._.chg && (attr === HTML || attr === VALUE) || noUpdate || attr === NONE) {
+					// This is an update coming from the tag itself (linkedElem change), or else onUpdate returned false, or attr === "none"
+					callAfterLink(tag, ev, eventArgs);
+					if (!tag._.chg) {
+						// onUpdate returned false, or attr === "none" - so don't refresh the tag: we just use the new tagCtxs merged
+						// from the sourceValue (which may optionally have been modifed in onUpdate()...) and then bind, and we are done
+						observeAndBind(linkCtx, source, target);
+					}
+					view.linkCtx = oldLinkCtx;
+					if (eventArgs && (onEvent = changeHandler(view, onAfterChangeStr, tag))) {
+						onEvent.call(tag || linkCtx, ev, eventArgs);
+					}
+					return;
+				}
+
+				if (tag.onUnbind) {
+					tag.onUnbind(tag.tagCtx, linkCtx, tag.ctx, ev, eventArgs);
+				}
+
+				sourceValue = tag.tagName === ":" // Call convertVal if it is a {{cvt:...}} - otherwise call renderTag
+					? $sub._cnvt(tag.convert, view, sourceValue[0]) // convertVal()    // convertVal(converter, view, tagCtx, onError)
+					: $sub._tag(tag, view, view.tmpl, sourceValue, true, onError); // renderTag(tagName, parentView, tmpl, tagCtxs, isUpdate, onError)
+			} else if (linkFn._tag) {
+				// For {{: ...}} with either cvt or cvtBack we call convertVal to get the sourceValue and instantiate the tag
+				// If cvt is undefined then this is a tag, and we call renderTag to get the rendered content and instantiate the tag
+				cvt = cvt === "" ? TRUE : cvt; // If there is a cvtBack but no cvt, set cvt to "true"
+				sourceValue = cvt // Call convertVal if it is a {{cvt:...}} - otherwise call renderTag
+					? $sub._cnvt(cvt, view, sourceValue[0] || sourceValue)                 // convertVal(converter, view, tagCtx, onError)
+					: $sub._tag(linkFn._tag, view, view.tmpl, sourceValue, true, onError); // renderTag(tagName, parentView, tmpl, tagCtxs, isUpdate, onError)
+
+				addLinkMethods(tag = linkCtx.tag); // In both convertVal and renderTag we have instantiated a tag
+				attr = linkCtx.attr || attr; // linkCtx.attr may have been set to tag.attr during tag instantiation in renderTag
+			}
+			if (bindEarly = tag && !tag.inline && tag.template) {
+				// Data-linked tags with templated contents need to be data-linked before their contents, so that observable updates
+				// will trigger the parent tags before the child tags.
+				observeAndBind(linkCtx, source, target);
+			}
+			updateContent(sourceValue, linkCtx, attr, tag);
+			linkCtx._noUpd = 0; // For data-link="^{...}" remove _noUpd flag so updates on subsequent calls
+
+			if (tag) {
+				tag._er = hasError;
+				callAfterLink(tag, ev, eventArgs);
+			}
+		}
+
+		if (!bindEarly) {
+			observeAndBind(linkCtx, source, target);
+		}
+
+		if (eventArgs && (onEvent = changeHandler(view, onAfterChangeStr, tag))) {
+			onEvent.call(tag || linkCtx, ev, eventArgs);
+		}
+		// Remove dynamically added linkCtx from view
+		view.linkCtx = oldLinkCtx;
+	}
+}
+
+function setDefer(elem, value) {
+	elem._df = value; // Use both an expando and an attribute to track deferred tokens. Attribute is needed for querySelectorAll for getViewInfos (childTags)
+	elem[(value ? "set" : "remove") + "Attribute"](deferAttr, "");
+}
+
+function updateContent(sourceValue, linkCtx, attr, tag) {
+	// When called for a tag, either in tag.refresh() or onDataLinkedTagChange(), returns tag
+	// When called (in onDataLinkedTagChange) for target HTML returns true
+	// When called (in onDataLinkedTagChange) for other targets returns boolean for "changed"
+	var setter, prevNode, nextNode, late, nodesToRemove, useProp, tokens, id, openIndex, closeIndex, testElem, nodeName, cStyle, jsvSel,
+		renders = attr !== NONE && sourceValue !== undefined && !linkCtx._noUpd && !((attr === VALUE || attr === HTML) && (tag ? tag._.chg : linkCtx.elem._jsvChg)),
+		// For data-link="^{...}", don't update the first time (no initial render) - e.g. to leave server rendered values.
+		source = linkCtx.data,
+		target = tag && tag.parentElem || linkCtx.elem,
+		targetParent = target.parentNode,
+		$target = $(target),
+		view = linkCtx.view,
+		targetVal = linkCtx._val,
+		oldLinkCtx = view.linkCtx,
+		change = tag;
+
+	if (tag) {
+		// Initialize the tag with element references
+		tag._.unlinked = true; // Set to unlinked, so initialization is triggered after re-rendering, e.g. for setting linkedElem, and calling onBind
+		tag.parentElem = tag.parentElem || (linkCtx.expr || tag._elCnt) ? target : targetParent;
+		prevNode = tag._prv;
+		nextNode = tag._nxt;
+	}
+	if (!renders) {
+		linkCtx._val = sourceValue;
+		return;
+	}
+
+	if (attr === "visible") {
+		attr = "css-display";
+	}
+	if (/^css-/.test(attr)) {
+		if (linkCtx.attr === "visible") {
+			// Get the current display style
+			cStyle = (target.currentStyle || getComputedStyle.call(global, target, "")).display;
+
+			if (sourceValue) {
+				// We are showing the element.
+				// Get the cached 'visible' display value from the -jsvd expando
+				sourceValue = target._jsvd
+					// Or, if not yet cached, get the current display value
+					|| cStyle;
+				if (sourceValue === NONE && !(sourceValue = displayStyles[nodeName = target.nodeName])) {
+					// Currently display value is 'none', and the 'visible' style has not been cached.
+					// We create an element to find the correct 'visible' display style for this nodeName
+					testElem = document.createElement(nodeName);
+					document.body.appendChild(testElem);
+
+					// Get the default style for this HTML tag to use as 'visible' style
+					sourceValue
+						// and cache it as a hash against nodeName
+						= displayStyles[nodeName]
+						= (testElem.currentStyle || getComputedStyle.call(global, testElem, "")).display;
+					document.body.removeChild(testElem);
+				}
+			} else {
+				// We are hiding the element.
+				// Cache the current display value as 'visible' style, on _jsvd expando, for when we show the element again
+				target._jsvd = cStyle;
+				sourceValue = NONE; // Hide the element
+			}
+		}
+		if (change = change || targetVal !== sourceValue) {
+			$.style(target, attr.slice(4), sourceValue);
+		}
+	} else if (attr !== "link") { // attr === "link" is for tag controls which do data binding but have no rendered output or target
+		if (/^data-/.test(attr)) {
+			$.data(target, attr.slice(5), sourceValue); // Support for binding to data attributes: data-foo{:expr}: data-foo attribute will be
+			// expr.toString(), but $.data(element, "foo") and $(element).data("foo") will actually return value of expr, even if of type object
+		} else if (/^prop-/.test(attr)) {
+			useProp = true;
+			attr = attr.slice(5);
+		} else if (attr === CHECKED) {
+			useProp = true;
+			sourceValue = sourceValue && sourceValue !== "false";
+			// The string value "false" can occur with data-link="checked{attr:expr}" - as a result of attr, and hence using convertVal()
+			// We will set the "checked" property
+			// We will compare this with the current value
+		} else if (attr === RADIO) {
+			// This is a special binding attribute for radio buttons, which corresponds to the default 'to' binding.
+			// This allows binding both to value (for each input) and to the default checked radio button (for each input in named group,
+			// e.g. binding to parent data).
+			// Place value binding first: <input type="radio" data-link="value{:name} {:#get('data').data.currency:} " .../>
+			// or (allowing any order for the binding expressions):
+			// <input type="radio" value="{{:name}}" data-link="{:#get('data').data.currency:} value^{:name}" .../>
+			useProp = true;
+			attr = CHECKED;
+			sourceValue = target.value === sourceValue;
+			// If the data value corresponds to the value attribute of this radio button input, set the checked property to true
+			// Otherwise set the checked property to false
+		} else if (attr === "selected" || attr === "disabled" || attr === "multiple" || attr === "readonly") {
+			sourceValue = (sourceValue && sourceValue !== "false") ? attr : null;
+			// Use attr, not prop, so when the options (for example) are changed dynamically, but include the previously selected value,
+			// they will still be selected after the change
+		} else if (attr === VALUE && target.nodeName === "SELECT") {
+			target._jsvSel = $isArray(sourceValue)
+				? sourceValue
+				: "" + sourceValue; // If not array, coerce to string
+		}
+
+		if (setter = fnSetters[attr]) {
+			if (attr === HTML) {
+				// Set linkCtx on view, dynamically, just during this handler call
+				view.linkCtx = linkCtx;
+				if (tag && tag.inline) {
+					nodesToRemove = tag.nodes(true);
+					if (tag._elCnt) {
+						if (prevNode && prevNode !== nextNode) {
+							// This prevNode will be removed from the DOM, so transfer the view tokens on prevNode to nextNode of this 'viewToRefresh'
+							transferViewTokens(prevNode, nextNode, target, tag._tgId, "^", true);
+						} else if (tokens = target._df) { // This occurs when there is no nextNode, and so the target._df may include tokens referencing
+							// view and tag bindings contained within the open and close tokens of the updated tag control. They need to be processed (disposed)
+							id = tag._tgId + "^";
+							openIndex = tokens.indexOf("#" + id) + 1;
+							closeIndex = tokens.indexOf("/" + id);
+
+							if (openIndex && closeIndex > 0) {
+								openIndex += id.length;
+								if (closeIndex > openIndex) {
+									setDefer(target, tokens.slice(0, openIndex) + tokens.slice(closeIndex));
+									disposeTokens(tokens.slice(openIndex, closeIndex));
+								}
+							}
+						}
+						prevNode = prevNode
+							? prevNode.previousSibling
+							: nextNode
+								? nextNode.previousSibling
+								: target.lastChild;
+					}
+					// Remove HTML nodes
+					$(nodesToRemove).remove(); // Note if !tag._elCnt removing the nodesToRemove will process and dispose view and tag bindings contained within the updated tag control
+
+					// Insert and link new content
+					late = view.link(view.data, target, prevNode, nextNode, sourceValue, tag && {tag: tag._tgId});
+				} else {
+					// data-linked value targeting innerHTML: data-link="html{:expr}" or contenteditable="true"
+					renders = renders && targetVal !== sourceValue;
+					if (renders) {
+						$target.empty();
+						late = view.link(source, target, prevNode, nextNode, sourceValue, tag && {tag: tag._tgId});
+					}
+				}
+				// Remove dynamically added linkCtx and ctx from view
+				view.linkCtx = oldLinkCtx;
+			} else {
+				if (change = change || targetVal !== sourceValue) {
+					if (attr === "text" && target.children && !target.children[0]) {
+						// This code is faster then $target.text()
+						if (target.textContent !== undefined) {
+							target.textContent = sourceValue;
+						} else {
+							target.innerText = sourceValue === null ? "" : sourceValue;
+						}
+					} else {
+						$target[setter](sourceValue);
+					}
+				}
+				if ((jsvSel = targetParent._jsvSel)
+					// Setting value of <option> element
+					&& (attr === VALUE || !$target.attr(VALUE))) { // Setting value attribute, or setting textContent if attribute is null
+					// Set/unselect selection based on value set on parent <select>. Works for multiselect too
+					target.selected = $.inArray("" + sourceValue, $isArray(jsvSel) ? jsvSel : [jsvSel]) > -1;
+				}
+			}
+		} else if (change = change || targetVal !== sourceValue) {
+			// Setting an attribute to undefined should remove the attribute
+			$target[useProp ? "prop" : "attr"](attr, sourceValue === undefined && !useProp ? null : sourceValue);
+		}
+	}
+	linkCtx._val = sourceValue;
+	lateLink(late); // Do any deferred linking (lateRender)
+	return change;
+}
+
+function arrayChangeHandler(ev, eventArgs) {
+	var self = this,
+		onBeforeChange = changeHandler(self, onBeforeChangeStr, self.tag),
+		onAfterChange = changeHandler(self, onAfterChangeStr, self.tag);
+	if (!onBeforeChange || onBeforeChange.call(self, ev, eventArgs) !== false) {
+		if (eventArgs) {
+			// This is an observable action (not a trigger/handler call from pushValues, or similar, for which eventArgs will be null)
+			var action = eventArgs.change,
+				index = eventArgs.index,
+				items = eventArgs.items;
+			self._.srt = eventArgs.refresh; // true if part of a 'sort' on refresh
+			switch (action) {
+				case "insert":
+					self.addViews(index, items);
+					break;
+				case "remove":
+					self.removeViews(index, items.length);
+					break;
+				case "move":
+						self.moveViews(eventArgs.oldIndex, index, items.length);
+					break;
+				case "refresh":
+					self._.srt = undefined;
+					self.fixIndex(0);
+					// Other cases: (e.g.undefined, for setProperty on observable object) etc. do nothing
+			}
+		}
+		if (onAfterChange) {
+			onAfterChange.call(self, ev, eventArgs);
+		}
+	}
+}
+
+//=============================
+// Utilities for event handlers
+//=============================
+
+function setArrayChangeLink(view) {
+	// Add/remove arrayChange handler on view
+	var handler, arrayBinding,
+		type = view.type, // undefined if view is being removed
+		data = view.data,
+		bound = view._.bnd; // true for top-level link() or data-link="{for}", or the for tag instance for {^{for}} (or for any custom tag that has an onArrayChange handler)
+
+	if (!view._.useKey && bound) {
+		// This is an array view. (view._.useKey not defined => data is array), and is data-bound to collection change events
+
+		if (arrayBinding = view._.bndArr) {
+			// First remove the current handler if there is one
+			$([arrayBinding[1]]).off(arrayChangeStr, arrayBinding[0]);
+			view._.bndArr = undefined;
+		}
+		if (bound !== !!bound) {
+			// bound is not a boolean, so it is the data-linked tag that 'owns' this array binding - e.g. {^{for...}}
+			if (type) {
+				bound._.arrVws[view._.id] = view;
+			} else {
+				delete bound._.arrVws[view._.id]; // if view.type is undefined, view is being removed
+			}
+		} else if (type && data) {
+			// If this view is not being removed, but the data array has been replaced, then bind to the new data array
+			handler = function(ev) {
+				if (!(ev.data && ev.data.off)) {
+					// Skip if !!ev.data.off: - a handler that has already been removed (maybe was on handler collection at call time - then removed by another handler)
+					// If view.type is undefined, do nothing. (Corresponds to case where there is another handler on the same data whose
+					// effect was to remove this view, and which happened to precede this event in the trigger sequence. So although this
+					// event has been removed now, it is still called since already on the trigger sequence)
+					arrayChangeHandler.apply(view, arguments);
+				}
+			};
+			$([data]).on(arrayChangeStr, handler);
+			view._.bndArr = [handler, data];
+		}
+	}
+}
+
+function defaultAttr(elem, to, linkGetVal) {
+	// to: true - default attribute for setting data value on HTML element; false: default attribute for getting value from HTML element
+	// Merge in the default attribute bindings for this target element
+	var nodeName = elem.nodeName.toLowerCase(),
+		attr =
+			$subSettingsAdvanced._fe[nodeName] // get form element binding settings for input textarea select or optgroup
+			|| elem.contentEditable === TRUE && {to: HTML, from: HTML}; // Or if contentEditable set to "true" set attr to "html"
+	return attr
+		? (to
+			? ((nodeName === "input" && elem.type === RADIO) // For radio buttons, bind from value, but bind to 'radio' - special value.
+				? RADIO
+				: attr.to)
+			: attr.from)
+		: to
+			? linkGetVal ? "text" : HTML // Default innerText for data-link="a.b.c" or data-link="{:a.b.c}" (with or without converters)- otherwise innerHTML
+			: ""; // Default is not to bind from
+}
+
+//==============================
+// Rendering and DOM insertion
+//==============================
+
+function renderAndLink(view, index, tmpl, views, data, context, refresh) {
+	var html, linkToNode, prevView, nodesToRemove, bindId,
+		parentNode = view.parentElem,
+		prevNode = view._prv,
+		nextNode = view._nxt,
+		elCnt = view._elCnt;
+
+	if (prevNode && prevNode.parentNode !== parentNode) {
+		error("Missing parentNode");
+		// Abandon, since node has already been removed, or wrapper element has been inserted between prevNode and parentNode
+	}
+
+	if (refresh) {
+		nodesToRemove = view.nodes();
+		if (elCnt && prevNode && prevNode !== nextNode) {
+			// This prevNode will be removed from the DOM, so transfer the view tokens on prevNode to nextNode of this 'viewToRefresh'
+			transferViewTokens(prevNode, nextNode, parentNode, view._.id, "_", true);
+		}
+		// Remove child views
+		view.removeViews(undefined, undefined, true);
+		linkToNode = nextNode;
+
+		if (elCnt) {
+			prevNode = prevNode
+				? prevNode.previousSibling
+				: nextNode
+					? nextNode.previousSibling
+					: parentNode.lastChild;
+		}
+
+		// Remove HTML nodes
+		$(nodesToRemove).remove();
+
+		for (bindId in view._.bnds) {
+			// The view bindings may have already been removed above in: $(nodesToRemove).remove();
+			// If not, remove them here:
+			removeViewBinding(bindId);
+		}
+	} else {
+		// addViews. Only called if view is of type "array"
+		if (index) {
+			// index is a number, so indexed view in view array
+			prevView = views[index - 1];
+			if (!prevView) {
+				return false; // If subview for provided index does not exist, do nothing
+			}
+			prevNode = prevView._nxt;
+		}
+		if (elCnt) {
+			linkToNode = prevNode;
+			prevNode = linkToNode
+				? linkToNode.previousSibling         // There is a linkToNode, so insert after previousSibling, or at the beginning
+				: parentNode.lastChild;              // If no prevView and no prevNode, index is 0 and the container is empty,
+				// so prevNode = linkToNode = null. But if prevView._nxt is null then we set prevNode to parentNode.lastChild
+				// (which must be before the prevView) so we insert after that node - and only link the inserted nodes
+		} else {
+			linkToNode = prevNode.nextSibling;
+		}
+	}
+	html = tmpl.render(data, context, view._.useKey && refresh, view, refresh || index, true);
+	// Pass in view._.useKey as test for noIteration (which corresponds to when self._.useKey > 0 and self.data is an array)
+
+	// Link the new HTML nodes to the data
+	lateLink(view.link(data, parentNode, prevNode, linkToNode, html, prevView));
+}
+
+//=====================
+// addBindingMarkers
+//=====================
+
+function addBindingMarkers(value, view, tag) {
+	// Insert binding markers into the rendered template output, which will get converted to appropriate
+	// data-jsv attributes (element-only content) or script marker nodes (phrasing or flow content), in convertMarkers,
+	// within view.link, prior to inserting into the DOM. Linking will then bind based on these markers in the DOM.
+	// Added view markers: #m_...VIEW.../m_
+	// Added tag markers: #m^...TAG..../m^
+	var id, end;
+	if (tag) {
+		// This is a binding marker for a data-linked tag {^{...}}
+		end = "^`";
+		addLinkMethods(tag); // This is {^{>...}} or {^{tag ...}}, {{cvt:...} or {^{:...}}, and tag was defined in convertVal or renderTag
+		id = tag._tgId;
+		if (!id) {
+			bindingStore[id = bindingKey++] = tag; // Store the tag temporarily, ready for databinding.
+			// During linking, in addDataBinding, the tag will be attached to the linkCtx,
+			// and then in observeAndBind, bindingStore[bindId] will be replaced by binding info.
+			tag._tgId = "" + id;
+		}
+	} else {
+		// This is a binding marker for a view
+		// Add the view to the store of current linked views
+		end = "_`";
+		viewStore[id = view._.id] = view;
+	}
+	// Example: "#23^TheValue/23^"
+	return "#" + id + end
+		+ (value != undefined ? value : "") // For {^{:name}} this gives the equivalent semantics to compiled
+											// (v=data.name)!=null?v:""; used in {{:name}} or data-link="name"
+		+ "/" + id + end;
+}
+
+//==============================
+// Data-linking and data binding
+//==============================
+
+//---------------
+// observeAndBind
+//---------------
+
+function observeAndBind(linkCtx, source, target) {
+	var binding, l, k, linkedElem, exprFnDeps, exprOb, prop, propDeps, depends, tagDepends, bindId, linkedElems,
+		tag = linkCtx.tag,
+		cvtBk = linkCtx.convertBack,
+		handler = linkCtx._hdl;
+	source = typeof source === "object" && source; // If not an object set to false
+
+	if (tag) {
+		// Use the 'depends' paths set on linkCtx.tag, or on the converter
+		// - which may have been set on declaration or in events: init, render, onAfterLink etc.
+		if (depends = tag.convert) {
+			depends = depends === TRUE ? tag.tagCtx.props.convert : depends;
+			depends = linkCtx.view.getRsc("converters", depends) || depends;
+			depends = depends && depends.depends;
+			depends = depends && $sub._dp(depends, source, handler); // dependsPaths
+		}
+		if (tagDepends = tag.depends) {
+			tagDepends = $sub._dp(tagDepends, tag, handler);
+			depends = depends ? depends.concat(tagDepends) : tagDepends;
+		}
+		linkedElems = tag.linkedElems;
+	}
+	depends = depends || [];
+	if (!linkCtx._depends || ("" + linkCtx._depends !== "" + depends)) {
+		// Only bind the first time, or if the new depends (toString) has changed from when last bound
+
+		exprFnDeps = linkCtx.fn.deps.slice(); // Make a copy of the dependency paths for the compiled linkCtx expression - to pass to observe(). In getInnerCb(),
+		// (and whenever the object is updated, in innerCb), we will set exprOb.ob to the current object returned by that computed expression, for this view.
+
+		if (linkCtx._depends) {
+			bindId = linkCtx._depends.bdId;
+			// Unobserve previous binding
+			$observable._apply(1, [source], exprFnDeps, linkCtx._depends, handler, linkCtx._ctxCb, true);
+		}
+
+		if (tag && tag.boundProps) {
+			// Add dependency paths for declared boundProps (so no need to write ^myprop=... to get binding) and for linkedProp too if there is one
+			l = tag.boundProps.length;
+			while (l--) {
+				prop = tag.boundProps[l];
+				k = tag._.bnd.paths.length;
+				while (k--) {
+					propDeps = tag._.bnd.paths[k][prop];
+					if (propDeps && propDeps.skp) { // Not already a bound prop ^prop=expression;
+						exprFnDeps = exprFnDeps.concat(propDeps); // Add dependencies for this prop expression
+					}
+				}
+			}
+		}
+
+		l = exprFnDeps.length;
+		while (l--) {
+			exprOb = exprFnDeps[l];
+			if (exprOb._cpfn) {
+				// This path is an 'exprOb', corresponding to a computed property returning an object. We replace the exprOb by
+				// a view-binding-specific exprOb instance. The current object will be stored as exprOb.ob.
+				exprFnDeps[l] = $extend({}, exprOb);
+			}
+		}
+		binding = $observable._apply(
+			1,
+			[source],
+			exprFnDeps, // flatten the paths - to gather all the dependencies across args and bound params
+			depends,
+			handler,
+			linkCtx._ctxCb);
+		// The binding returned by $observe has a bnd array with the source objects of the individual bindings.
+
+		if (!bindId) {
+			bindId = linkCtx._bndId || "" + bindingKey++;
+			linkCtx._bndId = undefined;
+			// Store the binding key on the view and on the element, for disposal when the view is removed
+			target._jsvBnd = (target._jsvBnd || "") + "&" + bindId;
+			linkCtx.view._.bnds[bindId] = bindId;
+		}
+
+		binding.elem = target; // The target of all the individual bindings
+		binding.linkCtx = linkCtx;
+		binding._tgId = bindId;
+
+		depends.bdId = bindId;
+		linkCtx._depends = depends;
+		// Store the binding.
+		bindingStore[bindId] = binding; // Note: If this corresponds to a data-linked tag, we are replacing the
+		// temporarily stored tag by the stored binding. The tag will now be at binding.linkCtx.tag
+
+		if (linkedElems || cvtBk !== undefined || tag && (tag.bindTo || tag.linkedElement || tag.linkedCtxParam)) {
+			defineBindToDataTargets(binding, tag, cvtBk);
+		}
+		if (linkedElems) {
+			l = linkedElems.length;
+			while (l--) {
+				linkedElem = linkedElems[l];
+				k = linkedElem && linkedElem.length;
+				while (k--) {
+					linkedElem[k]._jsvLkEl = tag;
+					bindLinkedElChange(tag, linkedElem[k]);
+					linkedElem[k]._jsvBnd = "&" + bindId + "+"; // Add a "+" for cloned binding - so removing
+					// elems with cloned bindings will not remove the 'parent' binding from the bindingStore.
+				}
+			}
+		} else if (cvtBk !== undefined) {
+			bindLinkedElChange(tag, target);
+		}
+
+		if (tag) {
+			if (!tag.flow && !tag.inline) {
+				target.setAttribute(jsvAttrStr, (target.getAttribute(jsvAttrStr)||"") + "#" + bindId + "^/" + bindId + "^");
+				tag._tgId = "" + bindId;
+			}
+		}
+	}
+}
+
+//-------
+// $.link
+//-------
+
+function lateLink(late) {
+	// Do any deferred linking (lateRender)
+	var lnkCtx;
+	if (late) {
+		while (lnkCtx = late.pop()) {
+			lnkCtx._hdl();
+		}
+	}
+}
+
+function tmplLink(to, from, context, noIteration, parentView, prevNode, nextNode) {
+	return $link(this, to, from, context, noIteration, parentView, prevNode, nextNode);
+}
+
+function $link(tmplOrLinkExpr, to, from, context, noIteration, parentView, prevNode, nextNode) {
+	// When linking from a template, prevNode and nextNode parameters are ignored
+	if (context === true) {
+		noIteration = context; // passing boolean as third param - noIteration
+		context = undefined;
+	} else if (typeof context !== "object") {
+		context = undefined; // context must be a boolean (noIteration) or a plain object
+	} else {
+		context = $extend({}, context);
+	}
+	if (tmplOrLinkExpr && to) {
+		to = to.jquery ? to : $(to); // to is a jquery object or an element or selector
+
+		if (!activeBody) {
+			activeBody = document.body;
+			useInput = "oninput" in activeBody;
+			$(activeBody)
+				.on(elementChangeStr, onElemChange)
+				.on('blur.jsv', '[contenteditable]', onElemChange);
+		}
+
+		var i, k, html, vwInfos, view, placeholderParent, targetEl, refresh, topLevelCall, late,
+			onRender = addBindingMarkers,
+			replaceMode = context && context.target === "replace",
+			l = to.length;
+
+		while (l--) { // iterate over 'to' targets. (Usually one, but can be multiple)
+			targetEl = to[l];
+
+			parentView = parentView || $view(targetEl);
+			if (topLevelCall = parentView === topView) {
+				topView.data = (topView.ctx = context || {}).root = from;
+			}
+			if ("" + tmplOrLinkExpr === tmplOrLinkExpr) {
+				// tmplOrLinkExpr is a string: treat as data-link expression.
+				addDataBinding(late = [], tmplOrLinkExpr, targetEl, parentView, undefined, true, from, context);
+			} else {
+				if (tmplOrLinkExpr.markup !== undefined) {
+					// This is a call to template.link()
+					if (replaceMode) {
+						placeholderParent = targetEl.parentNode;
+					}
+					parentView._.scp = true; // Set scope flag on parentView for link() call - used to set view.isTop for outermost view of created linked content
+					html = tmplOrLinkExpr.render(from, context, noIteration, parentView, undefined, onRender, true);
+					parentView._.scp = undefined;
+					// TODO Consider finding a way to bind data (link) within template without html being different for each view, the HTML can
+					// be evaluated once outside the while (l--), and pushed into a document fragment, then cloned and inserted at each target.
+
+					if (placeholderParent) {
+						// This is target="replace" mode
+						prevNode = targetEl.previousSibling;
+						nextNode = targetEl.nextSibling;
+						$.cleanData([targetEl], true);
+						placeholderParent.removeChild(targetEl);
+
+						targetEl = placeholderParent;
+					} else {
+						prevNode = nextNode = undefined; // When linking from a template, prevNode and nextNode parameters are ignored
+						$(targetEl).empty();
+					}
+				} else if (tmplOrLinkExpr === true && parentView === topView) {
+					// $.link(true, selector, data, ctx) - where selector points to elem in top-level content. (If not top-level content, no-op)
+					refresh = {lnk: 1};
+				} else {
+					break; // no-op - $.link(true, selector, data, ctx) targeting within previously linked rendered template
+				}
+
+// TODO Consider deferred linking API feature on per-template basis - {@{ instead of {^{ which allows the user to see the rendered content
+// before that content is linked, with better perceived perf. Have view.link return a deferred, and pass that to onAfterLink...
+// or something along those lines.
+// setTimeout(function() {
+
+				if (targetEl._df && !nextNode) {
+					// We are inserting new content and the target element has some deferred binding annotations,and there is no nextNode.
+					// Those views may be stale views (that will be recreated in this new linking action) so we will first remove them
+					// (if not already removed).
+					vwInfos = viewInfos(targetEl._df, true, rOpenViewMarkers);
+
+					for (i = 0, k = vwInfos.length; i < k; i++) {
+						view = vwInfos[i];
+						if ((view = viewStore[view.id]) && view.data !== undefined) {
+							// If this is the _prv (prevNode) for a view, remove the view
+							// - unless view.data is undefined, in which case it is already being removed
+							view.parent.removeViews(view._.key, undefined, true);
+						}
+					}
+					setDefer(targetEl); // remove defer tokens
+				}
+
+				// Link the content of the element, since this is a call to template.link(), or to $(el).link(true, ...),
+				late = parentView.link(from, targetEl, prevNode, nextNode, html, refresh, context);
+//});
+			}
+			lateLink(late); // Do any deferred linking (lateRender)
+		}
+	}
+	return to; // Allow chaining, to attach event handlers, etc.
+}
+
+//----------
+// view.link
+//----------
+
+function viewLink(outerData, parentNode, prevNode, nextNode, html, refresh, context, validateOnly) {
+	// Optionally insert HTML into DOM using documentFragments (and wrapping HTML appropriately).
+	// Data-link existing contents of parentNode, or the inserted HTML, if provided
+
+	// Depending on the content model for the HTML elements, the standard data-linking markers inserted in the HTML by addBindingMarkers during
+	// template rendering will be converted either to script marker nodes or, for element-only content sections, to data-jsv element annotations.
+
+	// Data-linking will then add _prv and _nxt to views, where:
+	//     _prv: References the previous node (script element of type "jsv123"), or (for elCnt=true), the first element node in the view (or if none, set _prv = _nxt)
+	//     _nxt: References the last node (script element of type "jsv/123"), or (for elCnt=true), the next element node after the view.
+
+	//==== nested functions ====
+	function convertMarkers(all, preceding, selfClose, closeTag, spaceBefore, id, boundId, spaceAfter, tag1, tag2, closeTag2, spaceAfterClose, selfClose2, endOpenTag) {
+		// rConvertMarkers = /(^|(\/>)|<\/(\w+)>|)(\s*)([#\/]\d+(?:_|(\^)))`(\s*)(<\w+(?=[\s\/>]))?|\s*(?:(<\w+(?=[\s\/>]))|<\/(\w+)>(\s*)|(\/>)\s*|(>))/g,
+		//                 prec, slfCl, clsTag,  spBefore, id,      bndId  spAfter,tag1,                   tag2,               clTag2,sac  slfCl2, endOpenTag
+		// Convert the markers that were included by addBindingMarkers in template output, to appropriate DOM annotations:
+		// data-jsv attributes (for element-only content) or script marker nodes (within phrasing or flow content).
+
+// TODO consider detecting 'quoted' contexts (attribute strings) so that attribute encoding does not need to encode >
+// Currently rAttrEncode = /[><"'&]/g includes '>' encoding in order to avoid erroneous parsing of <span title="&lt;a/>"></span>">
+		var errorMsg, bndId,
+			endOfElCnt = "";
+		if (endOpenTag) {
+			inTag = 0;
+			return all;
+		}
+		tag = tag1 || tag2 || "";
+		closeTag = closeTag || closeTag2;
+		selfClose = selfClose || selfClose2;
+		if (isVoid && !selfClose && (!all || closeTag || tag || id && !inTag)) { // !all = end of string
+			isVoid = undefined;
+			parentTag = tagStack.shift(); // preceding tag was a void element, with no closing slash, such as <br>.
+		}
+		closeTag = closeTag || selfClose;
+		if (closeTag) {
+			inTag = 0;
+			isVoid = undefined;
+			// TODO: smart insertion of <tbody> - to be completed for robust insertion of deferred bindings etc.
+			//if (closeTag === "table" && parentTag === "tbody") {
+			//	preceding = "</tbody>" + preceding;
+			//	parentTag = "table";
+			//	tagStack.shift();
+			//}
+			if (validate) {
+				if (selfClose || selfClose2) {
+					if (!voidElems[parentTag] && !/;svg;|;math;/.test(";" + tagStack.join(";") + ";")) {
+						// Only self-closing elements must be legitimate void elements, such as <br/>, per HTML schema,
+						// or under svg or math foreign namespace elements.
+						errorMsg = "'<" + parentTag + ".../";
+					}
+				} else if (voidElems[closeTag]) {
+					errorMsg = "'</" + closeTag; // closing tag such as </input>
+				} else if (!tagStack.length || closeTag !== parentTag) {
+					errorMsg = "Mismatch: '</" + closeTag;
+				}
+				if (errorMsg) {
+					syntaxError(errorMsg + ">' in:\n" + html);
+				}
+			}
+			prevElCnt = elCnt;
+			parentTag = tagStack.shift();
+			elCnt = elContent[parentTag];
+			closeTag2 = closeTag2 ? ("</" + closeTag2 + ">") : "";
+			if (prevElCnt) {
+				// If there are ids (markers since the last tag), move them to the defer string
+				defer += ids;
+				ids = "";
+				if (!elCnt) {
+					endOfElCnt = closeTag2 + openScript + "@" + defer + closeScript + (spaceAfterClose || "");
+					defer = deferStack.shift();
+				} else {
+					defer += "-"; // Will be used for stepping back through deferred tokens
+				}
+			}
+		}
+		if (elCnt) {
+			// elContent maps tagNames which have only element content, so may not support script nodes.
+			// We are in element-only content, can remove white space, and use data-jsv attributes on elements as markers
+			// Example: <tr data-jsv="/2_#6_"> - close marker for view 2 and open marker for view 6
+
+			if (id) {
+				// append marker for this id, to ids string
+				ids += id;
+			} else {
+				preceding = (closeTag2 || selfClose2 || "");
+			}
+			if (tag) {
+				// TODO: smart insertion of <tbody> - to be completed for robust insertion of deferred bindings etc.
+				//if (tag === "<tr" && parentTag === "table") {
+				//	tagStack.unshift(parentTag);
+				//	parentTag = "tbody";
+				//	preceding += "<" + parentTag + ">";
+				//	if (defer) {
+				//		defer += "+"; // Will be used for stepping back through deferred tokens
+				//	}
+				//	// TODO: move this to design-time validation check
+				//	//	error('"' + parentTag + '" has incorrect parent tag');
+				//}
+				preceding += tag;
+				if (ids) {
+					preceding += ' ' + jsvAttrStr + '="' + ids + '"';
+					ids = "";
+				}
+			}
+		} else {
+			// We are in phrasing or flow content, so use script marker nodes
+			// Example: <script type="jsv3/"></script> - data-linked tag, close marker
+			// We validate with inTag so no script markers are inserted in attribute context e.g. for:
+			// "<table {{if ...}}...{{/if}}... >" or "<table {{if ...}}...> ...{{/if}}..."
+			preceding = id
+				? (preceding + endOfElCnt + spaceBefore + (inTag ? "" : openScript + id + closeScript)+ spaceAfter + tag)
+				: endOfElCnt || all;
+		}
+
+		if (validate && boundId) {
+			if (inTag) {
+				// JsViews data-linking tags are not allowed within element markup.
+				// See jsviews/issues/303
+				syntaxError('{^{ within elem markup (' + inTag + ' ). Use data-link="..."');
+			}
+			if (id.charAt(0) === "#") {
+				tagStack.unshift(id.slice(1));
+			} else if (id.slice(1) !== (bndId = tagStack.shift())) {
+				// See jsviews/issues/213
+				syntaxError('Closing tag for {^{...}} under different elem: <' + bndId + '>');
+			}
+		}
+		if (tag) {
+			inTag = tag;
+			// If there are ids (markers since the last tag), move them to the defer string
+			tagStack.unshift(parentTag);
+			parentTag = tag.slice(1);
+			if (validate && tagStack[0] && tagStack[0] === badParent[parentTag]) {
+				// Missing <tbody>
+				// TODO: replace this by smart insertion of <tbody> tags
+				error('Parent of <tr> must be <tbody>');
+			}
+			isVoid = voidElems[parentTag];
+			if ((elCnt = elContent[parentTag]) && !prevElCnt) {
+				deferStack.unshift(defer);
+				defer = "";
+			}
+			prevElCnt = elCnt;
+//TODO Consider providing validation which throws if you place <span> as child of <tr>, etc. - since if not caught,
+//this can cause errors subsequently which are difficult to debug.
+//				if (elContent[tagStack[0]]>2 && !elCnt) {
+//					error(parentTag + " in " + tagStack[0]);
+//				}
+			if (defer && elCnt) {
+				defer += "+"; // Will be used for stepping back through deferred tokens
+			}
+		}
+		return preceding;
+	}
+
+	function processViewInfos(vwInfos, targetParent) {
+		// If targetParent, we are processing viewInfos (which may include navigation through '+-' paths) and hooking up to the right parentElem etc.
+		// (and elem may also be defined - the next node)
+		// If no targetParent, then we are processing viewInfos on newly inserted content
+		var deferPath, deferChar, bindChar, parentElem, id, onAftCr, deep,
+			addedBindEls = [];
+
+		// In elCnt context (element-only content model), prevNode is the first node after the open, nextNode is the first node after the close.
+		// If both are null/undefined, then open and close are at end of parent content, so the view is empty, and its placeholder is the
+		// 'lastChild' of the parentNode. If there is a prevNode, then it is either the first node in the view, or the view is empty and
+		// its placeholder is the 'previousSibling' of the prevNode, which is also the nextNode.
+		if (vwInfos) {
+			if (vwInfos._tkns.charAt(0) === "@") {
+				// We are processing newly inserted content. This is a special script element that was created in convertMarkers() to process deferred bindings,
+				// and inserted following the target parent element - because no element tags (outside elCnt) were encountered to carry those binding tokens.
+				// We will step back from the preceding sibling of this element, looking at targetParent elements until we find the one that the current binding
+				// token belongs to. Set elem to null (the special script element), and remove it from the DOM.
+				targetParent = elem.previousSibling;
+				elem.parentNode.removeChild(elem);
+				elem = undefined;
+			}
+			len = vwInfos.length;
+			while (len--) {
+				vwInfo = vwInfos[len];
+//if (prevIds.indexOf(vwInfo.token) < 0) { // This token is a newly created view or tag binding
+				bindChar = vwInfo.ch;
+				if (deferPath = vwInfo.path) {
+					// We have a 'deferred path'
+					j = deferPath.length - 1;
+					while (deferChar = deferPath.charAt(j--)) {
+						// Use the "+" and"-" characters to navigate the path back to the original parent node where the deferred bindings ocurred
+						if (deferChar === "+") {
+							if (deferPath.charAt(j) === "-") {
+								j--;
+								targetParent = targetParent.previousSibling;
+							} else {
+								targetParent = targetParent.parentNode;
+							}
+						} else {
+							targetParent = targetParent.lastChild;
+						}
+						// Note: Can use previousSibling and lastChild, not previousElementSibling and lastElementChild,
+						// since we have removed white space within elCnt. Hence support IE < 9
+					}
+				}
+				if (bindChar === "^") {
+					if (tag = bindingStore[id = vwInfo.id]) {
+						// The binding may have been deleted, for example in a different handler to an array collectionChange event
+						// This is a tag binding
+						deep = targetParent && (!elem || elem.parentNode !== targetParent); // We are stepping back looking for the right targetParent,
+						// or we are linking existing content and this element is in elCnt, not an immediate child of the targetParent.
+						if (!elem || deep) {
+							tag.parentElem = targetParent;
+						}
+						if (vwInfo.elCnt && deep) {
+							// With element only content, if there is no following element, or if the binding is deeper than the following element
+							// then we need to set the open or close token as a deferred binding annotation on the parent
+							setDefer(targetParent, (vwInfo.open ? "#" : "/") + id + bindChar + (targetParent._df || ""));
+						}
+						// This is an open or close marker for a data-linked tag {^{...}}. Add it to bindEls.
+						addedBindEls.push([deep ? null : elem, vwInfo]);
+					}
+				} else if (view = viewStore[id = vwInfo.id]) {
+					// The view may have been deleted, for example in a different handler to an array collectionChange event
+					if (!view.parentElem) {
+						// If view is not already extended for JsViews, extend and initialize the view object created in JsRender, as a JsViews view
+						view.parentElem = targetParent || elem && elem.parentNode || parentNode;
+						view._.onRender = addBindingMarkers;
+						view._.onArrayChange = arrayChangeHandler;
+						setArrayChangeLink(view);
+					}
+					parentElem = view.parentElem;
+					if (vwInfo.open) {
+						// This is an 'open view' node (preceding script marker node,
+						// or if elCnt, the first element in the view, with a data-jsv annotation) for binding
+						view._elCnt = vwInfo.elCnt;
+						if (targetParent && !elem) {
+							setDefer(targetParent, "#" + id + bindChar + (targetParent._df || ""));
+						} else {
+							// No targetParent, so there is a ._nxt elem (and this is processing tokens on the elem)
+							if (!view._prv) {
+								setDefer(parentElem, removeSubStr(parentElem._df, "#" + id + bindChar));
+							}
+							view._prv = elem;
+						}
+					} else {
+						// This is a 'close view' marker node for binding
+						if (targetParent && (!elem || elem.parentNode !== targetParent)) {
+							// There is no ._nxt so add token to _df. It is deferred.
+							setDefer(targetParent, "/" + id + bindChar + (targetParent._df || ""));
+							view._nxt = undefined;
+						} else if (elem) {
+							// This view did not have a ._nxt, but has one now, so token may be in _df, and must be removed. (No longer deferred)
+							if (!view._nxt) {
+								setDefer(parentElem, removeSubStr(parentElem._df, "/" + id + bindChar));
+							}
+							view._nxt = elem;
+						}
+						if (onAftCr = view.ctx && view.ctx[onAfterCreateStr] || onAfterCreate) {
+							onAftCr.call(view.ctx.tag, view);
+						}
+					}
+//}
+				}
+			}
+			len = addedBindEls.length;
+			while (len--) {
+				// These were added in reverse order to addedBindEls. We push them in BindEls in the correct order.
+				bindEls.push(addedBindEls[len]);
+			}
+		}
+		return !vwInfos || vwInfos.elCnt;
+	}
+
+	function getViewInfos(vwInfos) {
+		// Used by view.childTags() and tag.childTags()
+		// Similar to processViewInfos in how it steps through bindings to find tags. Only finds data-linked tags.
+		var level, parentTag, named;
+
+		if (vwInfos) {
+			len = vwInfos.length;
+			for (j = 0; j < len; j++) {
+				vwInfo = vwInfos[j];
+				// This is an open marker for a data-linked tag {^{...}}, within the content of the tag whose id is get.id. Add it to bindEls.
+				// Note - if bindingStore[vwInfo.id]._is === "tag" then getViewInfos is being called too soon - during first linking pass
+				tag = bindingStore[vwInfo.id];
+				if (!tag._is && tag.linkCtx) {
+					parentTag = tag = tag.linkCtx.tag;
+					named = tag.tagName === tagName;
+					if (!tag.flow || named) {
+						if (!deep) {
+							level = 1;
+							while (parentTag = parentTag.parent) {
+								level++;
+							}
+							tagDepth = tagDepth || level; // The level of the first tag encountered.
+						}
+						if ((deep || level === tagDepth) && (!tagName || named)) {
+							// Filter on top-level or tagName as appropriate
+							tags.push(tag);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	function dataLink() {
+		//================ Data-link and fixup of data-jsv annotations ================
+		var j, index,
+			tokens = "",
+			wrap = {},
+			selector = linkViewsSel + (get ? ",[" + deferAttr + "]" : "");
+			// If a childTags() call, get = ",[" + deferAttr + "]" - since we need to include elements that have a ._df expando for deferred tokens
+
+		elems = qsa ? parentNode.querySelectorAll(selector) : $(selector, parentNode).get();
+		l = elems.length;
+
+		// The prevNode will be in the returned query, since we called markPrevOrNextNode() on it.
+		// But it may have contained nodes that satisfy the selector also.
+		if (prevNode && prevNode.innerHTML) {
+			// Find the last contained node of prevNode, to use as the prevNode - so we only link subsequent elems in the query
+			prevNodes = qsa ? prevNode.querySelectorAll(selector) : $(selector, prevNode).get();
+			prevNode = prevNodes.length ? prevNodes[prevNodes.length - 1] : prevNode;
+		}
+
+		tagDepth = 0;
+		for (i = 0; i < l; i++) {
+			elem = elems[i];
+			if (prevNode && !found) {
+				// If prevNode is set, not false, skip linking. If this element is the prevNode, set to false so subsequent elements will link.
+				found = (elem === prevNode);
+			} else if (nextNode && elem === nextNode) {
+				// If nextNode is set then break when we get to nextNode
+				if (get) {
+					tokens += markerNodeInfo(elem);
+				}
+				break;
+			} else if (elem.parentNode) {
+				// elem has not been removed from DOM
+				if (get) {
+					tokens += markerNodeInfo(elem);
+					if (elem._df) {
+						j = i + 1;
+						while (j < l && elem.contains(elems[j])) {
+							j++;
+						}
+						// Add deferred tokens after any tokens on descendant elements of this one
+						wrap[j-1] = elem._df;
+					}
+					if (wrap[i]) {
+						tokens += wrap[i] || "";
+					}
+				} else {
+					if (isLink && (vwInfo = viewInfos(elem, undefined, rViewMarkers)) && (vwInfo = vwInfo[0])) {
+						// If this is a link(trueOrString ...) call we will avoid re-binding to elems that are within template-rendered views
+						skip = skip ? (vwInfo.id !== skip && skip) : vwInfo.open && vwInfo.id;
+					}
+					if (!skip && processInfos(viewInfos(elem))
+						// If a link() call, processViewInfos() adds bindings to bindEls, and returns true for non-script nodes, for adding data-link bindings
+						// If a childTags() call, getViewInfos returns array of tag bindings.
+							&& elem.getAttribute($viewsLinkAttr)) {
+						bindEls.push([elem]); // A data-linked element so add to bindEls too
+					}
+				}
+			}
+		}
+
+		if (get) {
+			tokens += parentNode._df || "";
+			if (index = tokens.indexOf("#" + get.id) + 1) {
+				// We are looking for view.childTags() or tag.childTags() - so start after the open token of the parent view or tag.
+				tokens = tokens.slice(index + get.id.length);
+			}
+			index = tokens.indexOf("/" + get.id);
+			if (index + 1) {
+				// We are looking for view.childTags() or tag.childTags() - so don't look beyond the close token of the parent view or tag.
+				tokens = tokens.slice(0, index);
+			}
+			// Call getViewInfos to add the found childTags to the tags array
+			getViewInfos(viewInfos(tokens, undefined, rOpenTagMarkers));
+		}
+
+		if (html === undefined && parentNode.getAttribute($viewsLinkAttr)) {
+			bindEls.push([parentNode]); // Support data-linking top-level element directly (not within a data-linked container)
+		}
+
+		// Remove temporary marker script nodes they were added by markPrevOrNextNode
+		unmarkPrevOrNextNode(prevNode, elCnt);
+		unmarkPrevOrNextNode(nextNode, elCnt);
+
+		if (get) {
+			return; // We have added childTags to the tags array, so we are done
+		}
+
+		if (elCnt && defer + ids) {
+			// There are some views with elCnt, for which the open or close did not precede any HTML tag - so they have not been processed yet
+			elem = nextNode;
+			if (defer) {
+				if (nextNode) {
+					processViewInfos(viewInfos(defer + "+", true), nextNode);
+				} else {
+					processViewInfos(viewInfos(defer, true), parentNode);
+				}
+			}
+			processViewInfos(viewInfos(ids, true), parentNode);
+			// If there were any tokens on nextNode which have now been associated with inserted HTML tags, remove them from nextNode
+			if (nextNode) {
+				tokens = nextNode.getAttribute(jsvAttrStr);
+				if (l = tokens.indexOf(prevIds) + 1) {
+					tokens = tokens.slice(l + prevIds.length - 1);
+				}
+				nextNode.setAttribute(jsvAttrStr, ids + tokens);
+			}
+		}
+
+// if (context.lazyLink) {
+// setTimeout(doLinking) (doLinking is function wrapper of following lines)
+// See Future tasks, and https://github.com/BorisMoore/jsviews/issues/368.
+// Could call context.lazyLink as callback, on async completion - or return promise.
+		//================ Bind the data-linked elements and tags ================
+		l = bindEls.length;
+		for (i = 0; i < l; i++) {
+			elem = bindEls[i];
+			linkInfo = elem[1];
+			elem = elem[0];
+			if (linkInfo) {
+				if (tag = bindingStore[linkInfo.id]) {
+					if (linkCtx = tag.linkCtx) {
+						// The tag may have been stored temporarily on the bindingStore - or may have already been replaced by the actual binding
+						tag = linkCtx.tag;
+						tag.linkCtx = linkCtx;
+					}
+					if (linkInfo.open) {
+						// This is an 'open linked tag' binding annotation for a data-linked tag {^{...}}
+						if (elem) {
+							tag.parentElem = elem.parentNode;
+							tag._prv = elem;
+						}
+						tag._elCnt = linkInfo.elCnt;
+						// We data-link depth-first ("on the way in"), which is better for perf - and allows setting parent tags etc.
+						view = tag.tagCtx.view;
+
+						// Add data binding (unless skipped due to lateRender)
+						addDataBinding(late, undefined, tag._prv, view, linkInfo.id);
+					} else {
+						tag._nxt = elem;
+						if (tag._.unlinked && !tag._toLk) {
+							// This is a 'close linked tag' binding annotation (and data-binding was not skipped due to lateRender)
+							tagCtx = tag.tagCtx;
+							view = tagCtx.view;
+							callAfterLink(tag);
+						}
+					}
+				}
+			} else {
+				// Add data binding for a data-linked element (with data-link attribute)
+				addDataBinding(late, elem.getAttribute($viewsLinkAttr), elem, $view(elem), undefined, isLink, outerData, context);
+			}
+		}
+//});
+	}
+	//==== /end of nested functions ====
+
+	var inTag, linkCtx, tag, i, l, j, len, elems, elem, view, vwInfo, linkInfo, prevNodes, token, prevView, nextView,
+		node, tags, deep, tagName, tagCtx, validate, tagDepth, depth, fragment, copiedNode, firstTag, parentTag,
+		isVoid, wrapper, div, tokens, elCnt, prevElCnt, htmlTag, ids, prevIds, found, skip, isLink, get,
+		self = this,
+		thisId = self._.id + "_",
+		defer = "",
+		// The marker ids for which no tag was encountered (empty views or final closing markers) which we carry over to container tag
+		bindEls = [],
+		tagStack = [],
+		deferStack = [],
+		late = [],
+		onAfterCreate = changeHandler(self, onAfterCreateStr),
+		processInfos = processViewInfos;
+
+	if (refresh) {
+		if (refresh.tmpl) {
+			// refresh is the prevView, passed in from addViews()
+			prevView = "/" + refresh._.id + "_";
+		} else {
+			isLink = refresh.lnk; // Top-level linking
+			if (refresh.tag) {
+				thisId = refresh.tag + "^";
+				refresh = true;
+			}
+			if (get = refresh.get) {
+				processInfos = getViewInfos;
+				tags = get.tags;
+				deep = get.deep;
+				tagName = get.name;
+			}
+		}
+		refresh = refresh === true;
+	}
+
+	parentNode = parentNode
+		? ("" + parentNode === parentNode
+			? $(parentNode)[0]  // It is a string, so treat as selector
+			: parentNode.jquery
+				? parentNode[0]   // A jQuery object - take first element.
+				: parentNode)
+		: (self.parentElem    // view.link()
+			|| document.body);  // link(null, data) to link the whole document
+
+	validate = !$subSettingsAdvanced.noValidate && parentNode.contentEditable !== TRUE;
+	parentTag = parentNode.tagName.toLowerCase();
+	elCnt = !!elContent[parentTag];
+
+	prevNode = prevNode && markPrevOrNextNode(prevNode, elCnt);
+	nextNode = nextNode && markPrevOrNextNode(nextNode, elCnt) || null;
+
+	if (html != undefined) {
+		//================ Insert html into DOM using documentFragments (and wrapping HTML appropriately). ================
+		// Also convert markers to DOM annotations, based on content model.
+		// Corresponds to nextNode ? $(nextNode).before(html) : $(parentNode).html(html);
+		// but allows insertion to wrap correctly even with inserted script nodes. jQuery version will fail e.g. under tbody or select.
+		// This version should also be slightly faster
+		div = document.createElement("div");
+		wrapper = div;
+		prevIds = ids = "";
+		htmlTag = parentNode.namespaceURI === "http://www.w3.org/2000/svg" ? "svg_ns" : (firstTag = rFirstElem.exec(html)) && firstTag[1] || "";
+		if (elCnt) {
+			// Now look for following view, and find its tokens, or if not found, get the parentNode._df tokens
+			node = nextNode;
+			while (node && !(nextView = viewInfos(node))) {
+				node = node.nextSibling;
+			}
+			if (tokens = nextView ? nextView._tkns : parentNode._df) {
+				token = prevView || "";
+				if (refresh || !prevView) {
+					token += "#" + thisId;
+				}
+				j = tokens.indexOf(token);
+				if (j + 1) {
+					j += token.length;
+					// Transfer the initial tokens to inserted nodes, by setting them as the ids variable, picked up in convertMarkers
+					prevIds = ids = tokens.slice(0, j);
+					tokens = tokens.slice(j);
+					if (nextView) {
+						node.setAttribute(jsvAttrStr, tokens);
+					} else {
+						setDefer(parentNode, tokens);
+					}
+				}
+			}
+		}
+
+		//================ Convert the markers to DOM annotations, based on content model. ================
+//			oldElCnt = elCnt;
+		isVoid = undefined;
+		html = ("" + html).replace(rConvertMarkers, convertMarkers);
+//			if (!!oldElCnt !== !!elCnt) {
+//				error("Parse: " + html); // Parse error. Content not well-formed?
+//			}
+		if (validate && tagStack.length) {
+			syntaxError("Mismatched '<" + parentTag + "...>' in:\n" + html); // Unmatched tag
+		}
+		if (validateOnly) {
+			return;
+		}
+		// Append wrapper element to doc fragment
+		safeFragment.appendChild(div);
+
+		// Go to html and back, then peel off extra wrappers
+		// Corresponds to jQuery $(nextNode).before(html) or $(parentNode).html(html);
+		// but supports svg elements, and other features missing from jQuery version (and this version should also be slightly faster)
+		htmlTag = wrapMap[htmlTag] || wrapMap.div;
+		depth = htmlTag[0];
+		wrapper.innerHTML = htmlTag[1] + html + htmlTag[2];
+		while (depth--) {
+			wrapper = wrapper.lastChild;
+		}
+		safeFragment.removeChild(div);
+		fragment = document.createDocumentFragment();
+		while (copiedNode = wrapper.firstChild) {
+			fragment.appendChild(copiedNode);
+		}
+		// Insert into the DOM
+		parentNode.insertBefore(fragment, nextNode);
+	}
+	dataLink();
+
+	return late;
+}
+
+function addDataBinding(late, linkMarkup, node, currentView, boundTagId, isLink, data, context) {
+	// Add data binding for data-linked elements or {^{...}} data-linked tags
+	var tmpl, tokens, attr, convertBack, tagExpr, linkFn, linkCtx, tag, rTagIndex, hasElse, lastIndex,
+		linkExpressions = [];
+
+	if (boundTagId) {
+		// boundTagId is a string for {^{...}} data-linked tag. So only one linkTag in linkMarkup
+		// data and context arguments are undefined
+		tag = bindingStore[boundTagId];
+		tag = tag.linkCtx ? tag.linkCtx.tag : tag;
+
+		linkCtx = tag.linkCtx || {
+			type: "inline",
+			data: currentView.data,                   // source
+			elem: tag._elCnt ? tag.parentElem : node, // target
+			view: currentView,
+			ctx: currentView.ctx,
+			attr: HTML, // Script marker nodes are associated with {^{ and always target HTML.
+			fn: tag._.bnd,
+			tag: tag,
+			// Pass the boundTagId in the linkCtx, so that it can be picked up in observeAndBind
+			_bndId: boundTagId
+		};
+		tag.linkCtx = linkCtx;
+		bindDataLinkTarget(linkCtx, late);
+		tag._toLk = linkCtx._bndId; // If data binding happened, remove _toLk flag from tag
+	} else if (linkMarkup && node) {
+		// Data-linked element
+
+		// If isLink then this is a top-level linking: .link(expression, target, data, ....) or
+		// .link(true, target, data, ....) scenario - and data and context are passed in separately from the view
+		data = isLink ? data : currentView.data;
+
+		// Compiled linkFn expressions could be stored in the tmpl.links array of the template
+		// TODO - consider also caching globally so that if {{:foo}} or data-link="foo" occurs in different places,
+		// the compiled template for this is cached and only compiled once...
+		//links = currentView.links || currentView.tmpl.links;
+
+		tmpl = currentView.tmpl;
+
+//			if (!(linkTags = links[linkMarkup])) {
+		// This is the first time this view template has been linked, so we compile the data-link expressions, and store them on the template.
+
+		linkMarkup = normalizeLinkTag(linkMarkup, defaultAttr(node));
+		lastIndex = rTagDatalink.lastIndex = 0;
+		while (tokens = rTagDatalink.exec(linkMarkup)) { // TODO require } to be followed by whitespace or $, and remove the \}(!\}) option.
+			linkExpressions.push(tokens);
+			lastIndex = rTagDatalink.lastIndex;
+		}
+		if (lastIndex < linkMarkup.length) {
+			syntaxError(linkMarkup);
+		}
+		while (tokens = linkExpressions.shift()) {
+			// Iterate over the data-link expressions, for different target attrs,
+			// e.g. <input data-link="{:firstName:} title{>~description(firstName, lastName)}"
+			// tokens: [all, attr, bindOnly, tagExpr, tagName, converter, colon, html, comment, code, params]
+			rTagIndex = rTagDatalink.lastIndex;
+			attr = tokens[1];
+			tagExpr = tokens[3];
+			while (linkExpressions[0] && linkExpressions[0][4] === "else") { // If this is {sometag...} and is followed by an {else...} add to tagExpr
+				tagExpr += delimCloseChar1 + delimOpenChar0 + linkExpressions.shift()[3];
+				hasElse = true;
+			}
+			if (hasElse) { // If an {else} has been added, need also to add closing {{/sometag}}
+				tagExpr += delimCloseChar1 + delimOpenChar0 + delimOpenChar1 + "/" + tokens[4] + delimCloseChar0;
+			}
+			linkCtx = {
+				type: isLink ? "top" : "link",
+				data: data, // source
+				elem: node, // target
+				view: currentView,
+				ctx: context,
+				attr: attr,
+				isLk: isLink, // top-level linking?
+				_toLk : 1, // Flag to data-link on initial data-link call rendering call
+				_noUpd : tokens[2] // Flag for data-link="^{...}" so on initial data-link call will bind, but not render)
+			};
+
+			convertBack = undefined;
+			if (tokens[6]) {
+				convertBack = tokens[10] || undefined;
+				linkCtx.convert = tokens[5] || "";
+				if (convertBack !== undefined && defaultAttr(node)) {
+					if (attr) {
+						syntaxError(tagExpr + "- Remove target: " + attr);
+					}
+					// Default target, so allow 2 way binding
+					linkCtx.convertBack = convertBack = convertBack.slice(1);
+				}
+			}
+			// Compile the linkFn expression which evaluates and binds a data-link expression
+			// TODO - optimize for the case of simple data path with no conversion, helpers, etc.:
+			//     i.e. data-link="a.b.c". Avoid creating new instances of Function every time. Can use a default function for all of these...
+
+			linkCtx.expr = attr + tagExpr;
+			linkFn = tmpl.links[tagExpr];
+			if (!linkFn) {
+				tmpl.links[tagExpr] = linkFn = $sub.tmplFn(tagExpr, tmpl, true, convertBack, hasElse);
+			}
+			linkCtx.fn = linkFn;
+			bindDataLinkTarget(linkCtx, late);
+			// We store rTagIndex in local scope, since this addDataBinding method can sometimes be called recursively,
+			// and each is using the same rTagDatalink instance.
+			rTagDatalink.lastIndex = rTagIndex;
+		}
+//		}
+	}
+}
+
+function bindDataLinkTarget(linkCtx, late) {
+	// Add data link bindings for a link expression in data-link attribute markup
+	function handler(ev, eventArgs) {
+		onDataLinkedTagChange.call(linkCtx, ev, eventArgs);
+		// If the link expression uses a custom tag, the onDataLinkedTagChange call will call renderTag, which will set tagCtx on linkCtx
+	}
+	if (linkCtx.isLk) {
+		// Top-level linking: .link(expressionOrTrue, data, context) - so we need to create a view for the linking, with the data and ctx
+		// which may be different than the current context of the target. Note that this view is not a standard data-linked view, so it will
+		// be disposed only when its parent view is disposed.
+		linkCtx.view = new $sub.View(
+			$sub.extendCtx(linkCtx.ctx, linkCtx.view.ctx),
+			"link", linkCtx.view, linkCtx.data, linkCtx.expr, undefined, addBindingMarkers);
+	}
+	linkCtx._ctxCb = $sub._gccb(linkCtx.view); // getContextCallback: _ctxCb, for filtering/appending to dependency paths: function(path, object) { return [(object|path)*]}
+	linkCtx._hdl = handler;
+	// handler._ctx = linkCtx; Could pass linkCtx for use in a depends = function() {} call, so depends is different for different linkCtx's
+	if (linkCtx.fn._lr) {
+		linkCtx._toLk = 1;
+		late.push(linkCtx); // lateRender - defer rendering and linking (sync but after first linking pass)
+	} else {
+		handler(true);
+	}
+}
+
+//=====================
+// Data-linking helpers
+//=====================
+
+function removeSubStr(str, substr) {
+	var k;
+	return str
+		? (k = str.indexOf(substr),
+			(k + 1
+				? str.slice(0, k) + str.slice(k + substr.length)
+				: str))
+		: "";
+}
+
+function markerNodeInfo(node) {
+	return node &&
+		("" + node === node
+			? node
+			: node.tagName === SCRIPT
+				? node.type.slice(3)
+				: node.nodeType === 1 && node.getAttribute(jsvAttrStr) || "");
+}
+
+function viewInfos(node, isVal, rBinding) {
+	// Test whether node is a script marker node, and if so, return metadata
+	function getInfos(all, open, close, id, ch, elPath) {
+		infos.push({
+			elCnt: elCnt,
+			id: id,
+			ch: ch,
+			open: open,
+			close: close,
+			path: elPath,
+			token: all
+		});
+	}
+	var elCnt, tokens,
+		infos = [];
+	if (tokens = isVal ? node : markerNodeInfo(node)) {
+		elCnt = infos.elCnt = node.tagName !== SCRIPT;
+		elCnt = tokens.charAt(0) === "@" || elCnt;
+		infos._tkns = tokens;
+		// rMarkerTokens = /(?:(#)|(\/))(\d+)([_^])([-+@\d]+)?/g;
+		tokens.replace(rBinding || rMarkerTokens, getInfos);
+		return infos;
+	}
+}
+
+function unmarkPrevOrNextNode(node, elCnt) {
+	if (node) {
+		if (node.type === "jsv") {
+			node.parentNode.removeChild(node);
+		} else if (elCnt && node.getAttribute($viewsLinkAttr) === "") {
+			node.removeAttribute($viewsLinkAttr);
+		}
+	}
+}
+
+function markPrevOrNextNode(node, elCnt) {
+	var marker = node;
+	while (elCnt && marker && marker.nodeType !== 1) {
+		marker = marker.previousSibling;
+	}
+	if (marker) {
+		if (marker.nodeType !== 1) {
+			// For text nodes, we will add a script node before
+			marker = document.createElement(SCRIPT);
+			marker.type = "jsv";
+			node.parentNode.insertBefore(marker, node);
+		} else if (!markerNodeInfo(marker) && !marker.getAttribute($viewsLinkAttr)) {
+			// For element nodes, we will add a data-link attribute (unless there is already one)
+			// so that this node gets included in the node linking process.
+			marker.setAttribute($viewsLinkAttr, "");
+		}
+	}
+	return marker;
+}
+
+function normalizeLinkTag(linkMarkup, twoway) {
+	linkMarkup = $.trim(linkMarkup).replace(rEscapeQuotes, "\\$&");
+	return linkMarkup.slice(-1) !== delimCloseChar0
+	// If simplified syntax is used: data-link="expression", convert to data-link="{:expression}",
+	// or for inputs, data-link="{:expression:}" for (default) two-way binding
+		? linkMarkup = delimOpenChar1 + ":" + linkMarkup + (twoway ? ":" : "") + delimCloseChar0
+		: linkMarkup;
+}
+
+//===========================
+// Methods for views and tags
+//===========================
+
+function callAfterLink(tag, ev, eventArgs) {
+	function copyFromTagCtxToTag() {
+		linkedElems = tagCtx.linkedElems || tag.linkedElems || tag.linkedElem && [tag.linkedElem];
+		if (linkedElems) {
+			tag.linkedElems = tagCtx.linkedElems = linkedElems;
+			tag.linkedElem = linkedElems[0] = tag.linkedElem || linkedElems[0];
+		}
+		if (linkedElem = tagCtx.mainElem || tag.mainElem) {
+			tagCtx.mainElem = tag.mainElem = linkedElem;
+		}
+		if (linkedElem = tagCtx.displayElem || tag.displayElem) {
+			tagCtx.displayElem = tag.displayElem = linkedElem;
+		}
+	}
+
+	var linkedElems, linkedElements, linkedElem, l, m, $linkCtxElem, linkCtxElem, tagCtxElse, props, val, oldVal,
+		tagCtx = tag.tagCtx,
+		tagCtxs = tag.tagCtxs,
+		tagCtxslength = tagCtxs && tagCtxs.length,
+		linkCtx = tag.linkCtx,
+		bindTo = tag.bindTo || {};
+
+	if (tag._.unlinked) { // First call to onAfterLink, or first call after onUpdate: updateContent. Initialize and call onBind and set properties
+		$linkCtxElem = $(linkCtx.elem);
+		if (tag.linkedElement || tag.mainElement || tag.displayElement) {
+			if (linkedElements = tag.linkedElement) {
+				// tag.linkedElement: - selector, or array of selectors, for identifying linked elements in template/rendered content.
+				// (But for tag bindings on data-linked elements, defaults to data-linked element)
+				tag.linkedElem = undefined;
+				l = linkedElements.length;
+				while (l--) {
+					if (linkedElements[l]) {
+						m = tagCtxslength;
+						while (m--) {
+							linkCtxElem = !m && !tag.inline && $linkCtxElem.filter(linkedElements[l]);
+							tagCtxElse = tagCtxs[m];
+							linkedElems = tagCtxElse.linkedElems = tagCtxElse.linkedElems || new Array(l);
+							linkedElem = linkCtxElem[0] ? linkCtxElem : tagCtxElse.contents(true, linkedElements[l]);
+							if (linkedElem[0] && linkedElem[0].type !== RADIO) {
+								linkedElems[l] = linkedElem.eq(0);
+							}
+						}
+					}
+				}
+			}
+			if (linkedElements = tag.mainElement) {
+				// tag.mainElement: - selector for identifying mainElem in template/rendered content
+				// (But for tag bindings on data-linked elements, defaults to data-linked element)
+				m = tagCtxslength;
+				while (m--) {
+					linkCtxElem = !m && !tag.inline && $linkCtxElem.filter(linkedElements);
+					tagCtxElse = tagCtxs[m];
+					linkedElem = linkCtxElem[0] ? linkCtxElem : tagCtxElse.contents(true, linkedElements).eq(0);
+					if (linkedElem[0]) {
+						tagCtxElse.mainElem = linkedElem;
+					}
+				}
+			}
+			if (linkedElements = tag.displayElement) {
+				// tag.mainElement: - selector for identifying mainElem in template/rendered content
+				// (But for tag bindings on data-linked elements, defaults to data-linked element)
+				m = tagCtxslength;
+				while (m--) {
+					linkCtxElem = !m && !tag.inline && $linkCtxElem.filter(linkedElements);
+					tagCtxElse = tagCtxs[m];
+					linkedElem = linkCtxElem[0] ? linkCtxElem : tagCtxElse.contents(true, linkedElements).eq(0);
+					if (linkedElem[0]) {
+						tagCtxElse.displayElem = linkedElem;
+						if (!m) {
+							tag.displayElem = linkedElem;
+						}
+					}
+				}
+			}
+			copyFromTagCtxToTag();
+		}
+		if (tag.onBind) {
+			tag.onBind(tagCtx, linkCtx, tag.ctx, ev, eventArgs);
+			copyFromTagCtxToTag();
+		}
+	}
+
+	m = tagCtxslength;
+	while (m--) {
+		tagCtxElse = tagCtxs[m];
+		props = tagCtxElse.props;
+
+		if (linkedElem = tagCtxElse.mainElem || !tag.mainElement && tagCtxElse.linkedElems && tagCtxElse.linkedElems[0]) {
+			// linkedElem is the mainElem (defaulting to linkedElem)
+			if (linkedElem[0] && props.id && !linkedElem[0].id) {
+				linkedElem[0].id = props.id;
+			}
+			if (tag.setSize) {
+				if (val = !bindTo.height && props.height || tag.height) {
+					linkedElem.height(val);
+				}
+				if (val = !bindTo.width && props.width || tag.width) {
+					linkedElem.width(val);
+				}
+			}
+		}
+
+		if (val = (linkedElem = tagCtxElse.displayElem || linkedElem) && (!bindTo["class"] && props["class"] || tag.className)) {
+			// This code supports dynamic binding to class - where it adds the class if absent, and removes/adds if a previous value is present
+			oldVal = linkedElem[0]._jsvCl;
+			if (val !== oldVal) {
+				if (linkedElem.hasClass(oldVal)) {
+					linkedElem.removeClass(oldVal);
+				}
+				linkedElem.addClass(val);
+				linkedElem[0]._jsvCl = val;
+			}
+		}
+	}
+
+	if (tag.onAfterLink) {
+		tag.onAfterLink(tagCtx, linkCtx, tag.ctx, ev, eventArgs);
+		copyFromTagCtxToTag();
+	}
+
+	if (!tag.flow && !tag._.chg) {
+		if (tag.inline && tag._.unlinked && (tag.linkedElems || bindTo)) {
+			defineBindToDataTargets(bindingStore[tag._tgId], tag);
+		}
+		tag.setValue();
+	}
+	tag._.unlinked = undefined;
+}
+
+function asyncOnElemChange(ev) {
+	var which = ev.which;
+	if (!(which > 15 && which < 21 || which > 32 && which < 41 || which > 111 && which < 131 || which === 27 || which === 144)) {
+		// Shift, Ctrl, Alt, Pause, Caplock, Page up/down End, Home, Left, Up, Right, Down, Function keys, Escape, Numlock
+		setTimeout(function() {
+			onElemChange(ev);
+		});
+	}
+}
+
+function bindTriggerEvent($elem, trig, onoff) {
+	// Bind keydown, or other trigger - (rather than use the default change event bubbled to activeBody)
+	if (trig === true && useInput) {
+		$elem[onoff]("input.jsv", onElemChange); // For HTML5 browser with "oninput" support - for mouse editing of text
+	} else {
+		trig = "" + trig === trig ? trig : "keydown.jsv"; // Set trigger to (true || truey non-string (e.g. 1) || 'keydown')
+		$elem[onoff](trig, trig.indexOf("keydown") >= 0 ? asyncOnElemChange : onElemChange); // Get 'keydown' with async
+	}
+}
+
+function bindLinkedElChange(tag, linkedElem) {
+	// Two-way binding for linkedElem - in the case of input, textarea or contentEditable elements.
+	// Trigger setting may have changed. Unbind previous trigger binding (if any) and bind new one.
+
+	var $linkedElem, newTrig,
+		oldTrig = linkedElem._jsvTr || false;
+
+	if (tag) {
+		newTrig = tag.tagCtx.props.trigger;
+		if (newTrig === undefined) {
+			newTrig = tag.trigger;
+		}
+	}
+	if (newTrig === undefined) {
+		newTrig = $subSettings.trigger;
+	}
+	// Trigger is noop except for text box, textarea, contenteditable...
+	newTrig = newTrig && (linkedElem.tagName === "INPUT" && linkedElem.type !== CHECKBOX && linkedElem.type !== RADIO
+		|| linkedElem.type === "textarea" || linkedElem.contentEditable === TRUE) && newTrig || false;
+
+	if (oldTrig !== newTrig) {
+		$linkedElem = $(linkedElem);
+		bindTriggerEvent($linkedElem, oldTrig, "off");
+		bindTriggerEvent($linkedElem, linkedElem._jsvTr = newTrig, "on");
+	}
+}
+
+function defineBindToDataTargets(binding, tag, cvtBk) {
+	// Two-way binding.
+	// We set the binding.to[1] to be the cvtBack, and binding.to[0] to be either the path to the target, or [object, path] where the target is the
+	// path on the provided object. So for a computed path with an object call: a.b.getObject().d.e, we set to[0] to be [exprOb, "d.e"], and
+	// we bind to the path on the returned object, exprOb.ob, as target. Otherwise our target is the first path, paths[0], which we will convert
+	// with contextCb() for paths like ~a.b.c or #x.y.z
+
+	var pathIndex, path, lastPath, bindtoOb, to, bindTo, paths, k, l, obsCtxPrm, linkedCtxParam, contextCb, targetPaths, bindTos,
+		tagElse = 1,
+		tos = [],
+		linkCtx = binding.linkCtx,
+		source = linkCtx.data,
+		targetPathsElses = linkCtx.fn.paths;
+
+	if (binding && !binding.to) {
+		if (tag) {
+			tag.convertBack = tag.convertBack || cvtBk;
+			bindTo = tag.bindTo;
+			tagElse = tag.tagCtxs ? tag.tagCtxs.length : 1;
+		}
+		while (tagElse--) {
+			bindTos = [];
+			if (targetPaths = targetPathsElses[tagElse]) {
+				bindTo = targetPaths._jsvto ? ["_jsvto"] : (bindTo || [0]);
+				k = bindTo.length;
+				while (k--) {
+					path = "";
+					contextCb = linkCtx._ctxCb;
+					paths = targetPaths[bindTo[k]];
+					if (pathIndex = paths && paths.length) {
+						lastPath = paths[pathIndex - 1];
+						if (lastPath._cpfn) { // Computed property exprOb
+
+							bindtoOb = lastPath;
+							while (lastPath.sb && lastPath.sb._cpfn) {
+								path = lastPath = lastPath.sb;
+							}
+							path = lastPath.sb || path && path.path;
+							lastPath = path ? path.slice(1) : bindtoOb.path;
+						}
+						to = path
+							? [bindtoOb, // 'exprOb' for this expression and view-binding. So bindtoOb.ob is current object returned by expression.
+									lastPath]
+							: resolveDataTargetPath(lastPath, source, contextCb); // Get 'to' for target path: lastPath
+					} else {
+						// Contextual parameter ~foo with no external binding - has ctx.foo = [{_ocp: xxx}] and binds to ctx.foo._ocp
+						linkedCtxParam = tag.linkedCtxParam;
+						to = [];
+						if (linkedCtxParam && linkedCtxParam[k]) {
+							// This is a tag binding, with linked tag contextual parameters
+							to = [tag.tagCtxs[tagElse].ctx[linkedCtxParam[k]][0], _ocp];
+						}
+					}
+					if ((obsCtxPrm = to._cxp) && obsCtxPrm.tag && lastPath.indexOf(".")<0) {
+						// This is a binding for a tag contextual parameter (e.g. <input data-link="~wd"/> within a tag block content
+						to = obsCtxPrm;
+					}
+					bindTos.unshift(to);
+				}
+			}
+			tos.unshift(bindTos);
+		}
+		binding.to = tos;
+	}
+}
+
+function resolveDataTargetPath(targetPath, source, contextCb) {
+	// Iteratively process targetPath, resolving ~a.b.c paths for contextual parameters
+	var path, bindtoOb, to, l, obsCtxPrm, view, topCp, data;
+
+	while (targetPath && targetPath !== _ocp && (to = contextCb(path = targetPath.split("^").join("."), source)) && (l = to.length)) {
+		if (obsCtxPrm = to[0]._cxp) { // Two-way binding to a contextual parameter reference, ~foo (declared as ~foo=expr on a parent tag)
+			topCp = topCp || obsCtxPrm;
+			view = to[0][0];
+			if (_ocp in view) {
+				data = view;
+				view = view._vw;
+			} else {
+				data = view.data;
+			}
+			topCp.path = targetPath = to[0][1];
+			to = [topCp.data = data, targetPath];
+				contextCb = $sub._gccb(view);
+				if (targetPath._cpfn) { // computed property
+					bindtoOb = targetPath;
+					bindtoOb.data = to[0];
+					bindtoOb._cpCtx = contextCb;
+					while (targetPath.sb && targetPath.sb._cpfn) {
+						path = targetPath = targetPath.sb;
+					}
+					path = targetPath.sb || path && path.path;
+					targetPath = path ? path.slice(1) : bindtoOb.path;
+					to = [
+						bindtoOb, // 'exprOb' for this expression and view-binding. So bindtoOb.ob is current object returned by expression.
+						targetPath
+					];
+				} else if (obsCtxPrm.tag && obsCtxPrm.path === _ocp) {
+					to = obsCtxPrm;
+				}
+		} else { // Two-way binding to a helper - e.g. ~address.street, or computed, e.g. ~fullName(), or view property e.g. #data.foo
+			to = l>2
+				? [to[l-3], to[l-2]] // With path: [object, path]
+				: [to[l-2]];         // No path, (e.g. [function] for computed with setter)
+		}
+		source = to[0];
+		targetPath = to[1];
+	}
+	to = to || [source, path];
+	to._cxp = topCp;
+	return to;
+}
+
+function mergeCtxs(tag, newCtxs, replace) { // Merge updated tagCtxs into tag.tagCtxs
+	var tagCtx, newTagCtx,
+		view = tag.tagCtx.view,
+		tagCtxs = tag.tagCtxs || [tag.tagCtx],
+		l = tagCtxs.length,
+		refresh = !newCtxs;
+
+	newCtxs = newCtxs || tag._.bnd.call(view.tmpl, (tag.linkCtx || view).data, view, $sub);
+
+	if (replace) {
+		// Replace previous tagCtxs by new ones, rather than merging
+		tagCtxs = tag.tagCtxs = newCtxs;
+		tag.tagCtx = tagCtxs[0];
+		addLinkMethods(tag);
+	} else {
+		while (l--) {
+			tagCtx = tagCtxs[l];
+			newTagCtx = newCtxs[l];
+			$observable(tagCtx.props).setProperty(newTagCtx.props);
+			$extend(tagCtx.ctx, newTagCtx.ctx); // We don't support propagating ctx variables, ~foo, observably, to nested views. So extend, not setProperty...
+			tagCtx.args = newTagCtx.args;
+			if (refresh) {
+				tagCtx.tmpl = newTagCtx.tmpl;
+			}
+		}
+	}
+	$sub._ths(tag, tagCtxs[0]); // tagHandlersFromProps
+	return tagCtxs;
+}
+
+//=========
+// Disposal
+//=========
+
+function clean(elems) {
+	// Remove data-link bindings, or contained views
+	var l, elem, bindings,
+		elemArray = [],
+		len = elems.length,
+		i = len;
+	while (i--) {
+		// Copy into an array, so that deletion of nodes from DOM will not cause our 'i' counter to get shifted
+		// (Note: This seems as fast or faster than elemArray = [].slice.call(elems); ...)
+		elemArray.push(elems[i]);
+	}
+	i = len;
+	while (i--) {
+		elem = elemArray[i];
+		if (elem.parentNode) {
+			// Has not already been removed from the DOM
+			if (bindings = elem._jsvBnd) {
+				// Get propertyChange bindings for this element
+				// This may be an element with data-link, or the opening script marker node for a data-linked tag {^{...}}
+				// bindings is a string with the syntax: "(&bindingId)*"
+				bindings = bindings.slice(1).split("&");
+				elem._jsvBnd = "";
+				l = bindings.length;
+				while (l--) {
+					// Remove associated bindings
+					removeViewBinding(bindings[l], elem._jsvLkEl, elem); // unbind bindings with this bindingId on this view
+				}
+			}
+			disposeTokens(markerNodeInfo(elem) + (elem._df || ""), elem);
+		}
+	}
+}
+
+function removeViewBinding(bindId, linkedElemTag, elem) {
+	// Unbind
+	var objId, linkCtx, tag, object, obsId, tagCtxs, l, map, linkedElem, trigger, view, tagCtx, linkedElems, allLinkedElems,
+		binding = bindingStore[bindId];
+
+	if (linkedElemTag) {
+		elem._jsvLkEl = undefined;
+	} else if (binding && (!elem || elem === binding.elem)) { // Test that elem is actually binding.elem, since cloned elements can have inappropriate markerNode info
+		delete bindingStore[bindId]; // Delete already, so call to onDispose handler below cannot trigger recursive deletion (through recursive call to jQuery cleanData)
+		for (objId in binding.bnd) {
+			object = binding.bnd[objId];
+			obsId = binding.cbId;
+			if ($isArray(object)) {
+				$([object]).off(arrayChangeStr + obsId).off(propertyChangeStr + obsId); // There may be either or both of arrayChange and propertyChange
+			} else {
+				$(object).off(propertyChangeStr + obsId);
+			}
+			delete binding.bnd[objId];
+		}
+
+		if (linkCtx = binding.linkCtx) {
+			if (tag = linkCtx.tag) {
+				if (tagCtxs = tag.tagCtxs) {
+					l = tagCtxs.length;
+					while (l--) {
+						tagCtx = tagCtxs[l];
+						if (map = tagCtx.map) {
+							map.unmap(); //unobserve
+						}
+						// Copy linkedElems in case tag.linkedElem or tag.linkedElems are undefined in onUnbind
+						if (linkedElems = tagCtx.linkedElems) {
+							allLinkedElems = (allLinkedElems || []).concat(linkedElems);
+						}
+					}
+				}
+
+				if (tag.onUnbind) {
+					tag.onUnbind(tag.tagCtx, linkCtx, tag.ctx, true);
+				}
+				if (tag.onDispose) {
+					tag.onDispose();
+				}
+
+				if (!tag._elCnt) {
+					if (tag._prv) {
+						tag._prv.parentNode.removeChild(tag._prv);
+					}
+					if (tag._nxt) {
+						tag._nxt.parentNode.removeChild(tag._nxt);
+					}
+				}
+			}
+
+			linkedElems = allLinkedElems || [$(linkCtx.elem)];
+			l = linkedElems.length;
+			while (l--) {
+				linkedElem = linkedElems[l];
+				if (trigger = linkedElem && linkedElem[0] && linkedElem[0]._jsvTr) {
+					bindTriggerEvent(linkedElem, trigger, "off");
+					linkedElem[0]._jsvTr = undefined;
+				}
+			}
+
+			view = linkCtx.view;
+			if (view.type === "link") {
+				view.parent.removeViews(view._.key, undefined, true); // A "link" view is associated with the binding, so should be disposed with binding.
+			} else {
+				delete view._.bnds[bindId];
+			}
+		}
+		delete cbBindingsStore[binding.cbId];
+	}
+}
+
+function $unlink(to) {
+	if (to) {
+		to = to.jquery ? to : $(to);
+		to.each(function() {
+			var innerView;
+			//TODO fix this for better perf. Rather that calling inner view multiple times which does querySelectorAll each time, consider a single querySelectorAll
+			// or simply call view.removeViews() on the top-level views under the target 'to' node, then clean(...)
+			while ((innerView = $view(this, true)) && innerView.parent) {
+				innerView.parent.removeViews(innerView._.key, undefined, true);
+			}
+			clean(this.getElementsByTagName("*"));
+		});
+		clean(to);
+	} else {
+		// Call to $.unlink() is equivalent to $.unlink(true, "body")
+		if (activeBody) {
+			$(activeBody)
+				.off(elementChangeStr, onElemChange)
+				.off('blur.jsv', '[contenteditable]', onElemChange);
+			activeBody = undefined;
+		}
+		topView.removeViews();
+		clean(document.body.getElementsByTagName("*"));
+	}
+}
+
+//========
+// Helpers
+//========
+
+function inputAttrib(elem) {
+	return elem.type === CHECKBOX ? elem[CHECKED] : elem.value;
+}
+
+function changeHandler(view, name, tag) {
+	// Get onBeforeChange, onAfterChange, onAfterCreate handler - if there is one;
+	return tag && tag[name] || view.ctx[name] && view.ctxPrm(name) || $views.helpers[name];
+}
+
+//========================== Initialize ==========================
+
+//=====================
+// JsRender integration
+//=====================
+
+addLinkMethods($sub.View.prototype); // Modify the View prototype to include link methods
+
+$sub.onStore.template = function(name, item, parentTmpl) {
+	if (item === null) {
+		delete $.link[name];
+		delete $.render[name];
+	} else {
+		item.link = tmplLink;
+
+		if (name && !parentTmpl && name !== "jsvTmpl") {
+			$.render[name] = item;
+			$.link[name] = function() {
+				return tmplLink.apply(item, arguments);
+			};
+		}
+	}
+};
+
+$sub.viewInfos = viewInfos; // Expose viewInfos() as public helper method
+
+// Define JsViews version of delimiters(), and initialize
+($viewsSettings.delimiters = function() {
+	// Run delimiters initialization in context of jsrender.js
+	var ret = oldJsvDelimiters.apply(0, arguments);
+
+	if (oldJsvDelimiters !== $viewsDelimiters) {
+		// If JsRender was loaded before JsViews, then need also to initialize and set globals in that JsRender instance
+		ret = $viewsDelimiters.apply(0, arguments);
+	}
+
+	// Data-linking must use new delimiters
+	rTagDatalink = new RegExp("(?:^|\\s*)([\\w-]*)(\\" + linkChar + ")?(\\" + delimOpenChar1 + $sub.rTag + "(:\\w*)?\\" + delimCloseChar0 + ")", "g");
+	return ret;
+})(); // jshint ignore:line
+
+$sub.addSetting("trigger");
+
+//====================================
+// Additional members for linked views
+//====================================
+
+function transferViewTokens(prevNode, nextNode, parentElem, id, viewOrTagChar, refresh) {
+	// Transfer tokens on prevNode of viewToRemove/viewToRefresh to nextNode or parentElem._df
+	// view marker tokens: #m_...VIEW.../m_
+	// tag marker tokens: #m^...TAG..../m^
+
+	var i, l, vwInfos, vwInfo, viewOrTag, viewId, tokens,
+		precedingLength = 0,
+		emptyView = prevNode === nextNode;
+
+	if (prevNode) {
+		// prevNode is either the first node in the viewOrTag, or has been replaced by the vwInfos tokens string
+		vwInfos = viewInfos(prevNode) || [];
+		for (i = 0, l = vwInfos.length; i < l; i++) {
+			// Step through views or tags on the prevNode
+			vwInfo = vwInfos[i];
+			viewId = vwInfo.id;
+			if (viewId === id && vwInfo.ch === viewOrTagChar) {
+				if (refresh) {
+					// This is viewOrTagToRefresh, this is the last viewOrTag to process...
+					l = 0;
+				} else {
+					// This is viewOrTagToRemove, so we are done...
+					break;
+				}
+			}
+			if (!emptyView) {
+				viewOrTag = vwInfo.ch === "_"
+					? viewStore[viewId]                 // A view: "#m_" or "/m_"
+					: bindingStore[viewId].linkCtx.tag; // A tag   "#m^" or "/m^"
+				if (vwInfo.open) {                    // A "#m_" or "#m^" token
+					viewOrTag._prv = nextNode;
+				} else if (vwInfo.close) {            // A "/m_" or "/m^" token
+					viewOrTag._nxt = nextNode;
+				}
+			}
+			precedingLength += viewId.length + 2;
+		}
+
+		if (precedingLength) {
+			prevNode.setAttribute(jsvAttrStr, prevNode.getAttribute(jsvAttrStr).slice(precedingLength));
+		}
+		tokens = nextNode ? nextNode.getAttribute(jsvAttrStr) : parentElem._df;
+		if (l = tokens.indexOf("/" + id + viewOrTagChar) + 1) {
+			tokens = vwInfos._tkns.slice(0, precedingLength) + tokens.slice(l + (refresh ? -1 : id.length + 1));
+		}
+		if (tokens) {
+			if (nextNode) {
+				// If viewOrTagToRemove was an empty viewOrTag, we will remove both #n and /n
+				// (and any intervening tokens) from the nextNode (=== prevNode)
+				// If viewOrTagToRemove was not empty, we will take tokens preceding #n from prevNode,
+				// and concatenate with tokens following /n on nextNode
+				nextNode.setAttribute(jsvAttrStr, tokens);
+			} else {
+				setDefer(parentElem, tokens);
+			}
+		}
+	} else {
+		// !prevNode, so there may be a deferred nodes token on the parentElem. Remove it.
+		setDefer(parentElem, removeSubStr(parentElem._df, "#" + id + viewOrTagChar));
+		if (!refresh && !nextNode) {
+			// If this viewOrTag is being removed, and there was no .nxt, remove closing token from deferred tokens
+			setDefer(parentElem, removeSubStr(parentElem._df, "/" + id + viewOrTagChar));
+		}
+	}
+}
+
+function disposeTokens(tokens, elem) {
+	var i, l, vwItem, vwInfos;
+	if (vwInfos = viewInfos(tokens, true, rOpenMarkers)) {
+		for (i = 0, l = vwInfos.length; i < l; i++) {
+			vwItem = vwInfos[i];
+			if (vwItem.ch === "_") {
+				if ((vwItem = viewStore[vwItem.id]) && vwItem.type && (!elem || vwItem._prv === elem || vwItem.parentElem === elem )) {
+					// If this is the _prv (prevNode) for a view, remove the view
+					// - unless view.type is undefined, in which case it is already being removed
+					// (or unless the elem is not related - e.g. a cloned element which 'accidentally' picked up the data-jsv atttribute of the ._df expando)
+					vwItem.parent.removeViews(vwItem._.key, undefined, true);
+				}
+			} else {
+				removeViewBinding(vwItem.id, undefined, elem); // unbind bindings with this bindingId on this view
+			}
+		}
+	}
+}
+
+//============================================
+// Add link methods to data-linked view or tag
+//============================================
+
+function updateValue(val, index, tagElse, bindId, ev) {
+// Observably update a data value targeted by bindTo
+// Called when linkedElem changes: called as updateValue(val, index, tagElse, bindId, ev) - this: undefined
+// Called directly as tag.updateValue(val, index, tagElse) - this: tag
+	var values = [];
+	if (this && this._tgId) {
+		bindId = this;
+	}
+	values[index||0] = val;
+	updateValues(values, tagElse, bindId, ev);
+	return this;
+}
+
+function setValues() {
+	var args = arguments,
+		m = args.length;
+
+	if (!m) {
+		args = this.tag.cvtArgs(true, this.index); // setValues() with no arguments calls setValue with boundArgs values
+		m = args.length;
+	}
+	while (m--) {
+		this.tag.setValue(args[m], m, this.index);
+	}
+}
+
+function addLinkMethods(tagOrView) { // tagOrView is View prototype or tag instance
+
+	var l, m, tagCtx, boundProps, bindTo, key, theTag, theView;
+
+	tagOrView.contents = function(deep, select) {
+		// For a view, a tag or a tagCtx, return jQuery object with the content nodes,
+		if (deep !== !!deep) {
+			// deep not boolean, so this is contents(selector)
+			select = deep;
+			deep = undefined;
+		}
+		var filtered,
+			nodes = $(this.nodes());
+		if (nodes[0]) {
+			filtered = select ? nodes.filter(select) : nodes;
+			nodes = deep && select ? filtered.add(nodes.find(select)) : filtered;
+		}
+		return nodes;
+	};
+
+	tagOrView.nodes = function(withMarkers, prevNode, nextNode) {
+		// For a view, a tag or a tagCtx, return top-level nodes
+		// Do not return any script marker nodes, unless withMarkers is true
+		// Optionally limit range, by passing in prevNode or nextNode parameters
+
+		var node,
+			self = this.contentView || this, // If tagCtx, use tagCtx.contentView
+			elCnt = self._elCnt,
+			prevIsFirstNode = !prevNode && elCnt,
+			nodes = [];
+
+		if (!self.args) { // If tagCtx with no content (so no contentView) self is tagCtx: return empty [];
+			prevNode = prevNode || self._prv;
+			nextNode = nextNode || self._nxt;
+
+			node = prevIsFirstNode
+				? (prevNode === self._nxt
+					? self.parentElem.lastSibling
+					: prevNode)
+				: (self.inline === false
+					? prevNode || self.linkCtx.elem.firstChild
+					: prevNode && prevNode.nextSibling);
+
+			while (node && (!nextNode || node !== nextNode)) {
+				if (withMarkers || elCnt || node.tagName !== SCRIPT) {
+					// All the top-level nodes in the view
+					// (except script marker nodes, unless withMarkers = true)
+					// (Note: If a script marker node, viewInfo.elCnt undefined)
+					nodes.push(node);
+				}
+				node = node.nextSibling;
+			}
+		}
+		return nodes;
+	};
+
+	tagOrView.childTags = function(deep, tagName) {
+		// For a view, a tagor a tagCtx, return child tags - at any depth, or as immediate children only.
+		if (deep !== !!deep) {
+			// deep not boolean, so this is childTags(tagName) - which looks for top-level tags of given tagName
+			tagName = deep;
+			deep = undefined;
+		}
+
+		var self = this.contentView || this, // If tagCtx, use tagCtx.contentView
+			view = self.link ? self : self.tagCtx.view, // This may be a view or a tag. If a tag, get the view from tag.tagCtx.view
+			prevNode = self._prv,
+			elCnt = self._elCnt,
+			tags = [];
+
+		if (!self.args) { // If tagCtx with no content (so no contentView) self is tagCtx: return empty [];
+			view.link(
+				undefined,
+				self.parentElem,
+				elCnt ? prevNode && prevNode.previousSibling : prevNode,
+				self._nxt,
+				undefined,
+				{get:{
+					tags: tags,
+					deep: deep,
+					name: tagName,
+					id: self.link ? self._.id + "_" : self._tgId + "^"
+				}}
+			);
+		}
+		return tags;
+	};
+
+	if (tagOrView._is === "tag") {
+		//=======================
+		// This is a TAG instance
+		//=======================
+
+		theTag = tagOrView;
+
+		m = theTag.tagCtxs.length;
+		while (m--) {
+			tagCtx = theTag.tagCtxs[m];
+
+			tagCtx.setValues = setValues;
+			tagCtx.cvtArgs = convertArgs;
+			tagCtx.bndArgs = convertBoundArgs;
+			tagCtx.contents = tagOrView.contents;
+			tagCtx.childTags = tagOrView.childTags;
+			tagCtx.nodes = tagOrView.nodes;
+		}
+
+		boundProps = theTag.boundProps = theTag.boundProps || [];
+		if (bindTo = theTag.linkTo ? ["linkTo"] : theTag.bindTo) {
+			l = bindTo.length;
+			while (l--) {
+				key = bindTo[l];
+				if (key + "" === key) {
+					bindTo[key] = 1;
+					if ($.inArray(key, boundProps) < 0) {
+						boundProps.push(key); // Add any 'bindTo' props to boundProps array. (So two-way binding works without writing ^foo=expression)
+					}
+				}
+			}
+		}
+
+		theTag.setValue = $sub._gm(theTag.constructor.prototype.setValue, function(val, index, tagElse) {
+			if (!arguments.length) { // tag.setValue() calls setValue(val, index) for each parameter in bindTo array
+				theTag.setValues(); // = theTag.bndArgs()
+				return theTag;
+			}
+			var linkedElem, linkedEl, linkedTag,
+				linkedCtxParam = theTag.linkedCtxParam,
+				tagCtx = theTag.tagCtxs[tagElse || 0],
+				props = tagCtx.props,
+				linkCtx = theTag.linkCtx,
+				linkedElems = tagCtx.linkedElems || theTag.linkedElem && [theTag.linkedElem];
+
+			if (val !== undefined) {
+				theTag.base.call(theTag , val, index, tagElse);
+			} else if (theTag.getValue && (val = theTag.getValue(tagElse)) && val !== undefined) {
+				// If bound args are not initialized, and getValue is defined, use getValue to initialize
+				if (theTag.bindTo.length > 1) {
+					val = val[index]; // getVal returns value if tag.bndArgs() (and bindTo) length is 1, or array of values if bindTo.length > 1
+				}
+				if (linkedCtxParam && linkedCtxParam[index]) {
+					// Values of tag contextual param were already intialized (during rendering) so need to observably update to values from tag.getValue()
+					$.observable(tagCtx.ctx[linkedCtxParam[index]][0]).setProperty(_ocp, val);
+				}
+			}
+			if ((linkedElem = linkedElems && linkedElems[index]) && linkedElem[0]) {
+				l = linkedElem.length;
+				while (l--) {
+					linkedEl = linkedElem[l];
+					if (theTag._.unlinked) {
+						linkedTag = linkedEl._jsvLkEl;
+						if (!linkedTag || linkedTag !== theTag) {
+							if (linkedTag) {
+								val = linkedTag.cvtArgs(true, tagElse)[index]; // Need to use converter of linked tag
+							}
+							// For data-linked tags, identify the linkedEl with the tag, for "to" binding
+							// (For data-linked elements, if not yet bound, we identify later when the linkCtx.elem is bound)
+							linkedEl._jsvLkEl = theTag;
+							linkedEl._jsvInd = index;
+							linkedEl._jsvElse = tagElse;
+							bindLinkedElChange(theTag, linkedEl);
+							linkedEl._jsvBnd = "&" + theTag._tgId + "+"; // Add a "+" for cloned binding - so removing
+							// elems with cloned bindings will not remove the 'parent' binding from the bindingStore.
+						}
+					}
+					if (val !== undefined && !linkedEl._jsvChg && linkCtx._val !== val) {
+						if (linkedEl.value !== undefined) {
+							if (linkedEl.type === CHECKBOX) {
+								linkedEl[CHECKED] = val && val !== "false";
+							} else if (linkedEl.type === RADIO) {
+								linkedEl[CHECKED] = (linkedEl.value === val);
+							} else if ($isArray(val)) {
+								linkedEl.value = val; // Don't use jQuery since it replaces array by mapped clone
+							} else {
+								$(linkedEl).val(val); // Use jQuery for attrHooks - can't just set value (on select, for example)
+							}
+						} else if (linkedEl.contentEditable === TRUE) {
+							linkedEl.innerHTML = val;
+						}
+					}
+					if (props.name) {
+						linkedEl.name = linkedEl.name || props.name;
+					}
+				}
+			}
+			return theTag;
+		});
+
+		theTag.updateValue = updateValue;
+
+		theTag.updateValues = function() {
+			return updateValues(arguments, undefined, this);
+		};
+
+		theTag.setValues = function() {
+			var m = arguments.length ? 1 : theTag.tagCtxs.length;
+			while (m--) {
+				setValues.apply(theTag.tagCtxs[m], arguments);
+			}
+		};
+
+		theTag.refresh = function(sourceValue) {
+			var attr,
+				linkCtx = theTag.linkCtx,
+				view = theTag.tagCtx.view;
+
+			if (theTag.onUnbind) {
+				theTag.onUnbind(theTag.tagCtx, linkCtx, theTag.ctx);
+			}
+			attr = theTag.inline ? HTML : (linkCtx.attr || defaultAttr(theTag.parentElem, true));
+			sourceValue = $sub._tag(theTag, view, view.tmpl, mergeCtxs(theTag), true); // Get rendered HTML for tag, based on refreshed tagCtxs
+			updateContent(sourceValue, linkCtx, attr, theTag);
+			callAfterLink(theTag);
+			return theTag;
+		};
+
+		theTag.domChange = function() { // domChange notification support
+			var elem = this.parentElem,
+				hasListener = $.hasData(elem) && $._data(elem).events,
+				domChangeNotification = "jsv-domchange";
+
+			if (hasListener && hasListener[domChangeNotification]) {
+				// Only trigger handler if there is a handler listening for this event. (Note using triggerHandler - so no event bubbling.)
+				$(elem).triggerHandler(domChangeNotification, arguments);
+			}
+		};
+
+		//====================================
+		// End of added link methods for TAG
+		//====================================
+	} else {
+		//=========================
+		// This is a VIEW prototype
+		//=========================
+
+		theView = tagOrView;
+
+		// Note: a linked view will also, after linking have nodes[], _prv (prevNode), _nxt (nextNode) ...
+		theView.addViews = function(index, dataItems) {
+			// if view is not an array view, do nothing
+			var i, viewsCount,
+				view = this,
+				itemsCount = dataItems.length,
+				views = view.views;
+
+			if (!view._.useKey && itemsCount) {
+				// view is of type "array"
+				viewsCount = views.length + itemsCount;
+
+				if (viewsCount === view.data.length // If views not already synced to array (e.g. triggered by array.length propertyChange - jsviews/issues/301)
+						&& renderAndLink(view, index, view.tmpl, views, dataItems, view.ctx) !== false) {
+					if (!view._.srt) { // Not part of a 'sort' on refresh
+						view.fixIndex(index + itemsCount);
+					}
+				}
+			}
+		};
+
+		theView.removeViews = function(index, itemsCount, keepNodes, isMove) {
+			// view.removeViews() removes all the child views
+			// view.removeViews(index) removes the child view with specified index or key
+			// view.removeViews(index, count) removes the specified nummber of child views, starting with the specified index
+			function removeView(index) {
+				var id, bindId, parentElem, prevNode, nextNode, nodesToRemove,
+					viewToRemove = views[index];
+
+				if (viewToRemove && viewToRemove.link) {
+					id = viewToRemove._.id;
+					if (!keepNodes) {
+						// Remove the HTML nodes from the DOM, unless they have already been removed, including nodes of child views
+						nodesToRemove = viewToRemove.nodes();
+					}
+
+					// Remove child views, without removing nodes
+					viewToRemove.removeViews(undefined, undefined, true);
+
+					viewToRemove.type = undefined; // Set type to undefined: used as a flag that this view is being removed
+					prevNode = viewToRemove._prv;
+					nextNode = viewToRemove._nxt;
+					parentElem = viewToRemove.parentElem;
+					// If prevNode and nextNode are the same, the view is empty
+					if (!keepNodes) {
+						// Remove the HTML nodes from the DOM, unless they have already been removed, including nodes of child views
+						if (viewToRemove._elCnt) {
+							// if keepNodes is false (and transferring of tokens has not already been done at a higher level)
+							// then transfer tokens from prevNode which is being removed, to nextNode.
+							transferViewTokens(prevNode, nextNode, parentElem, id, "_");
+						}
+						$(nodesToRemove).remove();
+					}
+					if (!viewToRemove._elCnt) {
+						try {
+							prevNode.parentNode.removeChild(prevNode); // (prevNode.parentNode is parentElem, except if jQuery Mobile or similar has inserted an intermediate wrapper
+							nextNode.parentNode.removeChild(nextNode);
+						} catch (e) {}
+					}
+					setArrayChangeLink(viewToRemove);
+					for (bindId in viewToRemove._.bnds) {
+						removeViewBinding(bindId);
+					}
+					delete viewStore[id];
+				}
+			}
+
+			var current, childView, viewsCount,
+				view = this,
+				isArray = !view._.useKey,
+				views = view.views;
+
+			if (isArray) {
+				viewsCount = views.length;
+			}
+			if (index === undefined) {
+				// Remove all child views
+				if (isArray) {
+					// views and data are arrays
+					current = viewsCount;
+					while (current--) {
+						removeView(current);
+					}
+					view.views = [];
+				} else {
+					// views and data are objects
+					for (childView in views) {
+						// Remove by key
+						removeView(childView);
+					}
+					view.views = {};
+				}
+			} else {
+				if (itemsCount === undefined) {
+					if (isArray) {
+						// The parentView is data array view.
+						// Set itemsCount to 1, to remove this item
+						itemsCount = 1;
+					} else {
+						// Remove child view with key 'index'
+						removeView(index);
+						delete views[index];
+					}
+				}
+				if (isArray && itemsCount
+					&& (isMove || viewsCount - itemsCount === view.data.length)) { // If views not already synced to array (e.g. triggered by array.length propertyChange - jsviews/issues/301)
+					current = index + itemsCount;
+					// Remove indexed items (parentView is data array view);
+					while (current-- > index) {
+						removeView(current);
+					}
+					views.splice(index, itemsCount);
+					if (!view._.srt) {
+						view.fixIndex(index);
+					}
+				}
+			}
+		};
+
+		theView.moveViews = function(oldIndex, index, itemsCount) {
+			function parts(itemView, str) {
+				return RegExp("^(.*)(" + (str ? "\\/" : "#") + itemView._.id + "_.*)$").exec(str || itemView._prv.getAttribute(jsvAttrStr));
+			}
+			function setPrv(itemView, tokens) {
+				itemView._prv.setAttribute(jsvAttrStr, tokens);
+			}
+			var nodes, childView, nxtView, insertBefore, viewId,
+				view = this,
+				selfNxt = view._nxt,
+				views = view.views,
+				backwards = index < oldIndex,
+				firstChange = backwards ? index : oldIndex,
+				lastChange = backwards ? oldIndex : index,
+				i = index,
+				movedNodes = [],
+
+				viewsToMove = views.splice(oldIndex, itemsCount); // remove
+
+			if (index > views.length) {
+				index = views.length;
+			}
+			views.splice.apply(views, [index, 0].concat(viewsToMove)); //re-insert
+
+			itemsCount = viewsToMove.length;
+			insertBefore = index + itemsCount;
+			lastChange += itemsCount;
+
+			for (i; i < insertBefore; i++) {
+				childView = views[i];
+				nodes = childView.nodes(true);
+				movedNodes = view._elCnt ? movedNodes.concat(nodes) : movedNodes.concat(childView._prv, nodes, childView._nxt);
+			}
+			movedNodes = $(movedNodes);
+
+			if (insertBefore < views.length) {
+				movedNodes.insertBefore(views[insertBefore]._prv);
+			} else if (selfNxt) {
+				movedNodes.insertBefore(selfNxt);
+			} else {
+				movedNodes.appendTo(view.parentElem);
+			}
+
+			if (view._elCnt) {
+				var afterParts,
+					endChange = backwards ? firstChange + itemsCount : lastChange - itemsCount,
+					beforeView = views[firstChange-1],
+					startView = views[firstChange],
+					endView = views[endChange],
+					afterView = views[lastChange],
+					startParts = parts(startView),
+					endParts = parts(endView);
+
+				setPrv(startView, endParts[1] + startParts[2]);
+				if (afterView) {
+					afterParts = parts(afterView);
+					setPrv(afterView, startParts[1] + afterParts[2]);
+				} else {
+					if (selfNxt) {
+						afterParts = parts(view, selfNxt.getAttribute(jsvAttrStr));
+						selfNxt.setAttribute(jsvAttrStr, startParts[1] + afterParts[2]);
+					} else {
+						afterParts = parts(view, view.parentElem._df);
+						setDefer(view.parentElem, startParts[1] + afterParts[2]);
+					}
+				}
+				setPrv(endView, afterParts[1] + endParts[2]);
+				if (beforeView) {
+					beforeView._nxt = startView._prv;
+				} else {
+					view._prv = startView._prv;
+				}
+				views[endChange-1]._nxt = endView._prv;
+				views[lastChange-1]._nxt = afterView ? afterView._prv : selfNxt;
+			}
+			view.fixIndex(firstChange);
+		};
+
+		theView.refresh = function() {
+			var view = this,
+				parent = view.parent;
+
+			if (parent) {
+				renderAndLink(view, view.index, view.tmpl, parent.views, view.data, undefined, true);
+				setArrayChangeLink(view);
+			}
+		};
+
+		theView.fixIndex = function(fromIndex) {
+			// Fixup index on following view items...
+			var views = this.views,
+				index = views.length;
+			while (fromIndex < index--) {
+				if (views[index].index !== index) {
+					$observable(views[index]).setProperty("index", index);
+					// This is fixing up index, but not key, and not index on child views. From child views, use view.getIndex()
+				}
+			}
+		};
+
+		theView.link = viewLink;
+
+		//====================================
+		// End of added link methods for VIEW
+		//====================================
+	}
+}
+
+//========================
+// JsViews-specific converters
+//========================
+
+$converters.merge = function(val) {
+	// Special converter used in data-linking to space-separated lists, such as className:
+	// Currently only supports toggle semantics - and has no effect if toggle string is not specified
+	// data-link="class{merge:boolExpr toggle=className}"
+	var regularExpression,
+		currentValue = this.linkCtx.elem.className,
+		toggle = this.tagCtx.props.toggle;
+
+	if (toggle) {
+		// We are toggling the class specified by the toggle property,
+		// and the boolean val binding is driving the insert/remove toggle
+
+		regularExpression = toggle.replace(/[\\^$.|?*+()[{]/g, "\\$&");
+		// Escape any regular expression special characters (metacharacters) within the toggle string
+		regularExpression = "(\\s(?=" + regularExpression + "$)|(\\s)|^)(" + regularExpression + "(\\s|$))";
+		// Example: /(\s(?=myclass$)|(\s)|^)?(myclass(\s|$))/ - so matches (" myclass" or " " or ^ ) followed by ("myclass " or "myclass$") where ^/$ are beginning/end of string
+		currentValue = currentValue.replace(new RegExp(regularExpression), "$2");
+		val = currentValue + (val ? (currentValue && " ") + toggle : "");
+	}
+	return val;
+};
+
+//========================
+// JsViews-specific tags
+//========================
+
+$tags({
+	on: {
+		attr: NONE,
+		init: function(tagCtx) {
+			var content,
+				tag = this,
+				i = 0,
+				args = tagCtx.args, // [events,] [selector,] handler
+				l = args.length;
+
+			for (; i<l && !$isFunction(args[i]); i++); // Handler is first arg of type function
+			tag._hi = l>i && i+1; // handler index
+			if (tag.inline) {
+				if (!$sub.rTmpl.exec(content = $.trim(tagCtx.tmpl.markup))) {
+					// Inline {^{on}} tag with no content (or external template content) or with content containing
+					// no HTML or JsRender tags: We will wrap the (text) content, or the operation name in a <button> element
+					// (Otherwise we will attach the handler to the element content after data-linking)
+					tag.template = "<button>" + (content || tagCtx.params.args[i] || "noop") + "</button>";
+				}
+				tag.attr = HTML;
+			}
+		},
+		onBind: function() {
+			if (this.template) { // {^{on/}} with no content has template rendering <button>. Make it the mainElem, so we can set id, size or class
+				this.mainElem = this.contents("button");
+			}
+		},
+		onAfterLink: function(tagCtx, linkCtx) {
+			var handler, params, find, activeElem,
+				tag = this,
+				i = tag._hi,
+				args = tagCtx.args, // [events,] [selector,] handler
+				l = args.length,
+				props = tagCtx.props,
+				data = props.data,
+				view = tagCtx.view,
+				contextOb = props.context; // Context ('this' pointer) for attached handler
+
+			if (i) { // There is a handler
+				handler = args[i-1];
+				params = args.slice(i); // Subsequent args are params
+				args = args.slice(0, i-1); // Preceding args (if any) are events and selector
+				tag._sel = args[1]; // Selector for descendant elements - for delegated events on those elements, delegating to the activeElem
+
+				activeElem = tag.activeElem = tag.activeElem || $(tag.inline
+					? (tag._sel = args[1] || "*", tag.parentElem)
+					// If inline, attach to child elements of tag parent element (filtered by selector argument if provided.
+					// (In handler we'll filter out events from sibling elements preceding or following tag.)
+					// This allows us to use the delegated pattern where the attached event works even for added elements satisfying the selector
+					: linkCtx.elem);
+
+				if (!contextOb) {
+					// Get the path for the preceding object (context object) of handler (which is the last arg), compile function
+					// to return that context object, and run compiled function against data
+					contextOb = /^(.*)[\.^][\w$]+$/.exec(tagCtx.params.args.slice(-params.length - 1)[0]);
+					contextOb = contextOb && $sub.tmplFn(delimOpenChar1 + ":" + contextOb[1] + delimCloseChar0, view.tmpl, true)(linkCtx.data, view);
+				}
+
+				if (tag._evs) {
+					tag.onUnbind();
+				}
+
+				activeElem.on(
+					tag._evs = args[0] || "click", // events defaults to "click"
+					tag._sel,
+					data == undefined ? null : data,
+					tag._hlr = function hndlr(ev) {
+						var nodes, length,
+							found = !tag.inline;
+
+						if (!found) { // If inline, filter out events from sibling elements preceding or following tag.
+							nodes = tag.contents("*");
+							l = nodes.length;
+							while (!found && l--) {
+								if (nodes[l].contains(ev.target)) {
+									found = true;
+								}
+							}
+						}
+						if (found) { // target elem is indeed within the tag, so call the {on} handler
+							return handler.apply(contextOb || linkCtx.data, [].concat(
+								params, // e.g. par1, par2
+								ev,
+								{change: ev.type, view: view, linkCtx: linkCtx},
+								params.slice.call(arguments, 1) // If triggering event (e.g. jsv-domchange) has additional arguments after ev, pass them too
+							));
+							// for {on 'click' handler par1 par2} use handler(par1, par2, ev, domchangeEventArgs)
+							// for {on 'jsv-domchange' handler par1 par2} use handler(par1, par2, ev, domchangeEventArgs, tagCtx, linkCtx, observableEventArgs)
+						}
+					}
+				);
+			}
+		},
+		onUpdate: false,
+		onUnbind: function() {
+			var self = this;
+			if (self.activeElem) {
+				self.activeElem.off(self._evs, self._sel, self._hlr);
+			}
+		},
+		contentCtx: true,
+		setSize: true,
+		dataBoundOnly: true
+	},
+	radiogroup: {
+		init: function(tagCtx) {
+			this.name = tagCtx.props.name || (Math.random() + "jsv").slice(9);
+		},
+		onBind: function(tagCtx, linkCtx) {
+			var domChngCntnr, $linkedElem, l,
+				tag = this;
+
+			if (tag.inline) {
+				// If the first element is owned by (rendered by) this tag (not by a childTag such as {^{for}})
+				// use it as container for detecting dom changes
+				domChngCntnr = tag.contents("*")[0];
+				domChngCntnr = domChngCntnr && $view(domChngCntnr).ctx.tag === tag.parent ? domChngCntnr : tag.parentElem;
+				$linkedElem = tag.contents(true, "input[type=radio]");
+			} else {
+				domChngCntnr = linkCtx.elem;
+				$linkedElem = $("input[type=radio]", linkCtx.elem);
+			}
+			tag.linkedElem = $linkedElem;
+			l = $linkedElem.length;
+			while (l--) {
+				// Configure the name for each radio input element
+				$linkedElem[l].name = $linkedElem[l].name || tag.name;
+			}
+			// Establish a domchange listener in case this radiogroup wraps a {^{for}} or {^{if}} or similar which might dynamically insert new radio input elements
+			$(domChngCntnr).on("jsv-domchange", function(ev, forOrIfTagCtx) {
+				var linkedElem, val,
+					parentTags = forOrIfTagCtx.ctx.parentTags;
+				if (!tag.inline || domChngCntnr !== tag.parentElem // The domChngCntnr is specific to this tag
+					// The domChngCntnr is the parentElem of this tag, so need to make sure dom change event is for
+					// a content change within this tag, not outside it.
+					|| parentTags && parentTags[tag.tagName] === tag) {
+					// Contents have changed so recreate $linkedElem for the radio input elements (including possible new one just inserted)
+					val = tag.cvtArgs()[0];
+					$linkedElem = tag.linkedElem = tag.contents(true, "input[type=radio]");
+					l = $linkedElem.length;
+					while (l--) {
+						// Configure binding and name for each radio input element
+						linkedElem = $linkedElem[l];
+						linkedElem._jsvLkEl = tag;
+						linkedElem.name = linkedElem.name || tag.name;
+						linkedElem._jsvBnd = "&" + tag._tgId + "+";
+						linkedElem.checked = val === linkedElem.value;
+					}
+					tag.linkedElems = tagCtx.linkedElems = [$linkedElem];
+				}
+			});
+		},
+		onUpdate: false, // don't rerender
+		contentCtx: true,
+		dataBoundOnly: true
+	}
+});
+
+$extend($tags["for"], {
+	//onUpdate: function(ev, eventArgs, newTagCtxs) {
+		//Consider adding filtering for perf optimization. However the below prevents update on some scenarios which _should_ update - namely when there is another array on which for also depends.
+		//var i, l, tci, prevArg;
+		//for (tci = 0; (prevArg = this.tagCtxs[tci]) && prevArg.args.length; tci++) {
+		//	if (prevArg.args[0] !== newTagCtxs[tci].args[0]) {
+		//		return true;
+		//	}
+		//}
+		//return false;
+	//},
+	onArrayChange: function(ev, eventArgs, tagCtx, linkCtx) {
+		var arrayView,
+			target = ev.target,
+			targetLength = target.length,
+			tag = this,
+			change = eventArgs.change;
+		if (tag._.noVws // Child views not supported because target is not html - e.g. data-link="title{for ...}"
+			|| tag.tagCtxs[1] && ( // There is an {{else}}
+				change === "insert" && targetLength === eventArgs.items.length // inserting, and new length is same as inserted length, so going from 0 to n
+				|| change === "remove" && !targetLength // removing , and new length 0, so going from n to 0
+			)) {
+			tag.refresh();
+		} else {
+			for (arrayView in tag._.arrVws) {
+				arrayView = tag._.arrVws[arrayView];
+				if (arrayView.data === target) {
+					arrayChangeHandler.apply(arrayView, arguments);
+				}
+			}
+		}
+		tag.domChange(tagCtx, linkCtx, eventArgs);
+		ev.done = true;
+	},
+	onAfterLink: function(tagCtx, linkCtx) {
+		var arrHandler, arrBinding, data,
+			tag = this,
+			i = 0,
+			arrayBindings = tag._ars || {},
+			tagCtxs = tag.tagCtxs,
+			l = tagCtxs.length,
+			selected = tag.selected || 0;
+
+		for (; i <= selected; i++) {
+			tagCtx = tagCtxs[i];    // loop through tagCtxs up to selected
+			data = tagCtx.map
+				? tagCtx.map.tgt      // 'data' is mapped data
+				: tagCtx.args.length
+					? tagCtx.args[0]    // or args[0]
+					: tagCtx.view.data; // or defaults to current data.
+
+			if ((arrBinding = arrayBindings[i]) && data !== arrBinding[0]) { // Is there previous array data on this tagCtx, different from new data
+				$observe(arrBinding[0], arrBinding[1], true); //unobserve previous array
+				delete arrayBindings[i];
+			}
+			if (!arrayBindings[i] && $isArray(data)) {
+				(function() {
+					var tagCt = tagCtx;
+					$observe(data, arrHandler = function(ev, eventArgs) {
+						tag.onArrayChange(ev, eventArgs, tagCt, linkCtx);
+					});
+					arrayBindings[i] = [data, arrHandler]; // Store array data and arrayChangeHandler on tag._ars[i]
+				})();
+			}
+		}
+		for (i = selected + 1; i < l; i++) { // If there were previous bindings on later tagCtxs, remove them
+			if (arrBinding = arrayBindings[i]) {
+				$observe(arrBinding[0], arrBinding[1], true); //unobserve previous binding
+				delete arrayBindings[i];
+			}
+		}
+		tag._ars = arrayBindings;
+	},
+	onDispose: function() {
+		var l, tag = this;
+		for (l in tag._ars) {
+			$observe(tag._ars[l][0], tag._ars[l][1], true); //unobserve
+		}
+	}
+});
+
+$extend($tags["if"], {
+	onUpdate: function(ev, eventArgs, newTagCtxs) {
+		var prevArg, different,
+			tci = 0;
+		for (; (prevArg = this.tagCtxs[tci]); tci++) {
+			different = prevArg.props.tmpl !== newTagCtxs[tci].props.tmpl || prevArg.args.length && !(prevArg = prevArg.args[0]) !== !newTagCtxs[tci].args[0];
+			if ((!this.convert && !!prevArg) || different) {
+				return different;
+				// If there is not a change of template, and there is no converter, and newArg and prevArg are both truthy, return false to cancel update.
+				// (Even if values on later elses are different, we still don't want to update, since rendered output would be unchanged)
+				// If newArg and prevArg are different, return true, to update
+				// If newArg and prevArg are both falsey, move to the next {{else ...}}
+			}
+		}
+		// Boolean value of all args are unchanged (falsey), so return false to cancel update
+		return false;
+	},
+	onAfterLink: function(tagCtx, linkCtx, ctx, ev, eventArgs) {
+		if (eventArgs) {
+			this.domChange(tagCtx, linkCtx, eventArgs);
+		}
+	}
+});
+
+function observeProps(map, ev, eventArgs) {
+	if (eventArgs.change === "set") {
+		var target = map.tgt,
+			l = target.length;
+		while (l--) {
+			if (target[l].key === eventArgs.path) {
+				break;
+			}
+		}
+		if (l === -1) {
+			if (eventArgs.path && !eventArgs.remove) {
+				$observable(target).insert({key: eventArgs.path, prop: eventArgs.value});
+			}
+		} else if (eventArgs.remove) {
+			$observable(target).remove(l);
+		} else {
+			$observable(target[l]).setProperty("prop", eventArgs.value);
+		}
+	}
+}
+
+function observeMappedProps(map, ev, eventArgs) {
+	var item,
+		source = map.src,
+		change = eventArgs.change;
+
+	if (change === "set") {
+		if (eventArgs.path === "prop") {
+			$observable(source).setProperty(ev.target.key, eventArgs.value);
+		} else { // path === "key"
+			$observable(source).removeProperty(eventArgs.oldValue); // When key is modified observably, remove old one and set new one
+			$observable(source).setProperty(eventArgs.value, ev.target.prop);
+		}
+	} else if (change === "remove") {
+		item = eventArgs.items[0];
+		$observable(source).removeProperty(item.key);
+		delete source[item.key];
+	} else if (change === "insert") {
+		item = eventArgs.items[0];
+		if (item.key) {
+			$observable(source).setProperty(item.key, item.prop);
+		}
+	}
+}
+
+function shallowArrayFilter(allPath /*, object, parentObs*/) { // Filter used by {{props}} for the mappedProps target array
+	return allPath.indexOf(".") < 0;
+}
+
+$tags("props", {
+	baseTag: "for",
+	dataMap: $views.map({
+		getTgt: $tags.props.dataMap.getTgt,
+		obsSrc: observeProps,
+		obsTgt: observeMappedProps,
+		tgtFlt: shallowArrayFilter
+	}),
+	flow: true
+});
+
+//========================
+// Extend jQuery namespace
+//========================
+
+$extend($, {
+
+	//=======================
+	// jQuery $.view() plugin
+	//=======================
+
+	view: $view = function(node, inner, type) {
+		// $.view() returns top view
+		// $.view(node) returns view that contains node
+		// $.view(selector) returns view that contains first selected element
+		// $.view(nodeOrSelector, type) returns nearest containing view of given type
+		// $.view(nodeOrSelector, "root") returns root containing view (child of top view)
+		// $.view(nodeOrSelector, true, type) returns nearest inner (contained) view of given type
+
+		function getInnerView(nd, isVl) {
+			if (nd) {
+				vwInfos = viewInfos(nd, isVl, rOpenViewMarkers);
+				for (j = 0, k = vwInfos.length; j < k; j++) {
+					if ((view = viewStore[vwInfos[j].id]) && (view = view && type ? view.get(true, type) : view)) {
+						break;
+					}
+				}
+			}
+		}
+
+		if (inner !== !!inner) {
+			// inner not boolean, so this is view(nodeOrSelector, type)
+			type = inner;
+			inner = undefined;
+		}
+		var view, vwInfos, i, j, k, l, elems,
+			level = 0,
+			body = document.body;
+
+		if (node && node !== body && topView._.useKey > 1) {
+			// Perf optimization for common cases
+
+			node = "" + node === node
+				? $(node)[0]
+				: node.jquery
+					? node[0]
+					: node;
+
+			if (node) {
+				if (inner) {
+					getInnerView(node._df, true);
+					if (!view) {
+						// Treat supplied node as a container element and return the first view encountered.
+						elems = qsa ? node.querySelectorAll(bindElsSel) : $(bindElsSel, node).get();
+						l = elems.length;
+						for (i = 0; !view && i < l; i++) {
+							getInnerView(elems[i]);
+						}
+					}
+					return view;
+				}
+				while (node) {
+					// Move back through siblings and up through parents to find preceding node which is a _prv (prevNode)
+					// script marker node for a non-element-content view, or a _prv (first node) for an elCnt view
+					if (vwInfos = viewInfos(node, undefined, rViewMarkers)) {
+						l = vwInfos.length;
+						while (l--) {
+							view = vwInfos[l];
+							if (view.open) {
+								if (level < 1) {
+									view = viewStore[view.id];
+									return view && type ? view.get(type) : view || topView;
+								}
+								level--;
+							} else {
+								// level starts at zero. If we hit a view.close, then we move level to 1, and we don't return a view until
+								// we are back at level zero (or a parent view with level < 0)
+								level++;
+							}
+						}
+					}
+					node = node.previousSibling || node.parentNode;
+				}
+			}
+		}
+		return topView;
+	},
+
+	link: $link,
+	unlink: $unlink,
+
+	//=====================
+	// override $.cleanData
+	//=====================
+	cleanData: function(elems) {
+		if (elems.length && isCleanCall) {
+			// Remove JsViews bindings. Also, remove from the DOM any corresponding script marker nodes
+			clean(elems);
+		}
+		oldCleanData.apply($, arguments);
+	}
+});
+
+// Possible future addition - e.g. for ckeditor tag control
+//$views.utility = {
+//	validate: function(html) {
+//		try {
+//			topView.link(undefined, document.createElement("div"), undefined, undefined, html, undefined, undefined, 1);
+//		}
+//		catch (e) {
+//			return e.message;
+//		}
+//	}
+//};
+
+//===============================
+// Extend jQuery instance plugins
+//===============================
+
+$extend($.fn, {
+	link: function(expr, from, context, noIteration, parentView, prevNode, nextNode) {
+		return $link(expr, this, from, context, noIteration, parentView, prevNode, nextNode);
+	},
+	unlink: function() {
+		return $unlink(this);
+	},
+	view: function(inner, type) {
+		return $view(this[0], inner, type);
+	}
+});
+
+//==============================================================================
+// Override jQuery methods that call our overridden cleanData, for disposal etc.
+//==============================================================================
+
+$.each([HTML, "replaceWith", "empty", "remove"], function(i, name) {
+	var oldFn = $.fn[name];
+	$.fn[name] = function() {
+		var result;
+		isCleanCall = 1; // Make sure cleanData does disposal only when coming from these calls.
+		try {
+			result = oldFn.apply(this, arguments);
+		}
+		finally {
+			isCleanCall = 0;
+		}
+		return result;
+	};
+});
+
+//===============
+// Extend topView
+//===============
+
+$extend(topView = $sub.topView, {tmpl: {links: {}}});
+
+viewStore = {0: topView}; // Top-level view
+
+//===================
+// Extend $.views.sub
+//===================
+
+$sub._glt = function(elem) { // get linked tags (Used in validate.js)
+	var linkCtx,
+		regEx = /#(\d*)\^\/\1\^/g,
+		linkCtxs = [],
+		tokens = markerNodeInfo(elem);
+
+	while (linkCtx = regEx.exec(tokens)) {
+		if (linkCtx = bindingStore[linkCtx[1]]) {
+			linkCtxs.push(linkCtx.linkCtx.tag);
+		}
+	}
+	return linkCtxs;
+};
+
+$sub._gccb = function(view) { // Return a callback for accessing the context of a template/data-link expression - and converting ~foo, #foo etc.
+	// TODO Consider exposing or allowing override, as public API
+	return function(path, object, depth) {
+		// TODO consider only calling the contextCb on the initial token in path '~a.b.c' and not calling again on
+		// the individual tokens, 'a', 'b', 'c'... Currently it is called multiple times
+		var tokens, tag, items, helper, last, nextPath, l, obsCtxPrm, addedTagCpDep, key, bindTo;
+		if (view && path) {
+			if (path._cpfn) {
+				return path._cpfn.call(view.tmpl, object, view, $sub); // exprOb for computed property
+			}
+			if (path.charAt(0) === "~") {
+				// We return new items to insert into the sequence, replacing the "~a.b.c" string:
+				// [helperObject 'a', "a.b.c" currentDataItem] so currentDataItem becomes the object for subsequent paths.
+				if (path.slice(0, 4) === "~tag") {
+					tag = view.ctx;
+					if (path.charAt(4) === ".") {
+						// "~tag.xxx"
+						tokens = path.slice(5).split(".");
+						tag = tag.tag;
+					}
+					if (tokens) {
+						return tag ? [tag, tokens.join("."), object] : [];
+					}
+				}
+				path = path.slice(1).split(".");
+				if (helper = view.ctxPrm(last = path.shift(), undefined, true)) {
+					if (obsCtxPrm = helper._cxp) { // helper for (contextual parameter ~foo=...) is an array - [view, ctxPrmDependencies ...]
+						if (path.length) {
+							nextPath = "." + path.join(".");
+							last = helper[l = helper.length-1];
+							if (last._cpfn) {
+								last.sb = nextPath;
+								last.bnd = !!depth;
+							} else {
+								helper[l] = (last + nextPath).replace("#data.", "");
+								if (last.slice(0, 5) === "#view") {
+									helper[l] = helper[l].slice(6);
+									helper.splice(l, 0, view);
+								}
+							}
+						}
+						items = [helper]; // Contextual parameter
+						if ((tag = obsCtxPrm.tag) && tag.convert) {
+							// If there is a converter, it might mix inputs, so tag contextual param needs to depend on all bound args/props.
+							bindTo = tag.bindTo || [0];
+							l = bindTo.length;
+							while (l--) {
+								if (depth !== undefined && l !== obsCtxPrm.ind) {
+									key = bindTo[l];
+									addedTagCpDep = [helper[0], tag.tagCtx.params[+key === key ? "args" : "props"]];
+									addedTagCpDep._cxp = obsCtxPrm;
+									items.push(addedTagCpDep); // Added dependency for tag contextual parameter
+								}
+							}
+						}
+					} else if (path.length || $isFunction(helper)) {
+						items = [helper, path.join("."), object]; // 2way bindng on ~foo.helperLeafProperty or ~computed() or ~contextualParam
+					}
+				}
+				return items || [];
+			}
+			if (path.charAt(0) === "#") {
+				// We return new items to insert into the sequence, replacing the "#a.b.c" string: [view, "a.b.c" currentDataItem]
+				// so currentDataItem becomes the object for subsequent paths. The 'true' flag makes the paths bind only to leaf changes.
+				return path === "#data" ? [] : [view, path.replace(rViewPath, ""), object];
+			}
+		}
+	};
+};
+
+//===================
+// ctxPrm  helpers
+//===================
+// The following helper functions for observable contextual parameters are needed by render.js in data-linking scenarios
+// Implemented here rather than in render.js to keep render.js size down, and exposed via $.sub...
+
+$sub._cp = function(paramVal, paramExpr, view, tagCtxPrm) { // Create tag or inline contextual parameter
+	// Called for inline contextual parameter ~foo=expression, from compiled function for expression. (tagCtxPrm is undefined)
+	// Called for tag parameter (two-way binding), from renderTag. (tagCtxPrm is {tag: ..., ind: ...})
+	if (view.linked) { // In JsViews, returns [view, linkFn] where linkFn is compiled function for expression, or observable contextual parameter object
+		if (paramExpr) {
+			var params = delimOpenChar1 + ":" + paramExpr + delimCloseChar0,
+				links = topView.tmpl.links, // Use topView links, as for compiled top-level linking expressions. To do - should this ever get disposed?
+				linkFn = links[params];
+			if (!linkFn) {
+				links[params] = linkFn = $sub.tmplFn(params, view.tmpl, true);
+			}
+			paramVal = linkFn.deps[0]
+				? [view, linkFn] // compiled expression
+				: [{_ocp: tagCtxPrm ? tagCtxPrm.tag.cvtArgs(true, tagCtxPrm.tagElse)[tagCtxPrm.ind] : linkFn()}]; // Static value - no deps - returns observable contextual parameter object
+		} else {
+			paramVal = [{_ocp: undefined}]; // Uninitialized observable contextual parameter object
+		}
+		paramVal._cxp = tagCtxPrm || {
+			updateValue: function(val) {
+				$observable(paramVal._cxp.data).setProperty(paramVal._cxp.path, val);
+				return this;
+			}
+		}; // Flag that this is a contextual parameter
+	}
+	return paramVal; // In JsRender returns evaluated expression
+};
+
+$sub._crcp = function(key, res, storeView, store) {
+	// Create observable contextual parameter for helper. (Called when updating or observing contextual parameter, from view.ctxPrm() )
+	(store || (storeView._ocps = storeView._ocps || {}))[key]
+		= res
+		= [{
+			_ocp: res, // The observable contextual parameter value
+			_vw: storeView
+		}];
+	res._cxp = {
+		path: _ocp,
+		ind: 0,
+		updateValue: function(val, path) {
+			$.observable(res[0]).setProperty(_ocp, val); // Set the value (res[0]._ocp)
+			return this;
+		}
+	};
+	return res;
+};
+
+$sub._ucp = function(key, value, view, obsCtxPrm) {
+	// update observable contextual parameter
+	var index, tag;
+	if (!obsCtxPrm.path) {
+		resolveDataTargetPath("~" + key, view.data, $sub._gccb(view));
+	}
+	if (tag = obsCtxPrm.tag) { // If this is a tag contextual parameter
+		index = $.inArray(key, tag.linkedCtxParam);
+		tag.setValue(value, index, obsCtxPrm.tagElse);
+	}
+	return (tag||obsCtxPrm).updateValue(value, index, obsCtxPrm.tagElse);
+};
+
+$sub._ceo = function cloneExprObjects(obs) { // Clone exprObs so that each referenced contextual parameter ~foo uses its own exprOb instances
+	var ob,
+		clones = [],
+		l = obs.length;
+	while (l--) {
+		ob = obs[l];
+		if (ob._cpfn) {
+			ob = $extend({}, ob);              // If an exprOb, clone it. If a string, keep as is
+			ob.prm = cloneExprObjects(ob.prm); // Recursively clone exprObs in parameters, too
+		}
+		clones.unshift(ob);
+	}
+	return clones;
+};
+
+//=========================
+// Extend $.views.settings
+//=========================
+
+oldAdvSet = $sub.advSet;
+
+$sub.advSet = function() { // refresh advanced settings
+	oldAdvSet.call($sub);
+	global._jsv = $subSettingsAdvanced._jsv
+		? $extend(global._jsv || {}, { // create global _jsv, for accessing views, etc
+				views: viewStore,
+				bindings: bindingStore
+			})
+		: undefined; // In IE8 cannot do delete global._jsv
+	$viewsLinkAttr = $subSettingsAdvanced.linkAttr;
+	linkViewsSel = bindElsSel + ",[" + $viewsLinkAttr + "]";
+	wrapMap = $subSettingsAdvanced._wm;
+	wrapMap.optgroup = wrapMap.option;
+	wrapMap.tbody = wrapMap.tfoot = wrapMap.colgroup = wrapMap.caption = wrapMap.thead;
+	wrapMap.th = wrapMap.td;
+};
+
+$viewsSettings.advanced({
+	linkAttr: "data-link",
+	useViews: false,
+	noValidate: false,
+	// wrapMap provide appropriate wrappers for inserting innerHTML, used in insertBefore
+	// We have to close these tags to support XHTML (#13200)
+	// TODO investigate whether more recent jQuery implementation using wrapMap in domManip/$().html() etc. is better optimized now...
+	_wm: {
+		option: [1, "<select multiple='multiple'>", "</select>"],
+		legend: [1, "<fieldset>", "</fieldset>"],
+		area: [1, "<map>", "</map>"],
+		param: [1, "<object>", "</object>"],
+		thead: [1, "<table>", "</table>"],
+		tr: [2, "<table><tbody>", "</tbody></table>"],
+		td: [3, "<table><tbody><tr>", "</tr></tbody></table>"],
+		col: [2, "<table><tbody></tbody><colgroup>", "</colgroup></table>"],
+		svg_ns: [1, "<svg>", "</svg>"],
+		// IE6-8 can't serialize link, script, style, or any html5 (NoScope) tags,
+		// unless wrapped in a div with non-breaking characters in front of it.
+		div: $.support.htmlSerialize ? [0, "", ""] : [1, "X<div>", "</div>"]
+	},
+	_fe: {
+		input: {
+			from: inputAttrib, to: VALUE
+		},
+		textarea: valueBinding,
+		select: valueBinding,
+		optgroup: {
+			to: "label"
+		}
+	}
+});
+
+return $;
+}, window));
 ;/*!
  * Bootstrap v3.3.7 (http://getbootstrap.com)
  * Copyright 2011-2016 Twitter, Inc.
@@ -12596,10 +19927,6 @@ if (typeof jQuery === 'undefined') {
 
 }(jQuery);
 ;//! moment.js
-//! version : 2.17.1
-//! authors : Tim Wood, Iskren Chernev, Moment.js contributors
-//! license : MIT
-//! momentjs.com
 
 ;(function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
@@ -12607,6279 +19934,4504 @@ if (typeof jQuery === 'undefined') {
     global.moment = factory()
 }(this, (function () { 'use strict';
 
-var hookCallback;
+    var hookCallback;
 
-function hooks () {
-    return hookCallback.apply(null, arguments);
-}
-
-// This is done to register the method called with moment()
-// without creating circular dependencies.
-function setHookCallback (callback) {
-    hookCallback = callback;
-}
-
-function isArray(input) {
-    return input instanceof Array || Object.prototype.toString.call(input) === '[object Array]';
-}
-
-function isObject(input) {
-    // IE8 will treat undefined and null as object if it wasn't for
-    // input != null
-    return input != null && Object.prototype.toString.call(input) === '[object Object]';
-}
-
-function isObjectEmpty(obj) {
-    var k;
-    for (k in obj) {
-        // even if its not own property I'd still call it non-empty
-        return false;
+    function hooks () {
+        return hookCallback.apply(null, arguments);
     }
-    return true;
-}
 
-function isNumber(input) {
-    return typeof input === 'number' || Object.prototype.toString.call(input) === '[object Number]';
-}
-
-function isDate(input) {
-    return input instanceof Date || Object.prototype.toString.call(input) === '[object Date]';
-}
-
-function map(arr, fn) {
-    var res = [], i;
-    for (i = 0; i < arr.length; ++i) {
-        res.push(fn(arr[i], i));
+    // This is done to register the method called with moment()
+    // without creating circular dependencies.
+    function setHookCallback (callback) {
+        hookCallback = callback;
     }
-    return res;
-}
 
-function hasOwnProp(a, b) {
-    return Object.prototype.hasOwnProperty.call(a, b);
-}
+    function isArray(input) {
+        return input instanceof Array || Object.prototype.toString.call(input) === '[object Array]';
+    }
 
-function extend(a, b) {
-    for (var i in b) {
-        if (hasOwnProp(b, i)) {
-            a[i] = b[i];
+    function isObject(input) {
+        // IE8 will treat undefined and null as object if it wasn't for
+        // input != null
+        return input != null && Object.prototype.toString.call(input) === '[object Object]';
+    }
+
+    function isObjectEmpty(obj) {
+        if (Object.getOwnPropertyNames) {
+            return (Object.getOwnPropertyNames(obj).length === 0);
+        } else {
+            var k;
+            for (k in obj) {
+                if (obj.hasOwnProperty(k)) {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 
-    if (hasOwnProp(b, 'toString')) {
-        a.toString = b.toString;
+    function isUndefined(input) {
+        return input === void 0;
     }
 
-    if (hasOwnProp(b, 'valueOf')) {
-        a.valueOf = b.valueOf;
+    function isNumber(input) {
+        return typeof input === 'number' || Object.prototype.toString.call(input) === '[object Number]';
     }
 
-    return a;
-}
-
-function createUTC (input, format, locale, strict) {
-    return createLocalOrUTC(input, format, locale, strict, true).utc();
-}
-
-function defaultParsingFlags() {
-    // We need to deep clone this object.
-    return {
-        empty           : false,
-        unusedTokens    : [],
-        unusedInput     : [],
-        overflow        : -2,
-        charsLeftOver   : 0,
-        nullInput       : false,
-        invalidMonth    : null,
-        invalidFormat   : false,
-        userInvalidated : false,
-        iso             : false,
-        parsedDateParts : [],
-        meridiem        : null
-    };
-}
-
-function getParsingFlags(m) {
-    if (m._pf == null) {
-        m._pf = defaultParsingFlags();
+    function isDate(input) {
+        return input instanceof Date || Object.prototype.toString.call(input) === '[object Date]';
     }
-    return m._pf;
-}
 
-var some;
-if (Array.prototype.some) {
-    some = Array.prototype.some;
-} else {
-    some = function (fun) {
-        var t = Object(this);
-        var len = t.length >>> 0;
+    function map(arr, fn) {
+        var res = [], i;
+        for (i = 0; i < arr.length; ++i) {
+            res.push(fn(arr[i], i));
+        }
+        return res;
+    }
 
-        for (var i = 0; i < len; i++) {
-            if (i in t && fun.call(this, t[i], i, t)) {
-                return true;
+    function hasOwnProp(a, b) {
+        return Object.prototype.hasOwnProperty.call(a, b);
+    }
+
+    function extend(a, b) {
+        for (var i in b) {
+            if (hasOwnProp(b, i)) {
+                a[i] = b[i];
             }
         }
 
-        return false;
-    };
-}
-
-var some$1 = some;
-
-function isValid(m) {
-    if (m._isValid == null) {
-        var flags = getParsingFlags(m);
-        var parsedParts = some$1.call(flags.parsedDateParts, function (i) {
-            return i != null;
-        });
-        var isNowValid = !isNaN(m._d.getTime()) &&
-            flags.overflow < 0 &&
-            !flags.empty &&
-            !flags.invalidMonth &&
-            !flags.invalidWeekday &&
-            !flags.nullInput &&
-            !flags.invalidFormat &&
-            !flags.userInvalidated &&
-            (!flags.meridiem || (flags.meridiem && parsedParts));
-
-        if (m._strict) {
-            isNowValid = isNowValid &&
-                flags.charsLeftOver === 0 &&
-                flags.unusedTokens.length === 0 &&
-                flags.bigHour === undefined;
+        if (hasOwnProp(b, 'toString')) {
+            a.toString = b.toString;
         }
 
-        if (Object.isFrozen == null || !Object.isFrozen(m)) {
-            m._isValid = isNowValid;
+        if (hasOwnProp(b, 'valueOf')) {
+            a.valueOf = b.valueOf;
+        }
+
+        return a;
+    }
+
+    function createUTC (input, format, locale, strict) {
+        return createLocalOrUTC(input, format, locale, strict, true).utc();
+    }
+
+    function defaultParsingFlags() {
+        // We need to deep clone this object.
+        return {
+            empty           : false,
+            unusedTokens    : [],
+            unusedInput     : [],
+            overflow        : -2,
+            charsLeftOver   : 0,
+            nullInput       : false,
+            invalidMonth    : null,
+            invalidFormat   : false,
+            userInvalidated : false,
+            iso             : false,
+            parsedDateParts : [],
+            meridiem        : null,
+            rfc2822         : false,
+            weekdayMismatch : false
+        };
+    }
+
+    function getParsingFlags(m) {
+        if (m._pf == null) {
+            m._pf = defaultParsingFlags();
+        }
+        return m._pf;
+    }
+
+    var some;
+    if (Array.prototype.some) {
+        some = Array.prototype.some;
+    } else {
+        some = function (fun) {
+            var t = Object(this);
+            var len = t.length >>> 0;
+
+            for (var i = 0; i < len; i++) {
+                if (i in t && fun.call(this, t[i], i, t)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+    }
+
+    function isValid(m) {
+        if (m._isValid == null) {
+            var flags = getParsingFlags(m);
+            var parsedParts = some.call(flags.parsedDateParts, function (i) {
+                return i != null;
+            });
+            var isNowValid = !isNaN(m._d.getTime()) &&
+                flags.overflow < 0 &&
+                !flags.empty &&
+                !flags.invalidMonth &&
+                !flags.invalidWeekday &&
+                !flags.weekdayMismatch &&
+                !flags.nullInput &&
+                !flags.invalidFormat &&
+                !flags.userInvalidated &&
+                (!flags.meridiem || (flags.meridiem && parsedParts));
+
+            if (m._strict) {
+                isNowValid = isNowValid &&
+                    flags.charsLeftOver === 0 &&
+                    flags.unusedTokens.length === 0 &&
+                    flags.bigHour === undefined;
+            }
+
+            if (Object.isFrozen == null || !Object.isFrozen(m)) {
+                m._isValid = isNowValid;
+            }
+            else {
+                return isNowValid;
+            }
+        }
+        return m._isValid;
+    }
+
+    function createInvalid (flags) {
+        var m = createUTC(NaN);
+        if (flags != null) {
+            extend(getParsingFlags(m), flags);
         }
         else {
-            return isNowValid;
+            getParsingFlags(m).userInvalidated = true;
         }
-    }
-    return m._isValid;
-}
 
-function createInvalid (flags) {
-    var m = createUTC(NaN);
-    if (flags != null) {
-        extend(getParsingFlags(m), flags);
-    }
-    else {
-        getParsingFlags(m).userInvalidated = true;
+        return m;
     }
 
-    return m;
-}
+    // Plugins that add properties should also add the key here (null value),
+    // so we can properly clone ourselves.
+    var momentProperties = hooks.momentProperties = [];
 
-function isUndefined(input) {
-    return input === void 0;
-}
+    function copyConfig(to, from) {
+        var i, prop, val;
 
-// Plugins that add properties should also add the key here (null value),
-// so we can properly clone ourselves.
-var momentProperties = hooks.momentProperties = [];
-
-function copyConfig(to, from) {
-    var i, prop, val;
-
-    if (!isUndefined(from._isAMomentObject)) {
-        to._isAMomentObject = from._isAMomentObject;
-    }
-    if (!isUndefined(from._i)) {
-        to._i = from._i;
-    }
-    if (!isUndefined(from._f)) {
-        to._f = from._f;
-    }
-    if (!isUndefined(from._l)) {
-        to._l = from._l;
-    }
-    if (!isUndefined(from._strict)) {
-        to._strict = from._strict;
-    }
-    if (!isUndefined(from._tzm)) {
-        to._tzm = from._tzm;
-    }
-    if (!isUndefined(from._isUTC)) {
-        to._isUTC = from._isUTC;
-    }
-    if (!isUndefined(from._offset)) {
-        to._offset = from._offset;
-    }
-    if (!isUndefined(from._pf)) {
-        to._pf = getParsingFlags(from);
-    }
-    if (!isUndefined(from._locale)) {
-        to._locale = from._locale;
-    }
-
-    if (momentProperties.length > 0) {
-        for (i in momentProperties) {
-            prop = momentProperties[i];
-            val = from[prop];
-            if (!isUndefined(val)) {
-                to[prop] = val;
-            }
+        if (!isUndefined(from._isAMomentObject)) {
+            to._isAMomentObject = from._isAMomentObject;
         }
-    }
-
-    return to;
-}
-
-var updateInProgress = false;
-
-// Moment prototype object
-function Moment(config) {
-    copyConfig(this, config);
-    this._d = new Date(config._d != null ? config._d.getTime() : NaN);
-    if (!this.isValid()) {
-        this._d = new Date(NaN);
-    }
-    // Prevent infinite loop in case updateOffset creates new moment
-    // objects.
-    if (updateInProgress === false) {
-        updateInProgress = true;
-        hooks.updateOffset(this);
-        updateInProgress = false;
-    }
-}
-
-function isMoment (obj) {
-    return obj instanceof Moment || (obj != null && obj._isAMomentObject != null);
-}
-
-function absFloor (number) {
-    if (number < 0) {
-        // -0 -> 0
-        return Math.ceil(number) || 0;
-    } else {
-        return Math.floor(number);
-    }
-}
-
-function toInt(argumentForCoercion) {
-    var coercedNumber = +argumentForCoercion,
-        value = 0;
-
-    if (coercedNumber !== 0 && isFinite(coercedNumber)) {
-        value = absFloor(coercedNumber);
-    }
-
-    return value;
-}
-
-// compare two arrays, return the number of differences
-function compareArrays(array1, array2, dontConvert) {
-    var len = Math.min(array1.length, array2.length),
-        lengthDiff = Math.abs(array1.length - array2.length),
-        diffs = 0,
-        i;
-    for (i = 0; i < len; i++) {
-        if ((dontConvert && array1[i] !== array2[i]) ||
-            (!dontConvert && toInt(array1[i]) !== toInt(array2[i]))) {
-            diffs++;
+        if (!isUndefined(from._i)) {
+            to._i = from._i;
         }
-    }
-    return diffs + lengthDiff;
-}
-
-function warn(msg) {
-    if (hooks.suppressDeprecationWarnings === false &&
-            (typeof console !==  'undefined') && console.warn) {
-        console.warn('Deprecation warning: ' + msg);
-    }
-}
-
-function deprecate(msg, fn) {
-    var firstTime = true;
-
-    return extend(function () {
-        if (hooks.deprecationHandler != null) {
-            hooks.deprecationHandler(null, msg);
+        if (!isUndefined(from._f)) {
+            to._f = from._f;
         }
-        if (firstTime) {
-            var args = [];
-            var arg;
-            for (var i = 0; i < arguments.length; i++) {
-                arg = '';
-                if (typeof arguments[i] === 'object') {
-                    arg += '\n[' + i + '] ';
-                    for (var key in arguments[0]) {
-                        arg += key + ': ' + arguments[0][key] + ', ';
-                    }
-                    arg = arg.slice(0, -2); // Remove trailing comma and space
-                } else {
-                    arg = arguments[i];
+        if (!isUndefined(from._l)) {
+            to._l = from._l;
+        }
+        if (!isUndefined(from._strict)) {
+            to._strict = from._strict;
+        }
+        if (!isUndefined(from._tzm)) {
+            to._tzm = from._tzm;
+        }
+        if (!isUndefined(from._isUTC)) {
+            to._isUTC = from._isUTC;
+        }
+        if (!isUndefined(from._offset)) {
+            to._offset = from._offset;
+        }
+        if (!isUndefined(from._pf)) {
+            to._pf = getParsingFlags(from);
+        }
+        if (!isUndefined(from._locale)) {
+            to._locale = from._locale;
+        }
+
+        if (momentProperties.length > 0) {
+            for (i = 0; i < momentProperties.length; i++) {
+                prop = momentProperties[i];
+                val = from[prop];
+                if (!isUndefined(val)) {
+                    to[prop] = val;
                 }
-                args.push(arg);
             }
-            warn(msg + '\nArguments: ' + Array.prototype.slice.call(args).join('') + '\n' + (new Error()).stack);
-            firstTime = false;
         }
-        return fn.apply(this, arguments);
-    }, fn);
-}
 
-var deprecations = {};
-
-function deprecateSimple(name, msg) {
-    if (hooks.deprecationHandler != null) {
-        hooks.deprecationHandler(name, msg);
+        return to;
     }
-    if (!deprecations[name]) {
-        warn(msg);
-        deprecations[name] = true;
+
+    var updateInProgress = false;
+
+    // Moment prototype object
+    function Moment(config) {
+        copyConfig(this, config);
+        this._d = new Date(config._d != null ? config._d.getTime() : NaN);
+        if (!this.isValid()) {
+            this._d = new Date(NaN);
+        }
+        // Prevent infinite loop in case updateOffset creates new moment
+        // objects.
+        if (updateInProgress === false) {
+            updateInProgress = true;
+            hooks.updateOffset(this);
+            updateInProgress = false;
+        }
     }
-}
 
-hooks.suppressDeprecationWarnings = false;
-hooks.deprecationHandler = null;
+    function isMoment (obj) {
+        return obj instanceof Moment || (obj != null && obj._isAMomentObject != null);
+    }
 
-function isFunction(input) {
-    return input instanceof Function || Object.prototype.toString.call(input) === '[object Function]';
-}
-
-function set (config) {
-    var prop, i;
-    for (i in config) {
-        prop = config[i];
-        if (isFunction(prop)) {
-            this[i] = prop;
+    function absFloor (number) {
+        if (number < 0) {
+            // -0 -> 0
+            return Math.ceil(number) || 0;
         } else {
-            this['_' + i] = prop;
+            return Math.floor(number);
         }
     }
-    this._config = config;
-    // Lenient ordinal parsing accepts just a number in addition to
-    // number + (possibly) stuff coming from _ordinalParseLenient.
-    this._ordinalParseLenient = new RegExp(this._ordinalParse.source + '|' + (/\d{1,2}/).source);
-}
 
-function mergeConfigs(parentConfig, childConfig) {
-    var res = extend({}, parentConfig), prop;
-    for (prop in childConfig) {
-        if (hasOwnProp(childConfig, prop)) {
-            if (isObject(parentConfig[prop]) && isObject(childConfig[prop])) {
-                res[prop] = {};
-                extend(res[prop], parentConfig[prop]);
-                extend(res[prop], childConfig[prop]);
-            } else if (childConfig[prop] != null) {
-                res[prop] = childConfig[prop];
-            } else {
-                delete res[prop];
+    function toInt(argumentForCoercion) {
+        var coercedNumber = +argumentForCoercion,
+            value = 0;
+
+        if (coercedNumber !== 0 && isFinite(coercedNumber)) {
+            value = absFloor(coercedNumber);
+        }
+
+        return value;
+    }
+
+    // compare two arrays, return the number of differences
+    function compareArrays(array1, array2, dontConvert) {
+        var len = Math.min(array1.length, array2.length),
+            lengthDiff = Math.abs(array1.length - array2.length),
+            diffs = 0,
+            i;
+        for (i = 0; i < len; i++) {
+            if ((dontConvert && array1[i] !== array2[i]) ||
+                (!dontConvert && toInt(array1[i]) !== toInt(array2[i]))) {
+                diffs++;
             }
         }
+        return diffs + lengthDiff;
     }
-    for (prop in parentConfig) {
-        if (hasOwnProp(parentConfig, prop) &&
-                !hasOwnProp(childConfig, prop) &&
-                isObject(parentConfig[prop])) {
-            // make sure changes to properties don't modify parent config
-            res[prop] = extend({}, res[prop]);
+
+    function warn(msg) {
+        if (hooks.suppressDeprecationWarnings === false &&
+                (typeof console !==  'undefined') && console.warn) {
+            console.warn('Deprecation warning: ' + msg);
         }
     }
-    return res;
-}
 
-function Locale(config) {
-    if (config != null) {
-        this.set(config);
+    function deprecate(msg, fn) {
+        var firstTime = true;
+
+        return extend(function () {
+            if (hooks.deprecationHandler != null) {
+                hooks.deprecationHandler(null, msg);
+            }
+            if (firstTime) {
+                var args = [];
+                var arg;
+                for (var i = 0; i < arguments.length; i++) {
+                    arg = '';
+                    if (typeof arguments[i] === 'object') {
+                        arg += '\n[' + i + '] ';
+                        for (var key in arguments[0]) {
+                            arg += key + ': ' + arguments[0][key] + ', ';
+                        }
+                        arg = arg.slice(0, -2); // Remove trailing comma and space
+                    } else {
+                        arg = arguments[i];
+                    }
+                    args.push(arg);
+                }
+                warn(msg + '\nArguments: ' + Array.prototype.slice.call(args).join('') + '\n' + (new Error()).stack);
+                firstTime = false;
+            }
+            return fn.apply(this, arguments);
+        }, fn);
     }
-}
 
-var keys;
+    var deprecations = {};
 
-if (Object.keys) {
-    keys = Object.keys;
-} else {
-    keys = function (obj) {
-        var i, res = [];
-        for (i in obj) {
-            if (hasOwnProp(obj, i)) {
-                res.push(i);
+    function deprecateSimple(name, msg) {
+        if (hooks.deprecationHandler != null) {
+            hooks.deprecationHandler(name, msg);
+        }
+        if (!deprecations[name]) {
+            warn(msg);
+            deprecations[name] = true;
+        }
+    }
+
+    hooks.suppressDeprecationWarnings = false;
+    hooks.deprecationHandler = null;
+
+    function isFunction(input) {
+        return input instanceof Function || Object.prototype.toString.call(input) === '[object Function]';
+    }
+
+    function set (config) {
+        var prop, i;
+        for (i in config) {
+            prop = config[i];
+            if (isFunction(prop)) {
+                this[i] = prop;
+            } else {
+                this['_' + i] = prop;
+            }
+        }
+        this._config = config;
+        // Lenient ordinal parsing accepts just a number in addition to
+        // number + (possibly) stuff coming from _dayOfMonthOrdinalParse.
+        // TODO: Remove "ordinalParse" fallback in next major release.
+        this._dayOfMonthOrdinalParseLenient = new RegExp(
+            (this._dayOfMonthOrdinalParse.source || this._ordinalParse.source) +
+                '|' + (/\d{1,2}/).source);
+    }
+
+    function mergeConfigs(parentConfig, childConfig) {
+        var res = extend({}, parentConfig), prop;
+        for (prop in childConfig) {
+            if (hasOwnProp(childConfig, prop)) {
+                if (isObject(parentConfig[prop]) && isObject(childConfig[prop])) {
+                    res[prop] = {};
+                    extend(res[prop], parentConfig[prop]);
+                    extend(res[prop], childConfig[prop]);
+                } else if (childConfig[prop] != null) {
+                    res[prop] = childConfig[prop];
+                } else {
+                    delete res[prop];
+                }
+            }
+        }
+        for (prop in parentConfig) {
+            if (hasOwnProp(parentConfig, prop) &&
+                    !hasOwnProp(childConfig, prop) &&
+                    isObject(parentConfig[prop])) {
+                // make sure changes to properties don't modify parent config
+                res[prop] = extend({}, res[prop]);
             }
         }
         return res;
+    }
+
+    function Locale(config) {
+        if (config != null) {
+            this.set(config);
+        }
+    }
+
+    var keys;
+
+    if (Object.keys) {
+        keys = Object.keys;
+    } else {
+        keys = function (obj) {
+            var i, res = [];
+            for (i in obj) {
+                if (hasOwnProp(obj, i)) {
+                    res.push(i);
+                }
+            }
+            return res;
+        };
+    }
+
+    var defaultCalendar = {
+        sameDay : '[Today at] LT',
+        nextDay : '[Tomorrow at] LT',
+        nextWeek : 'dddd [at] LT',
+        lastDay : '[Yesterday at] LT',
+        lastWeek : '[Last] dddd [at] LT',
+        sameElse : 'L'
     };
-}
 
-var keys$1 = keys;
+    function calendar (key, mom, now) {
+        var output = this._calendar[key] || this._calendar['sameElse'];
+        return isFunction(output) ? output.call(mom, now) : output;
+    }
 
-var defaultCalendar = {
-    sameDay : '[Today at] LT',
-    nextDay : '[Tomorrow at] LT',
-    nextWeek : 'dddd [at] LT',
-    lastDay : '[Yesterday at] LT',
-    lastWeek : '[Last] dddd [at] LT',
-    sameElse : 'L'
-};
+    var defaultLongDateFormat = {
+        LTS  : 'h:mm:ss A',
+        LT   : 'h:mm A',
+        L    : 'MM/DD/YYYY',
+        LL   : 'MMMM D, YYYY',
+        LLL  : 'MMMM D, YYYY h:mm A',
+        LLLL : 'dddd, MMMM D, YYYY h:mm A'
+    };
 
-function calendar (key, mom, now) {
-    var output = this._calendar[key] || this._calendar['sameElse'];
-    return isFunction(output) ? output.call(mom, now) : output;
-}
+    function longDateFormat (key) {
+        var format = this._longDateFormat[key],
+            formatUpper = this._longDateFormat[key.toUpperCase()];
 
-var defaultLongDateFormat = {
-    LTS  : 'h:mm:ss A',
-    LT   : 'h:mm A',
-    L    : 'MM/DD/YYYY',
-    LL   : 'MMMM D, YYYY',
-    LLL  : 'MMMM D, YYYY h:mm A',
-    LLLL : 'dddd, MMMM D, YYYY h:mm A'
-};
+        if (format || !formatUpper) {
+            return format;
+        }
 
-function longDateFormat (key) {
-    var format = this._longDateFormat[key],
-        formatUpper = this._longDateFormat[key.toUpperCase()];
+        this._longDateFormat[key] = formatUpper.replace(/MMMM|MM|DD|dddd/g, function (val) {
+            return val.slice(1);
+        });
 
-    if (format || !formatUpper) {
+        return this._longDateFormat[key];
+    }
+
+    var defaultInvalidDate = 'Invalid date';
+
+    function invalidDate () {
+        return this._invalidDate;
+    }
+
+    var defaultOrdinal = '%d';
+    var defaultDayOfMonthOrdinalParse = /\d{1,2}/;
+
+    function ordinal (number) {
+        return this._ordinal.replace('%d', number);
+    }
+
+    var defaultRelativeTime = {
+        future : 'in %s',
+        past   : '%s ago',
+        s  : 'a few seconds',
+        ss : '%d seconds',
+        m  : 'a minute',
+        mm : '%d minutes',
+        h  : 'an hour',
+        hh : '%d hours',
+        d  : 'a day',
+        dd : '%d days',
+        M  : 'a month',
+        MM : '%d months',
+        y  : 'a year',
+        yy : '%d years'
+    };
+
+    function relativeTime (number, withoutSuffix, string, isFuture) {
+        var output = this._relativeTime[string];
+        return (isFunction(output)) ?
+            output(number, withoutSuffix, string, isFuture) :
+            output.replace(/%d/i, number);
+    }
+
+    function pastFuture (diff, output) {
+        var format = this._relativeTime[diff > 0 ? 'future' : 'past'];
+        return isFunction(format) ? format(output) : format.replace(/%s/i, output);
+    }
+
+    var aliases = {};
+
+    function addUnitAlias (unit, shorthand) {
+        var lowerCase = unit.toLowerCase();
+        aliases[lowerCase] = aliases[lowerCase + 's'] = aliases[shorthand] = unit;
+    }
+
+    function normalizeUnits(units) {
+        return typeof units === 'string' ? aliases[units] || aliases[units.toLowerCase()] : undefined;
+    }
+
+    function normalizeObjectUnits(inputObject) {
+        var normalizedInput = {},
+            normalizedProp,
+            prop;
+
+        for (prop in inputObject) {
+            if (hasOwnProp(inputObject, prop)) {
+                normalizedProp = normalizeUnits(prop);
+                if (normalizedProp) {
+                    normalizedInput[normalizedProp] = inputObject[prop];
+                }
+            }
+        }
+
+        return normalizedInput;
+    }
+
+    var priorities = {};
+
+    function addUnitPriority(unit, priority) {
+        priorities[unit] = priority;
+    }
+
+    function getPrioritizedUnits(unitsObj) {
+        var units = [];
+        for (var u in unitsObj) {
+            units.push({unit: u, priority: priorities[u]});
+        }
+        units.sort(function (a, b) {
+            return a.priority - b.priority;
+        });
+        return units;
+    }
+
+    function zeroFill(number, targetLength, forceSign) {
+        var absNumber = '' + Math.abs(number),
+            zerosToFill = targetLength - absNumber.length,
+            sign = number >= 0;
+        return (sign ? (forceSign ? '+' : '') : '-') +
+            Math.pow(10, Math.max(0, zerosToFill)).toString().substr(1) + absNumber;
+    }
+
+    var formattingTokens = /(\[[^\[]*\])|(\\)?([Hh]mm(ss)?|Mo|MM?M?M?|Do|DDDo|DD?D?D?|ddd?d?|do?|w[o|w]?|W[o|W]?|Qo?|YYYYYY|YYYYY|YYYY|YY|gg(ggg?)?|GG(GGG?)?|e|E|a|A|hh?|HH?|kk?|mm?|ss?|S{1,9}|x|X|zz?|ZZ?|.)/g;
+
+    var localFormattingTokens = /(\[[^\[]*\])|(\\)?(LTS|LT|LL?L?L?|l{1,4})/g;
+
+    var formatFunctions = {};
+
+    var formatTokenFunctions = {};
+
+    // token:    'M'
+    // padded:   ['MM', 2]
+    // ordinal:  'Mo'
+    // callback: function () { this.month() + 1 }
+    function addFormatToken (token, padded, ordinal, callback) {
+        var func = callback;
+        if (typeof callback === 'string') {
+            func = function () {
+                return this[callback]();
+            };
+        }
+        if (token) {
+            formatTokenFunctions[token] = func;
+        }
+        if (padded) {
+            formatTokenFunctions[padded[0]] = function () {
+                return zeroFill(func.apply(this, arguments), padded[1], padded[2]);
+            };
+        }
+        if (ordinal) {
+            formatTokenFunctions[ordinal] = function () {
+                return this.localeData().ordinal(func.apply(this, arguments), token);
+            };
+        }
+    }
+
+    function removeFormattingTokens(input) {
+        if (input.match(/\[[\s\S]/)) {
+            return input.replace(/^\[|\]$/g, '');
+        }
+        return input.replace(/\\/g, '');
+    }
+
+    function makeFormatFunction(format) {
+        var array = format.match(formattingTokens), i, length;
+
+        for (i = 0, length = array.length; i < length; i++) {
+            if (formatTokenFunctions[array[i]]) {
+                array[i] = formatTokenFunctions[array[i]];
+            } else {
+                array[i] = removeFormattingTokens(array[i]);
+            }
+        }
+
+        return function (mom) {
+            var output = '', i;
+            for (i = 0; i < length; i++) {
+                output += isFunction(array[i]) ? array[i].call(mom, format) : array[i];
+            }
+            return output;
+        };
+    }
+
+    // format date using native date object
+    function formatMoment(m, format) {
+        if (!m.isValid()) {
+            return m.localeData().invalidDate();
+        }
+
+        format = expandFormat(format, m.localeData());
+        formatFunctions[format] = formatFunctions[format] || makeFormatFunction(format);
+
+        return formatFunctions[format](m);
+    }
+
+    function expandFormat(format, locale) {
+        var i = 5;
+
+        function replaceLongDateFormatTokens(input) {
+            return locale.longDateFormat(input) || input;
+        }
+
+        localFormattingTokens.lastIndex = 0;
+        while (i >= 0 && localFormattingTokens.test(format)) {
+            format = format.replace(localFormattingTokens, replaceLongDateFormatTokens);
+            localFormattingTokens.lastIndex = 0;
+            i -= 1;
+        }
+
         return format;
     }
 
-    this._longDateFormat[key] = formatUpper.replace(/MMMM|MM|DD|dddd/g, function (val) {
-        return val.slice(1);
+    var match1         = /\d/;            //       0 - 9
+    var match2         = /\d\d/;          //      00 - 99
+    var match3         = /\d{3}/;         //     000 - 999
+    var match4         = /\d{4}/;         //    0000 - 9999
+    var match6         = /[+-]?\d{6}/;    // -999999 - 999999
+    var match1to2      = /\d\d?/;         //       0 - 99
+    var match3to4      = /\d\d\d\d?/;     //     999 - 9999
+    var match5to6      = /\d\d\d\d\d\d?/; //   99999 - 999999
+    var match1to3      = /\d{1,3}/;       //       0 - 999
+    var match1to4      = /\d{1,4}/;       //       0 - 9999
+    var match1to6      = /[+-]?\d{1,6}/;  // -999999 - 999999
+
+    var matchUnsigned  = /\d+/;           //       0 - inf
+    var matchSigned    = /[+-]?\d+/;      //    -inf - inf
+
+    var matchOffset    = /Z|[+-]\d\d:?\d\d/gi; // +00:00 -00:00 +0000 -0000 or Z
+    var matchShortOffset = /Z|[+-]\d\d(?::?\d\d)?/gi; // +00 -00 +00:00 -00:00 +0000 -0000 or Z
+
+    var matchTimestamp = /[+-]?\d+(\.\d{1,3})?/; // 123456789 123456789.123
+
+    // any word (or two) characters or numbers including two/three word month in arabic.
+    // includes scottish gaelic two word and hyphenated months
+    var matchWord = /[0-9]{0,256}['a-z\u00A0-\u05FF\u0700-\uD7FF\uF900-\uFDCF\uFDF0-\uFF07\uFF10-\uFFEF]{1,256}|[\u0600-\u06FF\/]{1,256}(\s*?[\u0600-\u06FF]{1,256}){1,2}/i;
+
+    var regexes = {};
+
+    function addRegexToken (token, regex, strictRegex) {
+        regexes[token] = isFunction(regex) ? regex : function (isStrict, localeData) {
+            return (isStrict && strictRegex) ? strictRegex : regex;
+        };
+    }
+
+    function getParseRegexForToken (token, config) {
+        if (!hasOwnProp(regexes, token)) {
+            return new RegExp(unescapeFormat(token));
+        }
+
+        return regexes[token](config._strict, config._locale);
+    }
+
+    // Code from http://stackoverflow.com/questions/3561493/is-there-a-regexp-escape-function-in-javascript
+    function unescapeFormat(s) {
+        return regexEscape(s.replace('\\', '').replace(/\\(\[)|\\(\])|\[([^\]\[]*)\]|\\(.)/g, function (matched, p1, p2, p3, p4) {
+            return p1 || p2 || p3 || p4;
+        }));
+    }
+
+    function regexEscape(s) {
+        return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    }
+
+    var tokens = {};
+
+    function addParseToken (token, callback) {
+        var i, func = callback;
+        if (typeof token === 'string') {
+            token = [token];
+        }
+        if (isNumber(callback)) {
+            func = function (input, array) {
+                array[callback] = toInt(input);
+            };
+        }
+        for (i = 0; i < token.length; i++) {
+            tokens[token[i]] = func;
+        }
+    }
+
+    function addWeekParseToken (token, callback) {
+        addParseToken(token, function (input, array, config, token) {
+            config._w = config._w || {};
+            callback(input, config._w, config, token);
+        });
+    }
+
+    function addTimeToArrayFromToken(token, input, config) {
+        if (input != null && hasOwnProp(tokens, token)) {
+            tokens[token](input, config._a, config, token);
+        }
+    }
+
+    var YEAR = 0;
+    var MONTH = 1;
+    var DATE = 2;
+    var HOUR = 3;
+    var MINUTE = 4;
+    var SECOND = 5;
+    var MILLISECOND = 6;
+    var WEEK = 7;
+    var WEEKDAY = 8;
+
+    // FORMATTING
+
+    addFormatToken('Y', 0, 0, function () {
+        var y = this.year();
+        return y <= 9999 ? '' + y : '+' + y;
     });
 
-    return this._longDateFormat[key];
-}
+    addFormatToken(0, ['YY', 2], 0, function () {
+        return this.year() % 100;
+    });
 
-var defaultInvalidDate = 'Invalid date';
+    addFormatToken(0, ['YYYY',   4],       0, 'year');
+    addFormatToken(0, ['YYYYY',  5],       0, 'year');
+    addFormatToken(0, ['YYYYYY', 6, true], 0, 'year');
 
-function invalidDate () {
-    return this._invalidDate;
-}
+    // ALIASES
 
-var defaultOrdinal = '%d';
-var defaultOrdinalParse = /\d{1,2}/;
+    addUnitAlias('year', 'y');
 
-function ordinal (number) {
-    return this._ordinal.replace('%d', number);
-}
+    // PRIORITIES
 
-var defaultRelativeTime = {
-    future : 'in %s',
-    past   : '%s ago',
-    s  : 'a few seconds',
-    m  : 'a minute',
-    mm : '%d minutes',
-    h  : 'an hour',
-    hh : '%d hours',
-    d  : 'a day',
-    dd : '%d days',
-    M  : 'a month',
-    MM : '%d months',
-    y  : 'a year',
-    yy : '%d years'
-};
+    addUnitPriority('year', 1);
 
-function relativeTime (number, withoutSuffix, string, isFuture) {
-    var output = this._relativeTime[string];
-    return (isFunction(output)) ?
-        output(number, withoutSuffix, string, isFuture) :
-        output.replace(/%d/i, number);
-}
+    // PARSING
 
-function pastFuture (diff, output) {
-    var format = this._relativeTime[diff > 0 ? 'future' : 'past'];
-    return isFunction(format) ? format(output) : format.replace(/%s/i, output);
-}
+    addRegexToken('Y',      matchSigned);
+    addRegexToken('YY',     match1to2, match2);
+    addRegexToken('YYYY',   match1to4, match4);
+    addRegexToken('YYYYY',  match1to6, match6);
+    addRegexToken('YYYYYY', match1to6, match6);
 
-var aliases = {};
+    addParseToken(['YYYYY', 'YYYYYY'], YEAR);
+    addParseToken('YYYY', function (input, array) {
+        array[YEAR] = input.length === 2 ? hooks.parseTwoDigitYear(input) : toInt(input);
+    });
+    addParseToken('YY', function (input, array) {
+        array[YEAR] = hooks.parseTwoDigitYear(input);
+    });
+    addParseToken('Y', function (input, array) {
+        array[YEAR] = parseInt(input, 10);
+    });
 
-function addUnitAlias (unit, shorthand) {
-    var lowerCase = unit.toLowerCase();
-    aliases[lowerCase] = aliases[lowerCase + 's'] = aliases[shorthand] = unit;
-}
+    // HELPERS
 
-function normalizeUnits(units) {
-    return typeof units === 'string' ? aliases[units] || aliases[units.toLowerCase()] : undefined;
-}
+    function daysInYear(year) {
+        return isLeapYear(year) ? 366 : 365;
+    }
 
-function normalizeObjectUnits(inputObject) {
-    var normalizedInput = {},
-        normalizedProp,
-        prop;
+    function isLeapYear(year) {
+        return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    }
 
-    for (prop in inputObject) {
-        if (hasOwnProp(inputObject, prop)) {
-            normalizedProp = normalizeUnits(prop);
-            if (normalizedProp) {
-                normalizedInput[normalizedProp] = inputObject[prop];
+    // HOOKS
+
+    hooks.parseTwoDigitYear = function (input) {
+        return toInt(input) + (toInt(input) > 68 ? 1900 : 2000);
+    };
+
+    // MOMENTS
+
+    var getSetYear = makeGetSet('FullYear', true);
+
+    function getIsLeapYear () {
+        return isLeapYear(this.year());
+    }
+
+    function makeGetSet (unit, keepTime) {
+        return function (value) {
+            if (value != null) {
+                set$1(this, unit, value);
+                hooks.updateOffset(this, keepTime);
+                return this;
+            } else {
+                return get(this, unit);
+            }
+        };
+    }
+
+    function get (mom, unit) {
+        return mom.isValid() ?
+            mom._d['get' + (mom._isUTC ? 'UTC' : '') + unit]() : NaN;
+    }
+
+    function set$1 (mom, unit, value) {
+        if (mom.isValid() && !isNaN(value)) {
+            if (unit === 'FullYear' && isLeapYear(mom.year()) && mom.month() === 1 && mom.date() === 29) {
+                mom._d['set' + (mom._isUTC ? 'UTC' : '') + unit](value, mom.month(), daysInMonth(value, mom.month()));
+            }
+            else {
+                mom._d['set' + (mom._isUTC ? 'UTC' : '') + unit](value);
             }
         }
     }
 
-    return normalizedInput;
-}
+    // MOMENTS
 
-var priorities = {};
-
-function addUnitPriority(unit, priority) {
-    priorities[unit] = priority;
-}
-
-function getPrioritizedUnits(unitsObj) {
-    var units = [];
-    for (var u in unitsObj) {
-        units.push({unit: u, priority: priorities[u]});
-    }
-    units.sort(function (a, b) {
-        return a.priority - b.priority;
-    });
-    return units;
-}
-
-function makeGetSet (unit, keepTime) {
-    return function (value) {
-        if (value != null) {
-            set$1(this, unit, value);
-            hooks.updateOffset(this, keepTime);
-            return this;
-        } else {
-            return get(this, unit);
-        }
-    };
-}
-
-function get (mom, unit) {
-    return mom.isValid() ?
-        mom._d['get' + (mom._isUTC ? 'UTC' : '') + unit]() : NaN;
-}
-
-function set$1 (mom, unit, value) {
-    if (mom.isValid()) {
-        mom._d['set' + (mom._isUTC ? 'UTC' : '') + unit](value);
-    }
-}
-
-// MOMENTS
-
-function stringGet (units) {
-    units = normalizeUnits(units);
-    if (isFunction(this[units])) {
-        return this[units]();
-    }
-    return this;
-}
-
-
-function stringSet (units, value) {
-    if (typeof units === 'object') {
-        units = normalizeObjectUnits(units);
-        var prioritized = getPrioritizedUnits(units);
-        for (var i = 0; i < prioritized.length; i++) {
-            this[prioritized[i].unit](units[prioritized[i].unit]);
-        }
-    } else {
+    function stringGet (units) {
         units = normalizeUnits(units);
         if (isFunction(this[units])) {
-            return this[units](value);
+            return this[units]();
         }
+        return this;
     }
-    return this;
-}
 
-function zeroFill(number, targetLength, forceSign) {
-    var absNumber = '' + Math.abs(number),
-        zerosToFill = targetLength - absNumber.length,
-        sign = number >= 0;
-    return (sign ? (forceSign ? '+' : '') : '-') +
-        Math.pow(10, Math.max(0, zerosToFill)).toString().substr(1) + absNumber;
-}
 
-var formattingTokens = /(\[[^\[]*\])|(\\)?([Hh]mm(ss)?|Mo|MM?M?M?|Do|DDDo|DD?D?D?|ddd?d?|do?|w[o|w]?|W[o|W]?|Qo?|YYYYYY|YYYYY|YYYY|YY|gg(ggg?)?|GG(GGG?)?|e|E|a|A|hh?|HH?|kk?|mm?|ss?|S{1,9}|x|X|zz?|ZZ?|.)/g;
-
-var localFormattingTokens = /(\[[^\[]*\])|(\\)?(LTS|LT|LL?L?L?|l{1,4})/g;
-
-var formatFunctions = {};
-
-var formatTokenFunctions = {};
-
-// token:    'M'
-// padded:   ['MM', 2]
-// ordinal:  'Mo'
-// callback: function () { this.month() + 1 }
-function addFormatToken (token, padded, ordinal, callback) {
-    var func = callback;
-    if (typeof callback === 'string') {
-        func = function () {
-            return this[callback]();
-        };
-    }
-    if (token) {
-        formatTokenFunctions[token] = func;
-    }
-    if (padded) {
-        formatTokenFunctions[padded[0]] = function () {
-            return zeroFill(func.apply(this, arguments), padded[1], padded[2]);
-        };
-    }
-    if (ordinal) {
-        formatTokenFunctions[ordinal] = function () {
-            return this.localeData().ordinal(func.apply(this, arguments), token);
-        };
-    }
-}
-
-function removeFormattingTokens(input) {
-    if (input.match(/\[[\s\S]/)) {
-        return input.replace(/^\[|\]$/g, '');
-    }
-    return input.replace(/\\/g, '');
-}
-
-function makeFormatFunction(format) {
-    var array = format.match(formattingTokens), i, length;
-
-    for (i = 0, length = array.length; i < length; i++) {
-        if (formatTokenFunctions[array[i]]) {
-            array[i] = formatTokenFunctions[array[i]];
+    function stringSet (units, value) {
+        if (typeof units === 'object') {
+            units = normalizeObjectUnits(units);
+            var prioritized = getPrioritizedUnits(units);
+            for (var i = 0; i < prioritized.length; i++) {
+                this[prioritized[i].unit](units[prioritized[i].unit]);
+            }
         } else {
-            array[i] = removeFormattingTokens(array[i]);
+            units = normalizeUnits(units);
+            if (isFunction(this[units])) {
+                return this[units](value);
+            }
         }
+        return this;
     }
 
-    return function (mom) {
-        var output = '', i;
-        for (i = 0; i < length; i++) {
-            output += array[i] instanceof Function ? array[i].call(mom, format) : array[i];
-        }
-        return output;
-    };
-}
-
-// format date using native date object
-function formatMoment(m, format) {
-    if (!m.isValid()) {
-        return m.localeData().invalidDate();
+    function mod(n, x) {
+        return ((n % x) + x) % x;
     }
 
-    format = expandFormat(format, m.localeData());
-    formatFunctions[format] = formatFunctions[format] || makeFormatFunction(format);
+    var indexOf;
 
-    return formatFunctions[format](m);
-}
-
-function expandFormat(format, locale) {
-    var i = 5;
-
-    function replaceLongDateFormatTokens(input) {
-        return locale.longDateFormat(input) || input;
-    }
-
-    localFormattingTokens.lastIndex = 0;
-    while (i >= 0 && localFormattingTokens.test(format)) {
-        format = format.replace(localFormattingTokens, replaceLongDateFormatTokens);
-        localFormattingTokens.lastIndex = 0;
-        i -= 1;
-    }
-
-    return format;
-}
-
-var match1         = /\d/;            //       0 - 9
-var match2         = /\d\d/;          //      00 - 99
-var match3         = /\d{3}/;         //     000 - 999
-var match4         = /\d{4}/;         //    0000 - 9999
-var match6         = /[+-]?\d{6}/;    // -999999 - 999999
-var match1to2      = /\d\d?/;         //       0 - 99
-var match3to4      = /\d\d\d\d?/;     //     999 - 9999
-var match5to6      = /\d\d\d\d\d\d?/; //   99999 - 999999
-var match1to3      = /\d{1,3}/;       //       0 - 999
-var match1to4      = /\d{1,4}/;       //       0 - 9999
-var match1to6      = /[+-]?\d{1,6}/;  // -999999 - 999999
-
-var matchUnsigned  = /\d+/;           //       0 - inf
-var matchSigned    = /[+-]?\d+/;      //    -inf - inf
-
-var matchOffset    = /Z|[+-]\d\d:?\d\d/gi; // +00:00 -00:00 +0000 -0000 or Z
-var matchShortOffset = /Z|[+-]\d\d(?::?\d\d)?/gi; // +00 -00 +00:00 -00:00 +0000 -0000 or Z
-
-var matchTimestamp = /[+-]?\d+(\.\d{1,3})?/; // 123456789 123456789.123
-
-// any word (or two) characters or numbers including two/three word month in arabic.
-// includes scottish gaelic two word and hyphenated months
-var matchWord = /[0-9]*['a-z\u00A0-\u05FF\u0700-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]+|[\u0600-\u06FF\/]+(\s*?[\u0600-\u06FF]+){1,2}/i;
-
-
-var regexes = {};
-
-function addRegexToken (token, regex, strictRegex) {
-    regexes[token] = isFunction(regex) ? regex : function (isStrict, localeData) {
-        return (isStrict && strictRegex) ? strictRegex : regex;
-    };
-}
-
-function getParseRegexForToken (token, config) {
-    if (!hasOwnProp(regexes, token)) {
-        return new RegExp(unescapeFormat(token));
-    }
-
-    return regexes[token](config._strict, config._locale);
-}
-
-// Code from http://stackoverflow.com/questions/3561493/is-there-a-regexp-escape-function-in-javascript
-function unescapeFormat(s) {
-    return regexEscape(s.replace('\\', '').replace(/\\(\[)|\\(\])|\[([^\]\[]*)\]|\\(.)/g, function (matched, p1, p2, p3, p4) {
-        return p1 || p2 || p3 || p4;
-    }));
-}
-
-function regexEscape(s) {
-    return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-}
-
-var tokens = {};
-
-function addParseToken (token, callback) {
-    var i, func = callback;
-    if (typeof token === 'string') {
-        token = [token];
-    }
-    if (isNumber(callback)) {
-        func = function (input, array) {
-            array[callback] = toInt(input);
+    if (Array.prototype.indexOf) {
+        indexOf = Array.prototype.indexOf;
+    } else {
+        indexOf = function (o) {
+            // I know
+            var i;
+            for (i = 0; i < this.length; ++i) {
+                if (this[i] === o) {
+                    return i;
+                }
+            }
+            return -1;
         };
     }
-    for (i = 0; i < token.length; i++) {
-        tokens[token[i]] = func;
-    }
-}
 
-function addWeekParseToken (token, callback) {
-    addParseToken(token, function (input, array, config, token) {
-        config._w = config._w || {};
-        callback(input, config._w, config, token);
+    function daysInMonth(year, month) {
+        if (isNaN(year) || isNaN(month)) {
+            return NaN;
+        }
+        var modMonth = mod(month, 12);
+        year += (month - modMonth) / 12;
+        return modMonth === 1 ? (isLeapYear(year) ? 29 : 28) : (31 - modMonth % 7 % 2);
+    }
+
+    // FORMATTING
+
+    addFormatToken('M', ['MM', 2], 'Mo', function () {
+        return this.month() + 1;
     });
-}
 
-function addTimeToArrayFromToken(token, input, config) {
-    if (input != null && hasOwnProp(tokens, token)) {
-        tokens[token](input, config._a, config, token);
+    addFormatToken('MMM', 0, 0, function (format) {
+        return this.localeData().monthsShort(this, format);
+    });
+
+    addFormatToken('MMMM', 0, 0, function (format) {
+        return this.localeData().months(this, format);
+    });
+
+    // ALIASES
+
+    addUnitAlias('month', 'M');
+
+    // PRIORITY
+
+    addUnitPriority('month', 8);
+
+    // PARSING
+
+    addRegexToken('M',    match1to2);
+    addRegexToken('MM',   match1to2, match2);
+    addRegexToken('MMM',  function (isStrict, locale) {
+        return locale.monthsShortRegex(isStrict);
+    });
+    addRegexToken('MMMM', function (isStrict, locale) {
+        return locale.monthsRegex(isStrict);
+    });
+
+    addParseToken(['M', 'MM'], function (input, array) {
+        array[MONTH] = toInt(input) - 1;
+    });
+
+    addParseToken(['MMM', 'MMMM'], function (input, array, config, token) {
+        var month = config._locale.monthsParse(input, token, config._strict);
+        // if we didn't find a month name, mark the date as invalid.
+        if (month != null) {
+            array[MONTH] = month;
+        } else {
+            getParsingFlags(config).invalidMonth = input;
+        }
+    });
+
+    // LOCALES
+
+    var MONTHS_IN_FORMAT = /D[oD]?(\[[^\[\]]*\]|\s)+MMMM?/;
+    var defaultLocaleMonths = 'January_February_March_April_May_June_July_August_September_October_November_December'.split('_');
+    function localeMonths (m, format) {
+        if (!m) {
+            return isArray(this._months) ? this._months :
+                this._months['standalone'];
+        }
+        return isArray(this._months) ? this._months[m.month()] :
+            this._months[(this._months.isFormat || MONTHS_IN_FORMAT).test(format) ? 'format' : 'standalone'][m.month()];
     }
-}
 
-var YEAR = 0;
-var MONTH = 1;
-var DATE = 2;
-var HOUR = 3;
-var MINUTE = 4;
-var SECOND = 5;
-var MILLISECOND = 6;
-var WEEK = 7;
-var WEEKDAY = 8;
+    var defaultLocaleMonthsShort = 'Jan_Feb_Mar_Apr_May_Jun_Jul_Aug_Sep_Oct_Nov_Dec'.split('_');
+    function localeMonthsShort (m, format) {
+        if (!m) {
+            return isArray(this._monthsShort) ? this._monthsShort :
+                this._monthsShort['standalone'];
+        }
+        return isArray(this._monthsShort) ? this._monthsShort[m.month()] :
+            this._monthsShort[MONTHS_IN_FORMAT.test(format) ? 'format' : 'standalone'][m.month()];
+    }
 
-var indexOf;
+    function handleStrictParse(monthName, format, strict) {
+        var i, ii, mom, llc = monthName.toLocaleLowerCase();
+        if (!this._monthsParse) {
+            // this is not used
+            this._monthsParse = [];
+            this._longMonthsParse = [];
+            this._shortMonthsParse = [];
+            for (i = 0; i < 12; ++i) {
+                mom = createUTC([2000, i]);
+                this._shortMonthsParse[i] = this.monthsShort(mom, '').toLocaleLowerCase();
+                this._longMonthsParse[i] = this.months(mom, '').toLocaleLowerCase();
+            }
+        }
 
-if (Array.prototype.indexOf) {
-    indexOf = Array.prototype.indexOf;
-} else {
-    indexOf = function (o) {
-        // I know
-        var i;
-        for (i = 0; i < this.length; ++i) {
-            if (this[i] === o) {
+        if (strict) {
+            if (format === 'MMM') {
+                ii = indexOf.call(this._shortMonthsParse, llc);
+                return ii !== -1 ? ii : null;
+            } else {
+                ii = indexOf.call(this._longMonthsParse, llc);
+                return ii !== -1 ? ii : null;
+            }
+        } else {
+            if (format === 'MMM') {
+                ii = indexOf.call(this._shortMonthsParse, llc);
+                if (ii !== -1) {
+                    return ii;
+                }
+                ii = indexOf.call(this._longMonthsParse, llc);
+                return ii !== -1 ? ii : null;
+            } else {
+                ii = indexOf.call(this._longMonthsParse, llc);
+                if (ii !== -1) {
+                    return ii;
+                }
+                ii = indexOf.call(this._shortMonthsParse, llc);
+                return ii !== -1 ? ii : null;
+            }
+        }
+    }
+
+    function localeMonthsParse (monthName, format, strict) {
+        var i, mom, regex;
+
+        if (this._monthsParseExact) {
+            return handleStrictParse.call(this, monthName, format, strict);
+        }
+
+        if (!this._monthsParse) {
+            this._monthsParse = [];
+            this._longMonthsParse = [];
+            this._shortMonthsParse = [];
+        }
+
+        // TODO: add sorting
+        // Sorting makes sure if one month (or abbr) is a prefix of another
+        // see sorting in computeMonthsParse
+        for (i = 0; i < 12; i++) {
+            // make the regex if we don't have it already
+            mom = createUTC([2000, i]);
+            if (strict && !this._longMonthsParse[i]) {
+                this._longMonthsParse[i] = new RegExp('^' + this.months(mom, '').replace('.', '') + '$', 'i');
+                this._shortMonthsParse[i] = new RegExp('^' + this.monthsShort(mom, '').replace('.', '') + '$', 'i');
+            }
+            if (!strict && !this._monthsParse[i]) {
+                regex = '^' + this.months(mom, '') + '|^' + this.monthsShort(mom, '');
+                this._monthsParse[i] = new RegExp(regex.replace('.', ''), 'i');
+            }
+            // test the regex
+            if (strict && format === 'MMMM' && this._longMonthsParse[i].test(monthName)) {
+                return i;
+            } else if (strict && format === 'MMM' && this._shortMonthsParse[i].test(monthName)) {
+                return i;
+            } else if (!strict && this._monthsParse[i].test(monthName)) {
                 return i;
             }
         }
-        return -1;
-    };
-}
-
-var indexOf$1 = indexOf;
-
-function daysInMonth(year, month) {
-    return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-}
-
-// FORMATTING
-
-addFormatToken('M', ['MM', 2], 'Mo', function () {
-    return this.month() + 1;
-});
-
-addFormatToken('MMM', 0, 0, function (format) {
-    return this.localeData().monthsShort(this, format);
-});
-
-addFormatToken('MMMM', 0, 0, function (format) {
-    return this.localeData().months(this, format);
-});
-
-// ALIASES
-
-addUnitAlias('month', 'M');
-
-// PRIORITY
-
-addUnitPriority('month', 8);
-
-// PARSING
-
-addRegexToken('M',    match1to2);
-addRegexToken('MM',   match1to2, match2);
-addRegexToken('MMM',  function (isStrict, locale) {
-    return locale.monthsShortRegex(isStrict);
-});
-addRegexToken('MMMM', function (isStrict, locale) {
-    return locale.monthsRegex(isStrict);
-});
-
-addParseToken(['M', 'MM'], function (input, array) {
-    array[MONTH] = toInt(input) - 1;
-});
-
-addParseToken(['MMM', 'MMMM'], function (input, array, config, token) {
-    var month = config._locale.monthsParse(input, token, config._strict);
-    // if we didn't find a month name, mark the date as invalid.
-    if (month != null) {
-        array[MONTH] = month;
-    } else {
-        getParsingFlags(config).invalidMonth = input;
     }
-});
 
-// LOCALES
+    // MOMENTS
 
-var MONTHS_IN_FORMAT = /D[oD]?(\[[^\[\]]*\]|\s)+MMMM?/;
-var defaultLocaleMonths = 'January_February_March_April_May_June_July_August_September_October_November_December'.split('_');
-function localeMonths (m, format) {
-    if (!m) {
-        return this._months;
-    }
-    return isArray(this._months) ? this._months[m.month()] :
-        this._months[(this._months.isFormat || MONTHS_IN_FORMAT).test(format) ? 'format' : 'standalone'][m.month()];
-}
+    function setMonth (mom, value) {
+        var dayOfMonth;
 
-var defaultLocaleMonthsShort = 'Jan_Feb_Mar_Apr_May_Jun_Jul_Aug_Sep_Oct_Nov_Dec'.split('_');
-function localeMonthsShort (m, format) {
-    if (!m) {
-        return this._monthsShort;
-    }
-    return isArray(this._monthsShort) ? this._monthsShort[m.month()] :
-        this._monthsShort[MONTHS_IN_FORMAT.test(format) ? 'format' : 'standalone'][m.month()];
-}
-
-function handleStrictParse(monthName, format, strict) {
-    var i, ii, mom, llc = monthName.toLocaleLowerCase();
-    if (!this._monthsParse) {
-        // this is not used
-        this._monthsParse = [];
-        this._longMonthsParse = [];
-        this._shortMonthsParse = [];
-        for (i = 0; i < 12; ++i) {
-            mom = createUTC([2000, i]);
-            this._shortMonthsParse[i] = this.monthsShort(mom, '').toLocaleLowerCase();
-            this._longMonthsParse[i] = this.months(mom, '').toLocaleLowerCase();
+        if (!mom.isValid()) {
+            // No op
+            return mom;
         }
-    }
 
-    if (strict) {
-        if (format === 'MMM') {
-            ii = indexOf$1.call(this._shortMonthsParse, llc);
-            return ii !== -1 ? ii : null;
-        } else {
-            ii = indexOf$1.call(this._longMonthsParse, llc);
-            return ii !== -1 ? ii : null;
-        }
-    } else {
-        if (format === 'MMM') {
-            ii = indexOf$1.call(this._shortMonthsParse, llc);
-            if (ii !== -1) {
-                return ii;
+        if (typeof value === 'string') {
+            if (/^\d+$/.test(value)) {
+                value = toInt(value);
+            } else {
+                value = mom.localeData().monthsParse(value);
+                // TODO: Another silent failure?
+                if (!isNumber(value)) {
+                    return mom;
+                }
             }
-            ii = indexOf$1.call(this._longMonthsParse, llc);
-            return ii !== -1 ? ii : null;
-        } else {
-            ii = indexOf$1.call(this._longMonthsParse, llc);
-            if (ii !== -1) {
-                return ii;
-            }
-            ii = indexOf$1.call(this._shortMonthsParse, llc);
-            return ii !== -1 ? ii : null;
         }
-    }
-}
 
-function localeMonthsParse (monthName, format, strict) {
-    var i, mom, regex;
-
-    if (this._monthsParseExact) {
-        return handleStrictParse.call(this, monthName, format, strict);
-    }
-
-    if (!this._monthsParse) {
-        this._monthsParse = [];
-        this._longMonthsParse = [];
-        this._shortMonthsParse = [];
-    }
-
-    // TODO: add sorting
-    // Sorting makes sure if one month (or abbr) is a prefix of another
-    // see sorting in computeMonthsParse
-    for (i = 0; i < 12; i++) {
-        // make the regex if we don't have it already
-        mom = createUTC([2000, i]);
-        if (strict && !this._longMonthsParse[i]) {
-            this._longMonthsParse[i] = new RegExp('^' + this.months(mom, '').replace('.', '') + '$', 'i');
-            this._shortMonthsParse[i] = new RegExp('^' + this.monthsShort(mom, '').replace('.', '') + '$', 'i');
-        }
-        if (!strict && !this._monthsParse[i]) {
-            regex = '^' + this.months(mom, '') + '|^' + this.monthsShort(mom, '');
-            this._monthsParse[i] = new RegExp(regex.replace('.', ''), 'i');
-        }
-        // test the regex
-        if (strict && format === 'MMMM' && this._longMonthsParse[i].test(monthName)) {
-            return i;
-        } else if (strict && format === 'MMM' && this._shortMonthsParse[i].test(monthName)) {
-            return i;
-        } else if (!strict && this._monthsParse[i].test(monthName)) {
-            return i;
-        }
-    }
-}
-
-// MOMENTS
-
-function setMonth (mom, value) {
-    var dayOfMonth;
-
-    if (!mom.isValid()) {
-        // No op
+        dayOfMonth = Math.min(mom.date(), daysInMonth(mom.year(), value));
+        mom._d['set' + (mom._isUTC ? 'UTC' : '') + 'Month'](value, dayOfMonth);
         return mom;
     }
 
-    if (typeof value === 'string') {
-        if (/^\d+$/.test(value)) {
-            value = toInt(value);
+    function getSetMonth (value) {
+        if (value != null) {
+            setMonth(this, value);
+            hooks.updateOffset(this, true);
+            return this;
         } else {
-            value = mom.localeData().monthsParse(value);
-            // TODO: Another silent failure?
-            if (!isNumber(value)) {
-                return mom;
+            return get(this, 'Month');
+        }
+    }
+
+    function getDaysInMonth () {
+        return daysInMonth(this.year(), this.month());
+    }
+
+    var defaultMonthsShortRegex = matchWord;
+    function monthsShortRegex (isStrict) {
+        if (this._monthsParseExact) {
+            if (!hasOwnProp(this, '_monthsRegex')) {
+                computeMonthsParse.call(this);
             }
-        }
-    }
-
-    dayOfMonth = Math.min(mom.date(), daysInMonth(mom.year(), value));
-    mom._d['set' + (mom._isUTC ? 'UTC' : '') + 'Month'](value, dayOfMonth);
-    return mom;
-}
-
-function getSetMonth (value) {
-    if (value != null) {
-        setMonth(this, value);
-        hooks.updateOffset(this, true);
-        return this;
-    } else {
-        return get(this, 'Month');
-    }
-}
-
-function getDaysInMonth () {
-    return daysInMonth(this.year(), this.month());
-}
-
-var defaultMonthsShortRegex = matchWord;
-function monthsShortRegex (isStrict) {
-    if (this._monthsParseExact) {
-        if (!hasOwnProp(this, '_monthsRegex')) {
-            computeMonthsParse.call(this);
-        }
-        if (isStrict) {
-            return this._monthsShortStrictRegex;
-        } else {
-            return this._monthsShortRegex;
-        }
-    } else {
-        if (!hasOwnProp(this, '_monthsShortRegex')) {
-            this._monthsShortRegex = defaultMonthsShortRegex;
-        }
-        return this._monthsShortStrictRegex && isStrict ?
-            this._monthsShortStrictRegex : this._monthsShortRegex;
-    }
-}
-
-var defaultMonthsRegex = matchWord;
-function monthsRegex (isStrict) {
-    if (this._monthsParseExact) {
-        if (!hasOwnProp(this, '_monthsRegex')) {
-            computeMonthsParse.call(this);
-        }
-        if (isStrict) {
-            return this._monthsStrictRegex;
-        } else {
-            return this._monthsRegex;
-        }
-    } else {
-        if (!hasOwnProp(this, '_monthsRegex')) {
-            this._monthsRegex = defaultMonthsRegex;
-        }
-        return this._monthsStrictRegex && isStrict ?
-            this._monthsStrictRegex : this._monthsRegex;
-    }
-}
-
-function computeMonthsParse () {
-    function cmpLenRev(a, b) {
-        return b.length - a.length;
-    }
-
-    var shortPieces = [], longPieces = [], mixedPieces = [],
-        i, mom;
-    for (i = 0; i < 12; i++) {
-        // make the regex if we don't have it already
-        mom = createUTC([2000, i]);
-        shortPieces.push(this.monthsShort(mom, ''));
-        longPieces.push(this.months(mom, ''));
-        mixedPieces.push(this.months(mom, ''));
-        mixedPieces.push(this.monthsShort(mom, ''));
-    }
-    // Sorting makes sure if one month (or abbr) is a prefix of another it
-    // will match the longer piece.
-    shortPieces.sort(cmpLenRev);
-    longPieces.sort(cmpLenRev);
-    mixedPieces.sort(cmpLenRev);
-    for (i = 0; i < 12; i++) {
-        shortPieces[i] = regexEscape(shortPieces[i]);
-        longPieces[i] = regexEscape(longPieces[i]);
-    }
-    for (i = 0; i < 24; i++) {
-        mixedPieces[i] = regexEscape(mixedPieces[i]);
-    }
-
-    this._monthsRegex = new RegExp('^(' + mixedPieces.join('|') + ')', 'i');
-    this._monthsShortRegex = this._monthsRegex;
-    this._monthsStrictRegex = new RegExp('^(' + longPieces.join('|') + ')', 'i');
-    this._monthsShortStrictRegex = new RegExp('^(' + shortPieces.join('|') + ')', 'i');
-}
-
-// FORMATTING
-
-addFormatToken('Y', 0, 0, function () {
-    var y = this.year();
-    return y <= 9999 ? '' + y : '+' + y;
-});
-
-addFormatToken(0, ['YY', 2], 0, function () {
-    return this.year() % 100;
-});
-
-addFormatToken(0, ['YYYY',   4],       0, 'year');
-addFormatToken(0, ['YYYYY',  5],       0, 'year');
-addFormatToken(0, ['YYYYYY', 6, true], 0, 'year');
-
-// ALIASES
-
-addUnitAlias('year', 'y');
-
-// PRIORITIES
-
-addUnitPriority('year', 1);
-
-// PARSING
-
-addRegexToken('Y',      matchSigned);
-addRegexToken('YY',     match1to2, match2);
-addRegexToken('YYYY',   match1to4, match4);
-addRegexToken('YYYYY',  match1to6, match6);
-addRegexToken('YYYYYY', match1to6, match6);
-
-addParseToken(['YYYYY', 'YYYYYY'], YEAR);
-addParseToken('YYYY', function (input, array) {
-    array[YEAR] = input.length === 2 ? hooks.parseTwoDigitYear(input) : toInt(input);
-});
-addParseToken('YY', function (input, array) {
-    array[YEAR] = hooks.parseTwoDigitYear(input);
-});
-addParseToken('Y', function (input, array) {
-    array[YEAR] = parseInt(input, 10);
-});
-
-// HELPERS
-
-function daysInYear(year) {
-    return isLeapYear(year) ? 366 : 365;
-}
-
-function isLeapYear(year) {
-    return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-}
-
-// HOOKS
-
-hooks.parseTwoDigitYear = function (input) {
-    return toInt(input) + (toInt(input) > 68 ? 1900 : 2000);
-};
-
-// MOMENTS
-
-var getSetYear = makeGetSet('FullYear', true);
-
-function getIsLeapYear () {
-    return isLeapYear(this.year());
-}
-
-function createDate (y, m, d, h, M, s, ms) {
-    //can't just apply() to create a date:
-    //http://stackoverflow.com/questions/181348/instantiating-a-javascript-object-by-calling-prototype-constructor-apply
-    var date = new Date(y, m, d, h, M, s, ms);
-
-    //the date constructor remaps years 0-99 to 1900-1999
-    if (y < 100 && y >= 0 && isFinite(date.getFullYear())) {
-        date.setFullYear(y);
-    }
-    return date;
-}
-
-function createUTCDate (y) {
-    var date = new Date(Date.UTC.apply(null, arguments));
-
-    //the Date.UTC function remaps years 0-99 to 1900-1999
-    if (y < 100 && y >= 0 && isFinite(date.getUTCFullYear())) {
-        date.setUTCFullYear(y);
-    }
-    return date;
-}
-
-// start-of-first-week - start-of-year
-function firstWeekOffset(year, dow, doy) {
-    var // first-week day -- which january is always in the first week (4 for iso, 1 for other)
-        fwd = 7 + dow - doy,
-        // first-week day local weekday -- which local weekday is fwd
-        fwdlw = (7 + createUTCDate(year, 0, fwd).getUTCDay() - dow) % 7;
-
-    return -fwdlw + fwd - 1;
-}
-
-//http://en.wikipedia.org/wiki/ISO_week_date#Calculating_a_date_given_the_year.2C_week_number_and_weekday
-function dayOfYearFromWeeks(year, week, weekday, dow, doy) {
-    var localWeekday = (7 + weekday - dow) % 7,
-        weekOffset = firstWeekOffset(year, dow, doy),
-        dayOfYear = 1 + 7 * (week - 1) + localWeekday + weekOffset,
-        resYear, resDayOfYear;
-
-    if (dayOfYear <= 0) {
-        resYear = year - 1;
-        resDayOfYear = daysInYear(resYear) + dayOfYear;
-    } else if (dayOfYear > daysInYear(year)) {
-        resYear = year + 1;
-        resDayOfYear = dayOfYear - daysInYear(year);
-    } else {
-        resYear = year;
-        resDayOfYear = dayOfYear;
-    }
-
-    return {
-        year: resYear,
-        dayOfYear: resDayOfYear
-    };
-}
-
-function weekOfYear(mom, dow, doy) {
-    var weekOffset = firstWeekOffset(mom.year(), dow, doy),
-        week = Math.floor((mom.dayOfYear() - weekOffset - 1) / 7) + 1,
-        resWeek, resYear;
-
-    if (week < 1) {
-        resYear = mom.year() - 1;
-        resWeek = week + weeksInYear(resYear, dow, doy);
-    } else if (week > weeksInYear(mom.year(), dow, doy)) {
-        resWeek = week - weeksInYear(mom.year(), dow, doy);
-        resYear = mom.year() + 1;
-    } else {
-        resYear = mom.year();
-        resWeek = week;
-    }
-
-    return {
-        week: resWeek,
-        year: resYear
-    };
-}
-
-function weeksInYear(year, dow, doy) {
-    var weekOffset = firstWeekOffset(year, dow, doy),
-        weekOffsetNext = firstWeekOffset(year + 1, dow, doy);
-    return (daysInYear(year) - weekOffset + weekOffsetNext) / 7;
-}
-
-// FORMATTING
-
-addFormatToken('w', ['ww', 2], 'wo', 'week');
-addFormatToken('W', ['WW', 2], 'Wo', 'isoWeek');
-
-// ALIASES
-
-addUnitAlias('week', 'w');
-addUnitAlias('isoWeek', 'W');
-
-// PRIORITIES
-
-addUnitPriority('week', 5);
-addUnitPriority('isoWeek', 5);
-
-// PARSING
-
-addRegexToken('w',  match1to2);
-addRegexToken('ww', match1to2, match2);
-addRegexToken('W',  match1to2);
-addRegexToken('WW', match1to2, match2);
-
-addWeekParseToken(['w', 'ww', 'W', 'WW'], function (input, week, config, token) {
-    week[token.substr(0, 1)] = toInt(input);
-});
-
-// HELPERS
-
-// LOCALES
-
-function localeWeek (mom) {
-    return weekOfYear(mom, this._week.dow, this._week.doy).week;
-}
-
-var defaultLocaleWeek = {
-    dow : 0, // Sunday is the first day of the week.
-    doy : 6  // The week that contains Jan 1st is the first week of the year.
-};
-
-function localeFirstDayOfWeek () {
-    return this._week.dow;
-}
-
-function localeFirstDayOfYear () {
-    return this._week.doy;
-}
-
-// MOMENTS
-
-function getSetWeek (input) {
-    var week = this.localeData().week(this);
-    return input == null ? week : this.add((input - week) * 7, 'd');
-}
-
-function getSetISOWeek (input) {
-    var week = weekOfYear(this, 1, 4).week;
-    return input == null ? week : this.add((input - week) * 7, 'd');
-}
-
-// FORMATTING
-
-addFormatToken('d', 0, 'do', 'day');
-
-addFormatToken('dd', 0, 0, function (format) {
-    return this.localeData().weekdaysMin(this, format);
-});
-
-addFormatToken('ddd', 0, 0, function (format) {
-    return this.localeData().weekdaysShort(this, format);
-});
-
-addFormatToken('dddd', 0, 0, function (format) {
-    return this.localeData().weekdays(this, format);
-});
-
-addFormatToken('e', 0, 0, 'weekday');
-addFormatToken('E', 0, 0, 'isoWeekday');
-
-// ALIASES
-
-addUnitAlias('day', 'd');
-addUnitAlias('weekday', 'e');
-addUnitAlias('isoWeekday', 'E');
-
-// PRIORITY
-addUnitPriority('day', 11);
-addUnitPriority('weekday', 11);
-addUnitPriority('isoWeekday', 11);
-
-// PARSING
-
-addRegexToken('d',    match1to2);
-addRegexToken('e',    match1to2);
-addRegexToken('E',    match1to2);
-addRegexToken('dd',   function (isStrict, locale) {
-    return locale.weekdaysMinRegex(isStrict);
-});
-addRegexToken('ddd',   function (isStrict, locale) {
-    return locale.weekdaysShortRegex(isStrict);
-});
-addRegexToken('dddd',   function (isStrict, locale) {
-    return locale.weekdaysRegex(isStrict);
-});
-
-addWeekParseToken(['dd', 'ddd', 'dddd'], function (input, week, config, token) {
-    var weekday = config._locale.weekdaysParse(input, token, config._strict);
-    // if we didn't get a weekday name, mark the date as invalid
-    if (weekday != null) {
-        week.d = weekday;
-    } else {
-        getParsingFlags(config).invalidWeekday = input;
-    }
-});
-
-addWeekParseToken(['d', 'e', 'E'], function (input, week, config, token) {
-    week[token] = toInt(input);
-});
-
-// HELPERS
-
-function parseWeekday(input, locale) {
-    if (typeof input !== 'string') {
-        return input;
-    }
-
-    if (!isNaN(input)) {
-        return parseInt(input, 10);
-    }
-
-    input = locale.weekdaysParse(input);
-    if (typeof input === 'number') {
-        return input;
-    }
-
-    return null;
-}
-
-function parseIsoWeekday(input, locale) {
-    if (typeof input === 'string') {
-        return locale.weekdaysParse(input) % 7 || 7;
-    }
-    return isNaN(input) ? null : input;
-}
-
-// LOCALES
-
-var defaultLocaleWeekdays = 'Sunday_Monday_Tuesday_Wednesday_Thursday_Friday_Saturday'.split('_');
-function localeWeekdays (m, format) {
-    if (!m) {
-        return this._weekdays;
-    }
-    return isArray(this._weekdays) ? this._weekdays[m.day()] :
-        this._weekdays[this._weekdays.isFormat.test(format) ? 'format' : 'standalone'][m.day()];
-}
-
-var defaultLocaleWeekdaysShort = 'Sun_Mon_Tue_Wed_Thu_Fri_Sat'.split('_');
-function localeWeekdaysShort (m) {
-    return (m) ? this._weekdaysShort[m.day()] : this._weekdaysShort;
-}
-
-var defaultLocaleWeekdaysMin = 'Su_Mo_Tu_We_Th_Fr_Sa'.split('_');
-function localeWeekdaysMin (m) {
-    return (m) ? this._weekdaysMin[m.day()] : this._weekdaysMin;
-}
-
-function handleStrictParse$1(weekdayName, format, strict) {
-    var i, ii, mom, llc = weekdayName.toLocaleLowerCase();
-    if (!this._weekdaysParse) {
-        this._weekdaysParse = [];
-        this._shortWeekdaysParse = [];
-        this._minWeekdaysParse = [];
-
-        for (i = 0; i < 7; ++i) {
-            mom = createUTC([2000, 1]).day(i);
-            this._minWeekdaysParse[i] = this.weekdaysMin(mom, '').toLocaleLowerCase();
-            this._shortWeekdaysParse[i] = this.weekdaysShort(mom, '').toLocaleLowerCase();
-            this._weekdaysParse[i] = this.weekdays(mom, '').toLocaleLowerCase();
-        }
-    }
-
-    if (strict) {
-        if (format === 'dddd') {
-            ii = indexOf$1.call(this._weekdaysParse, llc);
-            return ii !== -1 ? ii : null;
-        } else if (format === 'ddd') {
-            ii = indexOf$1.call(this._shortWeekdaysParse, llc);
-            return ii !== -1 ? ii : null;
-        } else {
-            ii = indexOf$1.call(this._minWeekdaysParse, llc);
-            return ii !== -1 ? ii : null;
-        }
-    } else {
-        if (format === 'dddd') {
-            ii = indexOf$1.call(this._weekdaysParse, llc);
-            if (ii !== -1) {
-                return ii;
-            }
-            ii = indexOf$1.call(this._shortWeekdaysParse, llc);
-            if (ii !== -1) {
-                return ii;
-            }
-            ii = indexOf$1.call(this._minWeekdaysParse, llc);
-            return ii !== -1 ? ii : null;
-        } else if (format === 'ddd') {
-            ii = indexOf$1.call(this._shortWeekdaysParse, llc);
-            if (ii !== -1) {
-                return ii;
-            }
-            ii = indexOf$1.call(this._weekdaysParse, llc);
-            if (ii !== -1) {
-                return ii;
-            }
-            ii = indexOf$1.call(this._minWeekdaysParse, llc);
-            return ii !== -1 ? ii : null;
-        } else {
-            ii = indexOf$1.call(this._minWeekdaysParse, llc);
-            if (ii !== -1) {
-                return ii;
-            }
-            ii = indexOf$1.call(this._weekdaysParse, llc);
-            if (ii !== -1) {
-                return ii;
-            }
-            ii = indexOf$1.call(this._shortWeekdaysParse, llc);
-            return ii !== -1 ? ii : null;
-        }
-    }
-}
-
-function localeWeekdaysParse (weekdayName, format, strict) {
-    var i, mom, regex;
-
-    if (this._weekdaysParseExact) {
-        return handleStrictParse$1.call(this, weekdayName, format, strict);
-    }
-
-    if (!this._weekdaysParse) {
-        this._weekdaysParse = [];
-        this._minWeekdaysParse = [];
-        this._shortWeekdaysParse = [];
-        this._fullWeekdaysParse = [];
-    }
-
-    for (i = 0; i < 7; i++) {
-        // make the regex if we don't have it already
-
-        mom = createUTC([2000, 1]).day(i);
-        if (strict && !this._fullWeekdaysParse[i]) {
-            this._fullWeekdaysParse[i] = new RegExp('^' + this.weekdays(mom, '').replace('.', '\.?') + '$', 'i');
-            this._shortWeekdaysParse[i] = new RegExp('^' + this.weekdaysShort(mom, '').replace('.', '\.?') + '$', 'i');
-            this._minWeekdaysParse[i] = new RegExp('^' + this.weekdaysMin(mom, '').replace('.', '\.?') + '$', 'i');
-        }
-        if (!this._weekdaysParse[i]) {
-            regex = '^' + this.weekdays(mom, '') + '|^' + this.weekdaysShort(mom, '') + '|^' + this.weekdaysMin(mom, '');
-            this._weekdaysParse[i] = new RegExp(regex.replace('.', ''), 'i');
-        }
-        // test the regex
-        if (strict && format === 'dddd' && this._fullWeekdaysParse[i].test(weekdayName)) {
-            return i;
-        } else if (strict && format === 'ddd' && this._shortWeekdaysParse[i].test(weekdayName)) {
-            return i;
-        } else if (strict && format === 'dd' && this._minWeekdaysParse[i].test(weekdayName)) {
-            return i;
-        } else if (!strict && this._weekdaysParse[i].test(weekdayName)) {
-            return i;
-        }
-    }
-}
-
-// MOMENTS
-
-function getSetDayOfWeek (input) {
-    if (!this.isValid()) {
-        return input != null ? this : NaN;
-    }
-    var day = this._isUTC ? this._d.getUTCDay() : this._d.getDay();
-    if (input != null) {
-        input = parseWeekday(input, this.localeData());
-        return this.add(input - day, 'd');
-    } else {
-        return day;
-    }
-}
-
-function getSetLocaleDayOfWeek (input) {
-    if (!this.isValid()) {
-        return input != null ? this : NaN;
-    }
-    var weekday = (this.day() + 7 - this.localeData()._week.dow) % 7;
-    return input == null ? weekday : this.add(input - weekday, 'd');
-}
-
-function getSetISODayOfWeek (input) {
-    if (!this.isValid()) {
-        return input != null ? this : NaN;
-    }
-
-    // behaves the same as moment#day except
-    // as a getter, returns 7 instead of 0 (1-7 range instead of 0-6)
-    // as a setter, sunday should belong to the previous week.
-
-    if (input != null) {
-        var weekday = parseIsoWeekday(input, this.localeData());
-        return this.day(this.day() % 7 ? weekday : weekday - 7);
-    } else {
-        return this.day() || 7;
-    }
-}
-
-var defaultWeekdaysRegex = matchWord;
-function weekdaysRegex (isStrict) {
-    if (this._weekdaysParseExact) {
-        if (!hasOwnProp(this, '_weekdaysRegex')) {
-            computeWeekdaysParse.call(this);
-        }
-        if (isStrict) {
-            return this._weekdaysStrictRegex;
-        } else {
-            return this._weekdaysRegex;
-        }
-    } else {
-        if (!hasOwnProp(this, '_weekdaysRegex')) {
-            this._weekdaysRegex = defaultWeekdaysRegex;
-        }
-        return this._weekdaysStrictRegex && isStrict ?
-            this._weekdaysStrictRegex : this._weekdaysRegex;
-    }
-}
-
-var defaultWeekdaysShortRegex = matchWord;
-function weekdaysShortRegex (isStrict) {
-    if (this._weekdaysParseExact) {
-        if (!hasOwnProp(this, '_weekdaysRegex')) {
-            computeWeekdaysParse.call(this);
-        }
-        if (isStrict) {
-            return this._weekdaysShortStrictRegex;
-        } else {
-            return this._weekdaysShortRegex;
-        }
-    } else {
-        if (!hasOwnProp(this, '_weekdaysShortRegex')) {
-            this._weekdaysShortRegex = defaultWeekdaysShortRegex;
-        }
-        return this._weekdaysShortStrictRegex && isStrict ?
-            this._weekdaysShortStrictRegex : this._weekdaysShortRegex;
-    }
-}
-
-var defaultWeekdaysMinRegex = matchWord;
-function weekdaysMinRegex (isStrict) {
-    if (this._weekdaysParseExact) {
-        if (!hasOwnProp(this, '_weekdaysRegex')) {
-            computeWeekdaysParse.call(this);
-        }
-        if (isStrict) {
-            return this._weekdaysMinStrictRegex;
-        } else {
-            return this._weekdaysMinRegex;
-        }
-    } else {
-        if (!hasOwnProp(this, '_weekdaysMinRegex')) {
-            this._weekdaysMinRegex = defaultWeekdaysMinRegex;
-        }
-        return this._weekdaysMinStrictRegex && isStrict ?
-            this._weekdaysMinStrictRegex : this._weekdaysMinRegex;
-    }
-}
-
-
-function computeWeekdaysParse () {
-    function cmpLenRev(a, b) {
-        return b.length - a.length;
-    }
-
-    var minPieces = [], shortPieces = [], longPieces = [], mixedPieces = [],
-        i, mom, minp, shortp, longp;
-    for (i = 0; i < 7; i++) {
-        // make the regex if we don't have it already
-        mom = createUTC([2000, 1]).day(i);
-        minp = this.weekdaysMin(mom, '');
-        shortp = this.weekdaysShort(mom, '');
-        longp = this.weekdays(mom, '');
-        minPieces.push(minp);
-        shortPieces.push(shortp);
-        longPieces.push(longp);
-        mixedPieces.push(minp);
-        mixedPieces.push(shortp);
-        mixedPieces.push(longp);
-    }
-    // Sorting makes sure if one weekday (or abbr) is a prefix of another it
-    // will match the longer piece.
-    minPieces.sort(cmpLenRev);
-    shortPieces.sort(cmpLenRev);
-    longPieces.sort(cmpLenRev);
-    mixedPieces.sort(cmpLenRev);
-    for (i = 0; i < 7; i++) {
-        shortPieces[i] = regexEscape(shortPieces[i]);
-        longPieces[i] = regexEscape(longPieces[i]);
-        mixedPieces[i] = regexEscape(mixedPieces[i]);
-    }
-
-    this._weekdaysRegex = new RegExp('^(' + mixedPieces.join('|') + ')', 'i');
-    this._weekdaysShortRegex = this._weekdaysRegex;
-    this._weekdaysMinRegex = this._weekdaysRegex;
-
-    this._weekdaysStrictRegex = new RegExp('^(' + longPieces.join('|') + ')', 'i');
-    this._weekdaysShortStrictRegex = new RegExp('^(' + shortPieces.join('|') + ')', 'i');
-    this._weekdaysMinStrictRegex = new RegExp('^(' + minPieces.join('|') + ')', 'i');
-}
-
-// FORMATTING
-
-function hFormat() {
-    return this.hours() % 12 || 12;
-}
-
-function kFormat() {
-    return this.hours() || 24;
-}
-
-addFormatToken('H', ['HH', 2], 0, 'hour');
-addFormatToken('h', ['hh', 2], 0, hFormat);
-addFormatToken('k', ['kk', 2], 0, kFormat);
-
-addFormatToken('hmm', 0, 0, function () {
-    return '' + hFormat.apply(this) + zeroFill(this.minutes(), 2);
-});
-
-addFormatToken('hmmss', 0, 0, function () {
-    return '' + hFormat.apply(this) + zeroFill(this.minutes(), 2) +
-        zeroFill(this.seconds(), 2);
-});
-
-addFormatToken('Hmm', 0, 0, function () {
-    return '' + this.hours() + zeroFill(this.minutes(), 2);
-});
-
-addFormatToken('Hmmss', 0, 0, function () {
-    return '' + this.hours() + zeroFill(this.minutes(), 2) +
-        zeroFill(this.seconds(), 2);
-});
-
-function meridiem (token, lowercase) {
-    addFormatToken(token, 0, 0, function () {
-        return this.localeData().meridiem(this.hours(), this.minutes(), lowercase);
-    });
-}
-
-meridiem('a', true);
-meridiem('A', false);
-
-// ALIASES
-
-addUnitAlias('hour', 'h');
-
-// PRIORITY
-addUnitPriority('hour', 13);
-
-// PARSING
-
-function matchMeridiem (isStrict, locale) {
-    return locale._meridiemParse;
-}
-
-addRegexToken('a',  matchMeridiem);
-addRegexToken('A',  matchMeridiem);
-addRegexToken('H',  match1to2);
-addRegexToken('h',  match1to2);
-addRegexToken('HH', match1to2, match2);
-addRegexToken('hh', match1to2, match2);
-
-addRegexToken('hmm', match3to4);
-addRegexToken('hmmss', match5to6);
-addRegexToken('Hmm', match3to4);
-addRegexToken('Hmmss', match5to6);
-
-addParseToken(['H', 'HH'], HOUR);
-addParseToken(['a', 'A'], function (input, array, config) {
-    config._isPm = config._locale.isPM(input);
-    config._meridiem = input;
-});
-addParseToken(['h', 'hh'], function (input, array, config) {
-    array[HOUR] = toInt(input);
-    getParsingFlags(config).bigHour = true;
-});
-addParseToken('hmm', function (input, array, config) {
-    var pos = input.length - 2;
-    array[HOUR] = toInt(input.substr(0, pos));
-    array[MINUTE] = toInt(input.substr(pos));
-    getParsingFlags(config).bigHour = true;
-});
-addParseToken('hmmss', function (input, array, config) {
-    var pos1 = input.length - 4;
-    var pos2 = input.length - 2;
-    array[HOUR] = toInt(input.substr(0, pos1));
-    array[MINUTE] = toInt(input.substr(pos1, 2));
-    array[SECOND] = toInt(input.substr(pos2));
-    getParsingFlags(config).bigHour = true;
-});
-addParseToken('Hmm', function (input, array, config) {
-    var pos = input.length - 2;
-    array[HOUR] = toInt(input.substr(0, pos));
-    array[MINUTE] = toInt(input.substr(pos));
-});
-addParseToken('Hmmss', function (input, array, config) {
-    var pos1 = input.length - 4;
-    var pos2 = input.length - 2;
-    array[HOUR] = toInt(input.substr(0, pos1));
-    array[MINUTE] = toInt(input.substr(pos1, 2));
-    array[SECOND] = toInt(input.substr(pos2));
-});
-
-// LOCALES
-
-function localeIsPM (input) {
-    // IE8 Quirks Mode & IE7 Standards Mode do not allow accessing strings like arrays
-    // Using charAt should be more compatible.
-    return ((input + '').toLowerCase().charAt(0) === 'p');
-}
-
-var defaultLocaleMeridiemParse = /[ap]\.?m?\.?/i;
-function localeMeridiem (hours, minutes, isLower) {
-    if (hours > 11) {
-        return isLower ? 'pm' : 'PM';
-    } else {
-        return isLower ? 'am' : 'AM';
-    }
-}
-
-
-// MOMENTS
-
-// Setting the hour should keep the time, because the user explicitly
-// specified which hour he wants. So trying to maintain the same hour (in
-// a new timezone) makes sense. Adding/subtracting hours does not follow
-// this rule.
-var getSetHour = makeGetSet('Hours', true);
-
-// months
-// week
-// weekdays
-// meridiem
-var baseConfig = {
-    calendar: defaultCalendar,
-    longDateFormat: defaultLongDateFormat,
-    invalidDate: defaultInvalidDate,
-    ordinal: defaultOrdinal,
-    ordinalParse: defaultOrdinalParse,
-    relativeTime: defaultRelativeTime,
-
-    months: defaultLocaleMonths,
-    monthsShort: defaultLocaleMonthsShort,
-
-    week: defaultLocaleWeek,
-
-    weekdays: defaultLocaleWeekdays,
-    weekdaysMin: defaultLocaleWeekdaysMin,
-    weekdaysShort: defaultLocaleWeekdaysShort,
-
-    meridiemParse: defaultLocaleMeridiemParse
-};
-
-// internal storage for locale config files
-var locales = {};
-var localeFamilies = {};
-var globalLocale;
-
-function normalizeLocale(key) {
-    return key ? key.toLowerCase().replace('_', '-') : key;
-}
-
-// pick the locale from the array
-// try ['en-au', 'en-gb'] as 'en-au', 'en-gb', 'en', as in move through the list trying each
-// substring from most specific to least, but move to the next array item if it's a more specific variant than the current root
-function chooseLocale(names) {
-    var i = 0, j, next, locale, split;
-
-    while (i < names.length) {
-        split = normalizeLocale(names[i]).split('-');
-        j = split.length;
-        next = normalizeLocale(names[i + 1]);
-        next = next ? next.split('-') : null;
-        while (j > 0) {
-            locale = loadLocale(split.slice(0, j).join('-'));
-            if (locale) {
-                return locale;
-            }
-            if (next && next.length >= j && compareArrays(split, next, true) >= j - 1) {
-                //the next array item is better than a shallower substring of this one
-                break;
-            }
-            j--;
-        }
-        i++;
-    }
-    return null;
-}
-
-function loadLocale(name) {
-    var oldLocale = null;
-    // TODO: Find a better way to register and load all the locales in Node
-    if (!locales[name] && (typeof module !== 'undefined') &&
-            module && module.exports) {
-        try {
-            oldLocale = globalLocale._abbr;
-            require('./locale/' + name);
-            // because defineLocale currently also sets the global locale, we
-            // want to undo that for lazy loaded locales
-            getSetGlobalLocale(oldLocale);
-        } catch (e) { }
-    }
-    return locales[name];
-}
-
-// This function will load locale and then set the global locale.  If
-// no arguments are passed in, it will simply return the current global
-// locale key.
-function getSetGlobalLocale (key, values) {
-    var data;
-    if (key) {
-        if (isUndefined(values)) {
-            data = getLocale(key);
-        }
-        else {
-            data = defineLocale(key, values);
-        }
-
-        if (data) {
-            // moment.duration._locale = moment._locale = data;
-            globalLocale = data;
-        }
-    }
-
-    return globalLocale._abbr;
-}
-
-function defineLocale (name, config) {
-    if (config !== null) {
-        var parentConfig = baseConfig;
-        config.abbr = name;
-        if (locales[name] != null) {
-            deprecateSimple('defineLocaleOverride',
-                    'use moment.updateLocale(localeName, config) to change ' +
-                    'an existing locale. moment.defineLocale(localeName, ' +
-                    'config) should only be used for creating a new locale ' +
-                    'See http://momentjs.com/guides/#/warnings/define-locale/ for more info.');
-            parentConfig = locales[name]._config;
-        } else if (config.parentLocale != null) {
-            if (locales[config.parentLocale] != null) {
-                parentConfig = locales[config.parentLocale]._config;
+            if (isStrict) {
+                return this._monthsShortStrictRegex;
             } else {
-                if (!localeFamilies[config.parentLocale]) {
-                    localeFamilies[config.parentLocale] = [];
-                }
-                localeFamilies[config.parentLocale].push({
-                    name: name,
-                    config: config
-                });
-                return null;
+                return this._monthsShortRegex;
             }
+        } else {
+            if (!hasOwnProp(this, '_monthsShortRegex')) {
+                this._monthsShortRegex = defaultMonthsShortRegex;
+            }
+            return this._monthsShortStrictRegex && isStrict ?
+                this._monthsShortStrictRegex : this._monthsShortRegex;
         }
-        locales[name] = new Locale(mergeConfigs(parentConfig, config));
+    }
 
-        if (localeFamilies[name]) {
-            localeFamilies[name].forEach(function (x) {
-                defineLocale(x.name, x.config);
-            });
+    var defaultMonthsRegex = matchWord;
+    function monthsRegex (isStrict) {
+        if (this._monthsParseExact) {
+            if (!hasOwnProp(this, '_monthsRegex')) {
+                computeMonthsParse.call(this);
+            }
+            if (isStrict) {
+                return this._monthsStrictRegex;
+            } else {
+                return this._monthsRegex;
+            }
+        } else {
+            if (!hasOwnProp(this, '_monthsRegex')) {
+                this._monthsRegex = defaultMonthsRegex;
+            }
+            return this._monthsStrictRegex && isStrict ?
+                this._monthsStrictRegex : this._monthsRegex;
+        }
+    }
+
+    function computeMonthsParse () {
+        function cmpLenRev(a, b) {
+            return b.length - a.length;
         }
 
-        // backwards compat for now: also set the locale
-        // make sure we set the locale AFTER all child locales have been
-        // created, so we won't end up with the child locale set.
-        getSetGlobalLocale(name);
+        var shortPieces = [], longPieces = [], mixedPieces = [],
+            i, mom;
+        for (i = 0; i < 12; i++) {
+            // make the regex if we don't have it already
+            mom = createUTC([2000, i]);
+            shortPieces.push(this.monthsShort(mom, ''));
+            longPieces.push(this.months(mom, ''));
+            mixedPieces.push(this.months(mom, ''));
+            mixedPieces.push(this.monthsShort(mom, ''));
+        }
+        // Sorting makes sure if one month (or abbr) is a prefix of another it
+        // will match the longer piece.
+        shortPieces.sort(cmpLenRev);
+        longPieces.sort(cmpLenRev);
+        mixedPieces.sort(cmpLenRev);
+        for (i = 0; i < 12; i++) {
+            shortPieces[i] = regexEscape(shortPieces[i]);
+            longPieces[i] = regexEscape(longPieces[i]);
+        }
+        for (i = 0; i < 24; i++) {
+            mixedPieces[i] = regexEscape(mixedPieces[i]);
+        }
 
+        this._monthsRegex = new RegExp('^(' + mixedPieces.join('|') + ')', 'i');
+        this._monthsShortRegex = this._monthsRegex;
+        this._monthsStrictRegex = new RegExp('^(' + longPieces.join('|') + ')', 'i');
+        this._monthsShortStrictRegex = new RegExp('^(' + shortPieces.join('|') + ')', 'i');
+    }
 
-        return locales[name];
-    } else {
-        // useful for testing
-        delete locales[name];
+    function createDate (y, m, d, h, M, s, ms) {
+        // can't just apply() to create a date:
+        // https://stackoverflow.com/q/181348
+        var date = new Date(y, m, d, h, M, s, ms);
+
+        // the date constructor remaps years 0-99 to 1900-1999
+        if (y < 100 && y >= 0 && isFinite(date.getFullYear())) {
+            date.setFullYear(y);
+        }
+        return date;
+    }
+
+    function createUTCDate (y) {
+        var date = new Date(Date.UTC.apply(null, arguments));
+
+        // the Date.UTC function remaps years 0-99 to 1900-1999
+        if (y < 100 && y >= 0 && isFinite(date.getUTCFullYear())) {
+            date.setUTCFullYear(y);
+        }
+        return date;
+    }
+
+    // start-of-first-week - start-of-year
+    function firstWeekOffset(year, dow, doy) {
+        var // first-week day -- which january is always in the first week (4 for iso, 1 for other)
+            fwd = 7 + dow - doy,
+            // first-week day local weekday -- which local weekday is fwd
+            fwdlw = (7 + createUTCDate(year, 0, fwd).getUTCDay() - dow) % 7;
+
+        return -fwdlw + fwd - 1;
+    }
+
+    // https://en.wikipedia.org/wiki/ISO_week_date#Calculating_a_date_given_the_year.2C_week_number_and_weekday
+    function dayOfYearFromWeeks(year, week, weekday, dow, doy) {
+        var localWeekday = (7 + weekday - dow) % 7,
+            weekOffset = firstWeekOffset(year, dow, doy),
+            dayOfYear = 1 + 7 * (week - 1) + localWeekday + weekOffset,
+            resYear, resDayOfYear;
+
+        if (dayOfYear <= 0) {
+            resYear = year - 1;
+            resDayOfYear = daysInYear(resYear) + dayOfYear;
+        } else if (dayOfYear > daysInYear(year)) {
+            resYear = year + 1;
+            resDayOfYear = dayOfYear - daysInYear(year);
+        } else {
+            resYear = year;
+            resDayOfYear = dayOfYear;
+        }
+
+        return {
+            year: resYear,
+            dayOfYear: resDayOfYear
+        };
+    }
+
+    function weekOfYear(mom, dow, doy) {
+        var weekOffset = firstWeekOffset(mom.year(), dow, doy),
+            week = Math.floor((mom.dayOfYear() - weekOffset - 1) / 7) + 1,
+            resWeek, resYear;
+
+        if (week < 1) {
+            resYear = mom.year() - 1;
+            resWeek = week + weeksInYear(resYear, dow, doy);
+        } else if (week > weeksInYear(mom.year(), dow, doy)) {
+            resWeek = week - weeksInYear(mom.year(), dow, doy);
+            resYear = mom.year() + 1;
+        } else {
+            resYear = mom.year();
+            resWeek = week;
+        }
+
+        return {
+            week: resWeek,
+            year: resYear
+        };
+    }
+
+    function weeksInYear(year, dow, doy) {
+        var weekOffset = firstWeekOffset(year, dow, doy),
+            weekOffsetNext = firstWeekOffset(year + 1, dow, doy);
+        return (daysInYear(year) - weekOffset + weekOffsetNext) / 7;
+    }
+
+    // FORMATTING
+
+    addFormatToken('w', ['ww', 2], 'wo', 'week');
+    addFormatToken('W', ['WW', 2], 'Wo', 'isoWeek');
+
+    // ALIASES
+
+    addUnitAlias('week', 'w');
+    addUnitAlias('isoWeek', 'W');
+
+    // PRIORITIES
+
+    addUnitPriority('week', 5);
+    addUnitPriority('isoWeek', 5);
+
+    // PARSING
+
+    addRegexToken('w',  match1to2);
+    addRegexToken('ww', match1to2, match2);
+    addRegexToken('W',  match1to2);
+    addRegexToken('WW', match1to2, match2);
+
+    addWeekParseToken(['w', 'ww', 'W', 'WW'], function (input, week, config, token) {
+        week[token.substr(0, 1)] = toInt(input);
+    });
+
+    // HELPERS
+
+    // LOCALES
+
+    function localeWeek (mom) {
+        return weekOfYear(mom, this._week.dow, this._week.doy).week;
+    }
+
+    var defaultLocaleWeek = {
+        dow : 0, // Sunday is the first day of the week.
+        doy : 6  // The week that contains Jan 1st is the first week of the year.
+    };
+
+    function localeFirstDayOfWeek () {
+        return this._week.dow;
+    }
+
+    function localeFirstDayOfYear () {
+        return this._week.doy;
+    }
+
+    // MOMENTS
+
+    function getSetWeek (input) {
+        var week = this.localeData().week(this);
+        return input == null ? week : this.add((input - week) * 7, 'd');
+    }
+
+    function getSetISOWeek (input) {
+        var week = weekOfYear(this, 1, 4).week;
+        return input == null ? week : this.add((input - week) * 7, 'd');
+    }
+
+    // FORMATTING
+
+    addFormatToken('d', 0, 'do', 'day');
+
+    addFormatToken('dd', 0, 0, function (format) {
+        return this.localeData().weekdaysMin(this, format);
+    });
+
+    addFormatToken('ddd', 0, 0, function (format) {
+        return this.localeData().weekdaysShort(this, format);
+    });
+
+    addFormatToken('dddd', 0, 0, function (format) {
+        return this.localeData().weekdays(this, format);
+    });
+
+    addFormatToken('e', 0, 0, 'weekday');
+    addFormatToken('E', 0, 0, 'isoWeekday');
+
+    // ALIASES
+
+    addUnitAlias('day', 'd');
+    addUnitAlias('weekday', 'e');
+    addUnitAlias('isoWeekday', 'E');
+
+    // PRIORITY
+    addUnitPriority('day', 11);
+    addUnitPriority('weekday', 11);
+    addUnitPriority('isoWeekday', 11);
+
+    // PARSING
+
+    addRegexToken('d',    match1to2);
+    addRegexToken('e',    match1to2);
+    addRegexToken('E',    match1to2);
+    addRegexToken('dd',   function (isStrict, locale) {
+        return locale.weekdaysMinRegex(isStrict);
+    });
+    addRegexToken('ddd',   function (isStrict, locale) {
+        return locale.weekdaysShortRegex(isStrict);
+    });
+    addRegexToken('dddd',   function (isStrict, locale) {
+        return locale.weekdaysRegex(isStrict);
+    });
+
+    addWeekParseToken(['dd', 'ddd', 'dddd'], function (input, week, config, token) {
+        var weekday = config._locale.weekdaysParse(input, token, config._strict);
+        // if we didn't get a weekday name, mark the date as invalid
+        if (weekday != null) {
+            week.d = weekday;
+        } else {
+            getParsingFlags(config).invalidWeekday = input;
+        }
+    });
+
+    addWeekParseToken(['d', 'e', 'E'], function (input, week, config, token) {
+        week[token] = toInt(input);
+    });
+
+    // HELPERS
+
+    function parseWeekday(input, locale) {
+        if (typeof input !== 'string') {
+            return input;
+        }
+
+        if (!isNaN(input)) {
+            return parseInt(input, 10);
+        }
+
+        input = locale.weekdaysParse(input);
+        if (typeof input === 'number') {
+            return input;
+        }
+
         return null;
     }
-}
 
-function updateLocale(name, config) {
-    if (config != null) {
-        var locale, parentConfig = baseConfig;
-        // MERGE
-        if (locales[name] != null) {
-            parentConfig = locales[name]._config;
+    function parseIsoWeekday(input, locale) {
+        if (typeof input === 'string') {
+            return locale.weekdaysParse(input) % 7 || 7;
         }
-        config = mergeConfigs(parentConfig, config);
-        locale = new Locale(config);
-        locale.parentLocale = locales[name];
-        locales[name] = locale;
+        return isNaN(input) ? null : input;
+    }
 
-        // backwards compat for now: also set the locale
-        getSetGlobalLocale(name);
-    } else {
-        // pass null for config to unupdate, useful for tests
-        if (locales[name] != null) {
-            if (locales[name].parentLocale != null) {
-                locales[name] = locales[name].parentLocale;
-            } else if (locales[name] != null) {
-                delete locales[name];
+    // LOCALES
+
+    var defaultLocaleWeekdays = 'Sunday_Monday_Tuesday_Wednesday_Thursday_Friday_Saturday'.split('_');
+    function localeWeekdays (m, format) {
+        if (!m) {
+            return isArray(this._weekdays) ? this._weekdays :
+                this._weekdays['standalone'];
+        }
+        return isArray(this._weekdays) ? this._weekdays[m.day()] :
+            this._weekdays[this._weekdays.isFormat.test(format) ? 'format' : 'standalone'][m.day()];
+    }
+
+    var defaultLocaleWeekdaysShort = 'Sun_Mon_Tue_Wed_Thu_Fri_Sat'.split('_');
+    function localeWeekdaysShort (m) {
+        return (m) ? this._weekdaysShort[m.day()] : this._weekdaysShort;
+    }
+
+    var defaultLocaleWeekdaysMin = 'Su_Mo_Tu_We_Th_Fr_Sa'.split('_');
+    function localeWeekdaysMin (m) {
+        return (m) ? this._weekdaysMin[m.day()] : this._weekdaysMin;
+    }
+
+    function handleStrictParse$1(weekdayName, format, strict) {
+        var i, ii, mom, llc = weekdayName.toLocaleLowerCase();
+        if (!this._weekdaysParse) {
+            this._weekdaysParse = [];
+            this._shortWeekdaysParse = [];
+            this._minWeekdaysParse = [];
+
+            for (i = 0; i < 7; ++i) {
+                mom = createUTC([2000, 1]).day(i);
+                this._minWeekdaysParse[i] = this.weekdaysMin(mom, '').toLocaleLowerCase();
+                this._shortWeekdaysParse[i] = this.weekdaysShort(mom, '').toLocaleLowerCase();
+                this._weekdaysParse[i] = this.weekdays(mom, '').toLocaleLowerCase();
+            }
+        }
+
+        if (strict) {
+            if (format === 'dddd') {
+                ii = indexOf.call(this._weekdaysParse, llc);
+                return ii !== -1 ? ii : null;
+            } else if (format === 'ddd') {
+                ii = indexOf.call(this._shortWeekdaysParse, llc);
+                return ii !== -1 ? ii : null;
+            } else {
+                ii = indexOf.call(this._minWeekdaysParse, llc);
+                return ii !== -1 ? ii : null;
+            }
+        } else {
+            if (format === 'dddd') {
+                ii = indexOf.call(this._weekdaysParse, llc);
+                if (ii !== -1) {
+                    return ii;
+                }
+                ii = indexOf.call(this._shortWeekdaysParse, llc);
+                if (ii !== -1) {
+                    return ii;
+                }
+                ii = indexOf.call(this._minWeekdaysParse, llc);
+                return ii !== -1 ? ii : null;
+            } else if (format === 'ddd') {
+                ii = indexOf.call(this._shortWeekdaysParse, llc);
+                if (ii !== -1) {
+                    return ii;
+                }
+                ii = indexOf.call(this._weekdaysParse, llc);
+                if (ii !== -1) {
+                    return ii;
+                }
+                ii = indexOf.call(this._minWeekdaysParse, llc);
+                return ii !== -1 ? ii : null;
+            } else {
+                ii = indexOf.call(this._minWeekdaysParse, llc);
+                if (ii !== -1) {
+                    return ii;
+                }
+                ii = indexOf.call(this._weekdaysParse, llc);
+                if (ii !== -1) {
+                    return ii;
+                }
+                ii = indexOf.call(this._shortWeekdaysParse, llc);
+                return ii !== -1 ? ii : null;
             }
         }
     }
-    return locales[name];
-}
 
-// returns locale data
-function getLocale (key) {
-    var locale;
+    function localeWeekdaysParse (weekdayName, format, strict) {
+        var i, mom, regex;
 
-    if (key && key._locale && key._locale._abbr) {
-        key = key._locale._abbr;
+        if (this._weekdaysParseExact) {
+            return handleStrictParse$1.call(this, weekdayName, format, strict);
+        }
+
+        if (!this._weekdaysParse) {
+            this._weekdaysParse = [];
+            this._minWeekdaysParse = [];
+            this._shortWeekdaysParse = [];
+            this._fullWeekdaysParse = [];
+        }
+
+        for (i = 0; i < 7; i++) {
+            // make the regex if we don't have it already
+
+            mom = createUTC([2000, 1]).day(i);
+            if (strict && !this._fullWeekdaysParse[i]) {
+                this._fullWeekdaysParse[i] = new RegExp('^' + this.weekdays(mom, '').replace('.', '\.?') + '$', 'i');
+                this._shortWeekdaysParse[i] = new RegExp('^' + this.weekdaysShort(mom, '').replace('.', '\.?') + '$', 'i');
+                this._minWeekdaysParse[i] = new RegExp('^' + this.weekdaysMin(mom, '').replace('.', '\.?') + '$', 'i');
+            }
+            if (!this._weekdaysParse[i]) {
+                regex = '^' + this.weekdays(mom, '') + '|^' + this.weekdaysShort(mom, '') + '|^' + this.weekdaysMin(mom, '');
+                this._weekdaysParse[i] = new RegExp(regex.replace('.', ''), 'i');
+            }
+            // test the regex
+            if (strict && format === 'dddd' && this._fullWeekdaysParse[i].test(weekdayName)) {
+                return i;
+            } else if (strict && format === 'ddd' && this._shortWeekdaysParse[i].test(weekdayName)) {
+                return i;
+            } else if (strict && format === 'dd' && this._minWeekdaysParse[i].test(weekdayName)) {
+                return i;
+            } else if (!strict && this._weekdaysParse[i].test(weekdayName)) {
+                return i;
+            }
+        }
     }
 
-    if (!key) {
+    // MOMENTS
+
+    function getSetDayOfWeek (input) {
+        if (!this.isValid()) {
+            return input != null ? this : NaN;
+        }
+        var day = this._isUTC ? this._d.getUTCDay() : this._d.getDay();
+        if (input != null) {
+            input = parseWeekday(input, this.localeData());
+            return this.add(input - day, 'd');
+        } else {
+            return day;
+        }
+    }
+
+    function getSetLocaleDayOfWeek (input) {
+        if (!this.isValid()) {
+            return input != null ? this : NaN;
+        }
+        var weekday = (this.day() + 7 - this.localeData()._week.dow) % 7;
+        return input == null ? weekday : this.add(input - weekday, 'd');
+    }
+
+    function getSetISODayOfWeek (input) {
+        if (!this.isValid()) {
+            return input != null ? this : NaN;
+        }
+
+        // behaves the same as moment#day except
+        // as a getter, returns 7 instead of 0 (1-7 range instead of 0-6)
+        // as a setter, sunday should belong to the previous week.
+
+        if (input != null) {
+            var weekday = parseIsoWeekday(input, this.localeData());
+            return this.day(this.day() % 7 ? weekday : weekday - 7);
+        } else {
+            return this.day() || 7;
+        }
+    }
+
+    var defaultWeekdaysRegex = matchWord;
+    function weekdaysRegex (isStrict) {
+        if (this._weekdaysParseExact) {
+            if (!hasOwnProp(this, '_weekdaysRegex')) {
+                computeWeekdaysParse.call(this);
+            }
+            if (isStrict) {
+                return this._weekdaysStrictRegex;
+            } else {
+                return this._weekdaysRegex;
+            }
+        } else {
+            if (!hasOwnProp(this, '_weekdaysRegex')) {
+                this._weekdaysRegex = defaultWeekdaysRegex;
+            }
+            return this._weekdaysStrictRegex && isStrict ?
+                this._weekdaysStrictRegex : this._weekdaysRegex;
+        }
+    }
+
+    var defaultWeekdaysShortRegex = matchWord;
+    function weekdaysShortRegex (isStrict) {
+        if (this._weekdaysParseExact) {
+            if (!hasOwnProp(this, '_weekdaysRegex')) {
+                computeWeekdaysParse.call(this);
+            }
+            if (isStrict) {
+                return this._weekdaysShortStrictRegex;
+            } else {
+                return this._weekdaysShortRegex;
+            }
+        } else {
+            if (!hasOwnProp(this, '_weekdaysShortRegex')) {
+                this._weekdaysShortRegex = defaultWeekdaysShortRegex;
+            }
+            return this._weekdaysShortStrictRegex && isStrict ?
+                this._weekdaysShortStrictRegex : this._weekdaysShortRegex;
+        }
+    }
+
+    var defaultWeekdaysMinRegex = matchWord;
+    function weekdaysMinRegex (isStrict) {
+        if (this._weekdaysParseExact) {
+            if (!hasOwnProp(this, '_weekdaysRegex')) {
+                computeWeekdaysParse.call(this);
+            }
+            if (isStrict) {
+                return this._weekdaysMinStrictRegex;
+            } else {
+                return this._weekdaysMinRegex;
+            }
+        } else {
+            if (!hasOwnProp(this, '_weekdaysMinRegex')) {
+                this._weekdaysMinRegex = defaultWeekdaysMinRegex;
+            }
+            return this._weekdaysMinStrictRegex && isStrict ?
+                this._weekdaysMinStrictRegex : this._weekdaysMinRegex;
+        }
+    }
+
+
+    function computeWeekdaysParse () {
+        function cmpLenRev(a, b) {
+            return b.length - a.length;
+        }
+
+        var minPieces = [], shortPieces = [], longPieces = [], mixedPieces = [],
+            i, mom, minp, shortp, longp;
+        for (i = 0; i < 7; i++) {
+            // make the regex if we don't have it already
+            mom = createUTC([2000, 1]).day(i);
+            minp = this.weekdaysMin(mom, '');
+            shortp = this.weekdaysShort(mom, '');
+            longp = this.weekdays(mom, '');
+            minPieces.push(minp);
+            shortPieces.push(shortp);
+            longPieces.push(longp);
+            mixedPieces.push(minp);
+            mixedPieces.push(shortp);
+            mixedPieces.push(longp);
+        }
+        // Sorting makes sure if one weekday (or abbr) is a prefix of another it
+        // will match the longer piece.
+        minPieces.sort(cmpLenRev);
+        shortPieces.sort(cmpLenRev);
+        longPieces.sort(cmpLenRev);
+        mixedPieces.sort(cmpLenRev);
+        for (i = 0; i < 7; i++) {
+            shortPieces[i] = regexEscape(shortPieces[i]);
+            longPieces[i] = regexEscape(longPieces[i]);
+            mixedPieces[i] = regexEscape(mixedPieces[i]);
+        }
+
+        this._weekdaysRegex = new RegExp('^(' + mixedPieces.join('|') + ')', 'i');
+        this._weekdaysShortRegex = this._weekdaysRegex;
+        this._weekdaysMinRegex = this._weekdaysRegex;
+
+        this._weekdaysStrictRegex = new RegExp('^(' + longPieces.join('|') + ')', 'i');
+        this._weekdaysShortStrictRegex = new RegExp('^(' + shortPieces.join('|') + ')', 'i');
+        this._weekdaysMinStrictRegex = new RegExp('^(' + minPieces.join('|') + ')', 'i');
+    }
+
+    // FORMATTING
+
+    function hFormat() {
+        return this.hours() % 12 || 12;
+    }
+
+    function kFormat() {
+        return this.hours() || 24;
+    }
+
+    addFormatToken('H', ['HH', 2], 0, 'hour');
+    addFormatToken('h', ['hh', 2], 0, hFormat);
+    addFormatToken('k', ['kk', 2], 0, kFormat);
+
+    addFormatToken('hmm', 0, 0, function () {
+        return '' + hFormat.apply(this) + zeroFill(this.minutes(), 2);
+    });
+
+    addFormatToken('hmmss', 0, 0, function () {
+        return '' + hFormat.apply(this) + zeroFill(this.minutes(), 2) +
+            zeroFill(this.seconds(), 2);
+    });
+
+    addFormatToken('Hmm', 0, 0, function () {
+        return '' + this.hours() + zeroFill(this.minutes(), 2);
+    });
+
+    addFormatToken('Hmmss', 0, 0, function () {
+        return '' + this.hours() + zeroFill(this.minutes(), 2) +
+            zeroFill(this.seconds(), 2);
+    });
+
+    function meridiem (token, lowercase) {
+        addFormatToken(token, 0, 0, function () {
+            return this.localeData().meridiem(this.hours(), this.minutes(), lowercase);
+        });
+    }
+
+    meridiem('a', true);
+    meridiem('A', false);
+
+    // ALIASES
+
+    addUnitAlias('hour', 'h');
+
+    // PRIORITY
+    addUnitPriority('hour', 13);
+
+    // PARSING
+
+    function matchMeridiem (isStrict, locale) {
+        return locale._meridiemParse;
+    }
+
+    addRegexToken('a',  matchMeridiem);
+    addRegexToken('A',  matchMeridiem);
+    addRegexToken('H',  match1to2);
+    addRegexToken('h',  match1to2);
+    addRegexToken('k',  match1to2);
+    addRegexToken('HH', match1to2, match2);
+    addRegexToken('hh', match1to2, match2);
+    addRegexToken('kk', match1to2, match2);
+
+    addRegexToken('hmm', match3to4);
+    addRegexToken('hmmss', match5to6);
+    addRegexToken('Hmm', match3to4);
+    addRegexToken('Hmmss', match5to6);
+
+    addParseToken(['H', 'HH'], HOUR);
+    addParseToken(['k', 'kk'], function (input, array, config) {
+        var kInput = toInt(input);
+        array[HOUR] = kInput === 24 ? 0 : kInput;
+    });
+    addParseToken(['a', 'A'], function (input, array, config) {
+        config._isPm = config._locale.isPM(input);
+        config._meridiem = input;
+    });
+    addParseToken(['h', 'hh'], function (input, array, config) {
+        array[HOUR] = toInt(input);
+        getParsingFlags(config).bigHour = true;
+    });
+    addParseToken('hmm', function (input, array, config) {
+        var pos = input.length - 2;
+        array[HOUR] = toInt(input.substr(0, pos));
+        array[MINUTE] = toInt(input.substr(pos));
+        getParsingFlags(config).bigHour = true;
+    });
+    addParseToken('hmmss', function (input, array, config) {
+        var pos1 = input.length - 4;
+        var pos2 = input.length - 2;
+        array[HOUR] = toInt(input.substr(0, pos1));
+        array[MINUTE] = toInt(input.substr(pos1, 2));
+        array[SECOND] = toInt(input.substr(pos2));
+        getParsingFlags(config).bigHour = true;
+    });
+    addParseToken('Hmm', function (input, array, config) {
+        var pos = input.length - 2;
+        array[HOUR] = toInt(input.substr(0, pos));
+        array[MINUTE] = toInt(input.substr(pos));
+    });
+    addParseToken('Hmmss', function (input, array, config) {
+        var pos1 = input.length - 4;
+        var pos2 = input.length - 2;
+        array[HOUR] = toInt(input.substr(0, pos1));
+        array[MINUTE] = toInt(input.substr(pos1, 2));
+        array[SECOND] = toInt(input.substr(pos2));
+    });
+
+    // LOCALES
+
+    function localeIsPM (input) {
+        // IE8 Quirks Mode & IE7 Standards Mode do not allow accessing strings like arrays
+        // Using charAt should be more compatible.
+        return ((input + '').toLowerCase().charAt(0) === 'p');
+    }
+
+    var defaultLocaleMeridiemParse = /[ap]\.?m?\.?/i;
+    function localeMeridiem (hours, minutes, isLower) {
+        if (hours > 11) {
+            return isLower ? 'pm' : 'PM';
+        } else {
+            return isLower ? 'am' : 'AM';
+        }
+    }
+
+
+    // MOMENTS
+
+    // Setting the hour should keep the time, because the user explicitly
+    // specified which hour they want. So trying to maintain the same hour (in
+    // a new timezone) makes sense. Adding/subtracting hours does not follow
+    // this rule.
+    var getSetHour = makeGetSet('Hours', true);
+
+    var baseConfig = {
+        calendar: defaultCalendar,
+        longDateFormat: defaultLongDateFormat,
+        invalidDate: defaultInvalidDate,
+        ordinal: defaultOrdinal,
+        dayOfMonthOrdinalParse: defaultDayOfMonthOrdinalParse,
+        relativeTime: defaultRelativeTime,
+
+        months: defaultLocaleMonths,
+        monthsShort: defaultLocaleMonthsShort,
+
+        week: defaultLocaleWeek,
+
+        weekdays: defaultLocaleWeekdays,
+        weekdaysMin: defaultLocaleWeekdaysMin,
+        weekdaysShort: defaultLocaleWeekdaysShort,
+
+        meridiemParse: defaultLocaleMeridiemParse
+    };
+
+    // internal storage for locale config files
+    var locales = {};
+    var localeFamilies = {};
+    var globalLocale;
+
+    function normalizeLocale(key) {
+        return key ? key.toLowerCase().replace('_', '-') : key;
+    }
+
+    // pick the locale from the array
+    // try ['en-au', 'en-gb'] as 'en-au', 'en-gb', 'en', as in move through the list trying each
+    // substring from most specific to least, but move to the next array item if it's a more specific variant than the current root
+    function chooseLocale(names) {
+        var i = 0, j, next, locale, split;
+
+        while (i < names.length) {
+            split = normalizeLocale(names[i]).split('-');
+            j = split.length;
+            next = normalizeLocale(names[i + 1]);
+            next = next ? next.split('-') : null;
+            while (j > 0) {
+                locale = loadLocale(split.slice(0, j).join('-'));
+                if (locale) {
+                    return locale;
+                }
+                if (next && next.length >= j && compareArrays(split, next, true) >= j - 1) {
+                    //the next array item is better than a shallower substring of this one
+                    break;
+                }
+                j--;
+            }
+            i++;
+        }
         return globalLocale;
     }
 
-    if (!isArray(key)) {
-        //short-circuit everything else
-        locale = loadLocale(key);
-        if (locale) {
-            return locale;
+    function loadLocale(name) {
+        var oldLocale = null;
+        // TODO: Find a better way to register and load all the locales in Node
+        if (!locales[name] && (typeof module !== 'undefined') &&
+                module && module.exports) {
+            try {
+                oldLocale = globalLocale._abbr;
+                var aliasedRequire = require;
+                aliasedRequire('./locale/' + name);
+                getSetGlobalLocale(oldLocale);
+            } catch (e) {}
         }
-        key = [key];
+        return locales[name];
     }
 
-    return chooseLocale(key);
-}
+    // This function will load locale and then set the global locale.  If
+    // no arguments are passed in, it will simply return the current global
+    // locale key.
+    function getSetGlobalLocale (key, values) {
+        var data;
+        if (key) {
+            if (isUndefined(values)) {
+                data = getLocale(key);
+            }
+            else {
+                data = defineLocale(key, values);
+            }
 
-function listLocales() {
-    return keys$1(locales);
-}
-
-function checkOverflow (m) {
-    var overflow;
-    var a = m._a;
-
-    if (a && getParsingFlags(m).overflow === -2) {
-        overflow =
-            a[MONTH]       < 0 || a[MONTH]       > 11  ? MONTH :
-            a[DATE]        < 1 || a[DATE]        > daysInMonth(a[YEAR], a[MONTH]) ? DATE :
-            a[HOUR]        < 0 || a[HOUR]        > 24 || (a[HOUR] === 24 && (a[MINUTE] !== 0 || a[SECOND] !== 0 || a[MILLISECOND] !== 0)) ? HOUR :
-            a[MINUTE]      < 0 || a[MINUTE]      > 59  ? MINUTE :
-            a[SECOND]      < 0 || a[SECOND]      > 59  ? SECOND :
-            a[MILLISECOND] < 0 || a[MILLISECOND] > 999 ? MILLISECOND :
-            -1;
-
-        if (getParsingFlags(m)._overflowDayOfYear && (overflow < YEAR || overflow > DATE)) {
-            overflow = DATE;
-        }
-        if (getParsingFlags(m)._overflowWeeks && overflow === -1) {
-            overflow = WEEK;
-        }
-        if (getParsingFlags(m)._overflowWeekday && overflow === -1) {
-            overflow = WEEKDAY;
-        }
-
-        getParsingFlags(m).overflow = overflow;
-    }
-
-    return m;
-}
-
-// iso 8601 regex
-// 0000-00-00 0000-W00 or 0000-W00-0 + T + 00 or 00:00 or 00:00:00 or 00:00:00.000 + +00:00 or +0000 or +00)
-var extendedIsoRegex = /^\s*((?:[+-]\d{6}|\d{4})-(?:\d\d-\d\d|W\d\d-\d|W\d\d|\d\d\d|\d\d))(?:(T| )(\d\d(?::\d\d(?::\d\d(?:[.,]\d+)?)?)?)([\+\-]\d\d(?::?\d\d)?|\s*Z)?)?$/;
-var basicIsoRegex = /^\s*((?:[+-]\d{6}|\d{4})(?:\d\d\d\d|W\d\d\d|W\d\d|\d\d\d|\d\d))(?:(T| )(\d\d(?:\d\d(?:\d\d(?:[.,]\d+)?)?)?)([\+\-]\d\d(?::?\d\d)?|\s*Z)?)?$/;
-
-var tzRegex = /Z|[+-]\d\d(?::?\d\d)?/;
-
-var isoDates = [
-    ['YYYYYY-MM-DD', /[+-]\d{6}-\d\d-\d\d/],
-    ['YYYY-MM-DD', /\d{4}-\d\d-\d\d/],
-    ['GGGG-[W]WW-E', /\d{4}-W\d\d-\d/],
-    ['GGGG-[W]WW', /\d{4}-W\d\d/, false],
-    ['YYYY-DDD', /\d{4}-\d{3}/],
-    ['YYYY-MM', /\d{4}-\d\d/, false],
-    ['YYYYYYMMDD', /[+-]\d{10}/],
-    ['YYYYMMDD', /\d{8}/],
-    // YYYYMM is NOT allowed by the standard
-    ['GGGG[W]WWE', /\d{4}W\d{3}/],
-    ['GGGG[W]WW', /\d{4}W\d{2}/, false],
-    ['YYYYDDD', /\d{7}/]
-];
-
-// iso time formats and regexes
-var isoTimes = [
-    ['HH:mm:ss.SSSS', /\d\d:\d\d:\d\d\.\d+/],
-    ['HH:mm:ss,SSSS', /\d\d:\d\d:\d\d,\d+/],
-    ['HH:mm:ss', /\d\d:\d\d:\d\d/],
-    ['HH:mm', /\d\d:\d\d/],
-    ['HHmmss.SSSS', /\d\d\d\d\d\d\.\d+/],
-    ['HHmmss,SSSS', /\d\d\d\d\d\d,\d+/],
-    ['HHmmss', /\d\d\d\d\d\d/],
-    ['HHmm', /\d\d\d\d/],
-    ['HH', /\d\d/]
-];
-
-var aspNetJsonRegex = /^\/?Date\((\-?\d+)/i;
-
-// date from iso format
-function configFromISO(config) {
-    var i, l,
-        string = config._i,
-        match = extendedIsoRegex.exec(string) || basicIsoRegex.exec(string),
-        allowTime, dateFormat, timeFormat, tzFormat;
-
-    if (match) {
-        getParsingFlags(config).iso = true;
-
-        for (i = 0, l = isoDates.length; i < l; i++) {
-            if (isoDates[i][1].exec(match[1])) {
-                dateFormat = isoDates[i][0];
-                allowTime = isoDates[i][2] !== false;
-                break;
+            if (data) {
+                // moment.duration._locale = moment._locale = data;
+                globalLocale = data;
+            }
+            else {
+                if ((typeof console !==  'undefined') && console.warn) {
+                    //warn user if arguments are passed but the locale could not be set
+                    console.warn('Locale ' + key +  ' not found. Did you forget to load it?');
+                }
             }
         }
-        if (dateFormat == null) {
-            config._isValid = false;
+
+        return globalLocale._abbr;
+    }
+
+    function defineLocale (name, config) {
+        if (config !== null) {
+            var locale, parentConfig = baseConfig;
+            config.abbr = name;
+            if (locales[name] != null) {
+                deprecateSimple('defineLocaleOverride',
+                        'use moment.updateLocale(localeName, config) to change ' +
+                        'an existing locale. moment.defineLocale(localeName, ' +
+                        'config) should only be used for creating a new locale ' +
+                        'See http://momentjs.com/guides/#/warnings/define-locale/ for more info.');
+                parentConfig = locales[name]._config;
+            } else if (config.parentLocale != null) {
+                if (locales[config.parentLocale] != null) {
+                    parentConfig = locales[config.parentLocale]._config;
+                } else {
+                    locale = loadLocale(config.parentLocale);
+                    if (locale != null) {
+                        parentConfig = locale._config;
+                    } else {
+                        if (!localeFamilies[config.parentLocale]) {
+                            localeFamilies[config.parentLocale] = [];
+                        }
+                        localeFamilies[config.parentLocale].push({
+                            name: name,
+                            config: config
+                        });
+                        return null;
+                    }
+                }
+            }
+            locales[name] = new Locale(mergeConfigs(parentConfig, config));
+
+            if (localeFamilies[name]) {
+                localeFamilies[name].forEach(function (x) {
+                    defineLocale(x.name, x.config);
+                });
+            }
+
+            // backwards compat for now: also set the locale
+            // make sure we set the locale AFTER all child locales have been
+            // created, so we won't end up with the child locale set.
+            getSetGlobalLocale(name);
+
+
+            return locales[name];
+        } else {
+            // useful for testing
+            delete locales[name];
+            return null;
+        }
+    }
+
+    function updateLocale(name, config) {
+        if (config != null) {
+            var locale, tmpLocale, parentConfig = baseConfig;
+            // MERGE
+            tmpLocale = loadLocale(name);
+            if (tmpLocale != null) {
+                parentConfig = tmpLocale._config;
+            }
+            config = mergeConfigs(parentConfig, config);
+            locale = new Locale(config);
+            locale.parentLocale = locales[name];
+            locales[name] = locale;
+
+            // backwards compat for now: also set the locale
+            getSetGlobalLocale(name);
+        } else {
+            // pass null for config to unupdate, useful for tests
+            if (locales[name] != null) {
+                if (locales[name].parentLocale != null) {
+                    locales[name] = locales[name].parentLocale;
+                } else if (locales[name] != null) {
+                    delete locales[name];
+                }
+            }
+        }
+        return locales[name];
+    }
+
+    // returns locale data
+    function getLocale (key) {
+        var locale;
+
+        if (key && key._locale && key._locale._abbr) {
+            key = key._locale._abbr;
+        }
+
+        if (!key) {
+            return globalLocale;
+        }
+
+        if (!isArray(key)) {
+            //short-circuit everything else
+            locale = loadLocale(key);
+            if (locale) {
+                return locale;
+            }
+            key = [key];
+        }
+
+        return chooseLocale(key);
+    }
+
+    function listLocales() {
+        return keys(locales);
+    }
+
+    function checkOverflow (m) {
+        var overflow;
+        var a = m._a;
+
+        if (a && getParsingFlags(m).overflow === -2) {
+            overflow =
+                a[MONTH]       < 0 || a[MONTH]       > 11  ? MONTH :
+                a[DATE]        < 1 || a[DATE]        > daysInMonth(a[YEAR], a[MONTH]) ? DATE :
+                a[HOUR]        < 0 || a[HOUR]        > 24 || (a[HOUR] === 24 && (a[MINUTE] !== 0 || a[SECOND] !== 0 || a[MILLISECOND] !== 0)) ? HOUR :
+                a[MINUTE]      < 0 || a[MINUTE]      > 59  ? MINUTE :
+                a[SECOND]      < 0 || a[SECOND]      > 59  ? SECOND :
+                a[MILLISECOND] < 0 || a[MILLISECOND] > 999 ? MILLISECOND :
+                -1;
+
+            if (getParsingFlags(m)._overflowDayOfYear && (overflow < YEAR || overflow > DATE)) {
+                overflow = DATE;
+            }
+            if (getParsingFlags(m)._overflowWeeks && overflow === -1) {
+                overflow = WEEK;
+            }
+            if (getParsingFlags(m)._overflowWeekday && overflow === -1) {
+                overflow = WEEKDAY;
+            }
+
+            getParsingFlags(m).overflow = overflow;
+        }
+
+        return m;
+    }
+
+    // Pick the first defined of two or three arguments.
+    function defaults(a, b, c) {
+        if (a != null) {
+            return a;
+        }
+        if (b != null) {
+            return b;
+        }
+        return c;
+    }
+
+    function currentDateArray(config) {
+        // hooks is actually the exported moment object
+        var nowValue = new Date(hooks.now());
+        if (config._useUTC) {
+            return [nowValue.getUTCFullYear(), nowValue.getUTCMonth(), nowValue.getUTCDate()];
+        }
+        return [nowValue.getFullYear(), nowValue.getMonth(), nowValue.getDate()];
+    }
+
+    // convert an array to a date.
+    // the array should mirror the parameters below
+    // note: all values past the year are optional and will default to the lowest possible value.
+    // [year, month, day , hour, minute, second, millisecond]
+    function configFromArray (config) {
+        var i, date, input = [], currentDate, expectedWeekday, yearToUse;
+
+        if (config._d) {
             return;
         }
-        if (match[3]) {
-            for (i = 0, l = isoTimes.length; i < l; i++) {
-                if (isoTimes[i][1].exec(match[3])) {
-                    // match[2] should be 'T' or space
-                    timeFormat = (match[2] || ' ') + isoTimes[i][0];
+
+        currentDate = currentDateArray(config);
+
+        //compute day of the year from weeks and weekdays
+        if (config._w && config._a[DATE] == null && config._a[MONTH] == null) {
+            dayOfYearFromWeekInfo(config);
+        }
+
+        //if the day of the year is set, figure out what it is
+        if (config._dayOfYear != null) {
+            yearToUse = defaults(config._a[YEAR], currentDate[YEAR]);
+
+            if (config._dayOfYear > daysInYear(yearToUse) || config._dayOfYear === 0) {
+                getParsingFlags(config)._overflowDayOfYear = true;
+            }
+
+            date = createUTCDate(yearToUse, 0, config._dayOfYear);
+            config._a[MONTH] = date.getUTCMonth();
+            config._a[DATE] = date.getUTCDate();
+        }
+
+        // Default to current date.
+        // * if no year, month, day of month are given, default to today
+        // * if day of month is given, default month and year
+        // * if month is given, default only year
+        // * if year is given, don't default anything
+        for (i = 0; i < 3 && config._a[i] == null; ++i) {
+            config._a[i] = input[i] = currentDate[i];
+        }
+
+        // Zero out whatever was not defaulted, including time
+        for (; i < 7; i++) {
+            config._a[i] = input[i] = (config._a[i] == null) ? (i === 2 ? 1 : 0) : config._a[i];
+        }
+
+        // Check for 24:00:00.000
+        if (config._a[HOUR] === 24 &&
+                config._a[MINUTE] === 0 &&
+                config._a[SECOND] === 0 &&
+                config._a[MILLISECOND] === 0) {
+            config._nextDay = true;
+            config._a[HOUR] = 0;
+        }
+
+        config._d = (config._useUTC ? createUTCDate : createDate).apply(null, input);
+        expectedWeekday = config._useUTC ? config._d.getUTCDay() : config._d.getDay();
+
+        // Apply timezone offset from input. The actual utcOffset can be changed
+        // with parseZone.
+        if (config._tzm != null) {
+            config._d.setUTCMinutes(config._d.getUTCMinutes() - config._tzm);
+        }
+
+        if (config._nextDay) {
+            config._a[HOUR] = 24;
+        }
+
+        // check for mismatching day of week
+        if (config._w && typeof config._w.d !== 'undefined' && config._w.d !== expectedWeekday) {
+            getParsingFlags(config).weekdayMismatch = true;
+        }
+    }
+
+    function dayOfYearFromWeekInfo(config) {
+        var w, weekYear, week, weekday, dow, doy, temp, weekdayOverflow;
+
+        w = config._w;
+        if (w.GG != null || w.W != null || w.E != null) {
+            dow = 1;
+            doy = 4;
+
+            // TODO: We need to take the current isoWeekYear, but that depends on
+            // how we interpret now (local, utc, fixed offset). So create
+            // a now version of current config (take local/utc/offset flags, and
+            // create now).
+            weekYear = defaults(w.GG, config._a[YEAR], weekOfYear(createLocal(), 1, 4).year);
+            week = defaults(w.W, 1);
+            weekday = defaults(w.E, 1);
+            if (weekday < 1 || weekday > 7) {
+                weekdayOverflow = true;
+            }
+        } else {
+            dow = config._locale._week.dow;
+            doy = config._locale._week.doy;
+
+            var curWeek = weekOfYear(createLocal(), dow, doy);
+
+            weekYear = defaults(w.gg, config._a[YEAR], curWeek.year);
+
+            // Default to current week.
+            week = defaults(w.w, curWeek.week);
+
+            if (w.d != null) {
+                // weekday -- low day numbers are considered next week
+                weekday = w.d;
+                if (weekday < 0 || weekday > 6) {
+                    weekdayOverflow = true;
+                }
+            } else if (w.e != null) {
+                // local weekday -- counting starts from begining of week
+                weekday = w.e + dow;
+                if (w.e < 0 || w.e > 6) {
+                    weekdayOverflow = true;
+                }
+            } else {
+                // default to begining of week
+                weekday = dow;
+            }
+        }
+        if (week < 1 || week > weeksInYear(weekYear, dow, doy)) {
+            getParsingFlags(config)._overflowWeeks = true;
+        } else if (weekdayOverflow != null) {
+            getParsingFlags(config)._overflowWeekday = true;
+        } else {
+            temp = dayOfYearFromWeeks(weekYear, week, weekday, dow, doy);
+            config._a[YEAR] = temp.year;
+            config._dayOfYear = temp.dayOfYear;
+        }
+    }
+
+    // iso 8601 regex
+    // 0000-00-00 0000-W00 or 0000-W00-0 + T + 00 or 00:00 or 00:00:00 or 00:00:00.000 + +00:00 or +0000 or +00)
+    var extendedIsoRegex = /^\s*((?:[+-]\d{6}|\d{4})-(?:\d\d-\d\d|W\d\d-\d|W\d\d|\d\d\d|\d\d))(?:(T| )(\d\d(?::\d\d(?::\d\d(?:[.,]\d+)?)?)?)([\+\-]\d\d(?::?\d\d)?|\s*Z)?)?$/;
+    var basicIsoRegex = /^\s*((?:[+-]\d{6}|\d{4})(?:\d\d\d\d|W\d\d\d|W\d\d|\d\d\d|\d\d))(?:(T| )(\d\d(?:\d\d(?:\d\d(?:[.,]\d+)?)?)?)([\+\-]\d\d(?::?\d\d)?|\s*Z)?)?$/;
+
+    var tzRegex = /Z|[+-]\d\d(?::?\d\d)?/;
+
+    var isoDates = [
+        ['YYYYYY-MM-DD', /[+-]\d{6}-\d\d-\d\d/],
+        ['YYYY-MM-DD', /\d{4}-\d\d-\d\d/],
+        ['GGGG-[W]WW-E', /\d{4}-W\d\d-\d/],
+        ['GGGG-[W]WW', /\d{4}-W\d\d/, false],
+        ['YYYY-DDD', /\d{4}-\d{3}/],
+        ['YYYY-MM', /\d{4}-\d\d/, false],
+        ['YYYYYYMMDD', /[+-]\d{10}/],
+        ['YYYYMMDD', /\d{8}/],
+        // YYYYMM is NOT allowed by the standard
+        ['GGGG[W]WWE', /\d{4}W\d{3}/],
+        ['GGGG[W]WW', /\d{4}W\d{2}/, false],
+        ['YYYYDDD', /\d{7}/]
+    ];
+
+    // iso time formats and regexes
+    var isoTimes = [
+        ['HH:mm:ss.SSSS', /\d\d:\d\d:\d\d\.\d+/],
+        ['HH:mm:ss,SSSS', /\d\d:\d\d:\d\d,\d+/],
+        ['HH:mm:ss', /\d\d:\d\d:\d\d/],
+        ['HH:mm', /\d\d:\d\d/],
+        ['HHmmss.SSSS', /\d\d\d\d\d\d\.\d+/],
+        ['HHmmss,SSSS', /\d\d\d\d\d\d,\d+/],
+        ['HHmmss', /\d\d\d\d\d\d/],
+        ['HHmm', /\d\d\d\d/],
+        ['HH', /\d\d/]
+    ];
+
+    var aspNetJsonRegex = /^\/?Date\((\-?\d+)/i;
+
+    // date from iso format
+    function configFromISO(config) {
+        var i, l,
+            string = config._i,
+            match = extendedIsoRegex.exec(string) || basicIsoRegex.exec(string),
+            allowTime, dateFormat, timeFormat, tzFormat;
+
+        if (match) {
+            getParsingFlags(config).iso = true;
+
+            for (i = 0, l = isoDates.length; i < l; i++) {
+                if (isoDates[i][1].exec(match[1])) {
+                    dateFormat = isoDates[i][0];
+                    allowTime = isoDates[i][2] !== false;
                     break;
                 }
             }
-            if (timeFormat == null) {
+            if (dateFormat == null) {
                 config._isValid = false;
                 return;
             }
-        }
-        if (!allowTime && timeFormat != null) {
+            if (match[3]) {
+                for (i = 0, l = isoTimes.length; i < l; i++) {
+                    if (isoTimes[i][1].exec(match[3])) {
+                        // match[2] should be 'T' or space
+                        timeFormat = (match[2] || ' ') + isoTimes[i][0];
+                        break;
+                    }
+                }
+                if (timeFormat == null) {
+                    config._isValid = false;
+                    return;
+                }
+            }
+            if (!allowTime && timeFormat != null) {
+                config._isValid = false;
+                return;
+            }
+            if (match[4]) {
+                if (tzRegex.exec(match[4])) {
+                    tzFormat = 'Z';
+                } else {
+                    config._isValid = false;
+                    return;
+                }
+            }
+            config._f = dateFormat + (timeFormat || '') + (tzFormat || '');
+            configFromStringAndFormat(config);
+        } else {
             config._isValid = false;
+        }
+    }
+
+    // RFC 2822 regex: For details see https://tools.ietf.org/html/rfc2822#section-3.3
+    var rfc2822 = /^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s)?(\d{1,2})\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s(\d{2,4})\s(\d\d):(\d\d)(?::(\d\d))?\s(?:(UT|GMT|[ECMP][SD]T)|([Zz])|([+-]\d{4}))$/;
+
+    function extractFromRFC2822Strings(yearStr, monthStr, dayStr, hourStr, minuteStr, secondStr) {
+        var result = [
+            untruncateYear(yearStr),
+            defaultLocaleMonthsShort.indexOf(monthStr),
+            parseInt(dayStr, 10),
+            parseInt(hourStr, 10),
+            parseInt(minuteStr, 10)
+        ];
+
+        if (secondStr) {
+            result.push(parseInt(secondStr, 10));
+        }
+
+        return result;
+    }
+
+    function untruncateYear(yearStr) {
+        var year = parseInt(yearStr, 10);
+        if (year <= 49) {
+            return 2000 + year;
+        } else if (year <= 999) {
+            return 1900 + year;
+        }
+        return year;
+    }
+
+    function preprocessRFC2822(s) {
+        // Remove comments and folding whitespace and replace multiple-spaces with a single space
+        return s.replace(/\([^)]*\)|[\n\t]/g, ' ').replace(/(\s\s+)/g, ' ').trim();
+    }
+
+    function checkWeekday(weekdayStr, parsedInput, config) {
+        if (weekdayStr) {
+            // TODO: Replace the vanilla JS Date object with an indepentent day-of-week check.
+            var weekdayProvided = defaultLocaleWeekdaysShort.indexOf(weekdayStr),
+                weekdayActual = new Date(parsedInput[0], parsedInput[1], parsedInput[2]).getDay();
+            if (weekdayProvided !== weekdayActual) {
+                getParsingFlags(config).weekdayMismatch = true;
+                config._isValid = false;
+                return false;
+            }
+        }
+        return true;
+    }
+
+    var obsOffsets = {
+        UT: 0,
+        GMT: 0,
+        EDT: -4 * 60,
+        EST: -5 * 60,
+        CDT: -5 * 60,
+        CST: -6 * 60,
+        MDT: -6 * 60,
+        MST: -7 * 60,
+        PDT: -7 * 60,
+        PST: -8 * 60
+    };
+
+    function calculateOffset(obsOffset, militaryOffset, numOffset) {
+        if (obsOffset) {
+            return obsOffsets[obsOffset];
+        } else if (militaryOffset) {
+            // the only allowed military tz is Z
+            return 0;
+        } else {
+            var hm = parseInt(numOffset, 10);
+            var m = hm % 100, h = (hm - m) / 100;
+            return h * 60 + m;
+        }
+    }
+
+    // date and time from ref 2822 format
+    function configFromRFC2822(config) {
+        var match = rfc2822.exec(preprocessRFC2822(config._i));
+        if (match) {
+            var parsedArray = extractFromRFC2822Strings(match[4], match[3], match[2], match[5], match[6], match[7]);
+            if (!checkWeekday(match[1], parsedArray, config)) {
+                return;
+            }
+
+            config._a = parsedArray;
+            config._tzm = calculateOffset(match[8], match[9], match[10]);
+
+            config._d = createUTCDate.apply(null, config._a);
+            config._d.setUTCMinutes(config._d.getUTCMinutes() - config._tzm);
+
+            getParsingFlags(config).rfc2822 = true;
+        } else {
+            config._isValid = false;
+        }
+    }
+
+    // date from iso format or fallback
+    function configFromString(config) {
+        var matched = aspNetJsonRegex.exec(config._i);
+
+        if (matched !== null) {
+            config._d = new Date(+matched[1]);
             return;
         }
-        if (match[4]) {
-            if (tzRegex.exec(match[4])) {
-                tzFormat = 'Z';
-            } else {
-                config._isValid = false;
-                return;
-            }
+
+        configFromISO(config);
+        if (config._isValid === false) {
+            delete config._isValid;
+        } else {
+            return;
         }
-        config._f = dateFormat + (timeFormat || '') + (tzFormat || '');
-        configFromStringAndFormat(config);
-    } else {
-        config._isValid = false;
-    }
-}
 
-// date from iso format or fallback
-function configFromString(config) {
-    var matched = aspNetJsonRegex.exec(config._i);
+        configFromRFC2822(config);
+        if (config._isValid === false) {
+            delete config._isValid;
+        } else {
+            return;
+        }
 
-    if (matched !== null) {
-        config._d = new Date(+matched[1]);
-        return;
-    }
-
-    configFromISO(config);
-    if (config._isValid === false) {
-        delete config._isValid;
+        // Final attempt, use Input Fallback
         hooks.createFromInputFallback(config);
     }
-}
 
-hooks.createFromInputFallback = deprecate(
-    'value provided is not in a recognized ISO format. moment construction falls back to js Date(), ' +
-    'which is not reliable across all browsers and versions. Non ISO date formats are ' +
-    'discouraged and will be removed in an upcoming major release. Please refer to ' +
-    'http://momentjs.com/guides/#/warnings/js-date/ for more info.',
-    function (config) {
-        config._d = new Date(config._i + (config._useUTC ? ' UTC' : ''));
-    }
-);
-
-// Pick the first defined of two or three arguments.
-function defaults(a, b, c) {
-    if (a != null) {
-        return a;
-    }
-    if (b != null) {
-        return b;
-    }
-    return c;
-}
-
-function currentDateArray(config) {
-    // hooks is actually the exported moment object
-    var nowValue = new Date(hooks.now());
-    if (config._useUTC) {
-        return [nowValue.getUTCFullYear(), nowValue.getUTCMonth(), nowValue.getUTCDate()];
-    }
-    return [nowValue.getFullYear(), nowValue.getMonth(), nowValue.getDate()];
-}
-
-// convert an array to a date.
-// the array should mirror the parameters below
-// note: all values past the year are optional and will default to the lowest possible value.
-// [year, month, day , hour, minute, second, millisecond]
-function configFromArray (config) {
-    var i, date, input = [], currentDate, yearToUse;
-
-    if (config._d) {
-        return;
-    }
-
-    currentDate = currentDateArray(config);
-
-    //compute day of the year from weeks and weekdays
-    if (config._w && config._a[DATE] == null && config._a[MONTH] == null) {
-        dayOfYearFromWeekInfo(config);
-    }
-
-    //if the day of the year is set, figure out what it is
-    if (config._dayOfYear) {
-        yearToUse = defaults(config._a[YEAR], currentDate[YEAR]);
-
-        if (config._dayOfYear > daysInYear(yearToUse)) {
-            getParsingFlags(config)._overflowDayOfYear = true;
+    hooks.createFromInputFallback = deprecate(
+        'value provided is not in a recognized RFC2822 or ISO format. moment construction falls back to js Date(), ' +
+        'which is not reliable across all browsers and versions. Non RFC2822/ISO date formats are ' +
+        'discouraged and will be removed in an upcoming major release. Please refer to ' +
+        'http://momentjs.com/guides/#/warnings/js-date/ for more info.',
+        function (config) {
+            config._d = new Date(config._i + (config._useUTC ? ' UTC' : ''));
         }
+    );
 
-        date = createUTCDate(yearToUse, 0, config._dayOfYear);
-        config._a[MONTH] = date.getUTCMonth();
-        config._a[DATE] = date.getUTCDate();
-    }
+    // constant that refers to the ISO standard
+    hooks.ISO_8601 = function () {};
 
-    // Default to current date.
-    // * if no year, month, day of month are given, default to today
-    // * if day of month is given, default month and year
-    // * if month is given, default only year
-    // * if year is given, don't default anything
-    for (i = 0; i < 3 && config._a[i] == null; ++i) {
-        config._a[i] = input[i] = currentDate[i];
-    }
+    // constant that refers to the RFC 2822 form
+    hooks.RFC_2822 = function () {};
 
-    // Zero out whatever was not defaulted, including time
-    for (; i < 7; i++) {
-        config._a[i] = input[i] = (config._a[i] == null) ? (i === 2 ? 1 : 0) : config._a[i];
-    }
-
-    // Check for 24:00:00.000
-    if (config._a[HOUR] === 24 &&
-            config._a[MINUTE] === 0 &&
-            config._a[SECOND] === 0 &&
-            config._a[MILLISECOND] === 0) {
-        config._nextDay = true;
-        config._a[HOUR] = 0;
-    }
-
-    config._d = (config._useUTC ? createUTCDate : createDate).apply(null, input);
-    // Apply timezone offset from input. The actual utcOffset can be changed
-    // with parseZone.
-    if (config._tzm != null) {
-        config._d.setUTCMinutes(config._d.getUTCMinutes() - config._tzm);
-    }
-
-    if (config._nextDay) {
-        config._a[HOUR] = 24;
-    }
-}
-
-function dayOfYearFromWeekInfo(config) {
-    var w, weekYear, week, weekday, dow, doy, temp, weekdayOverflow;
-
-    w = config._w;
-    if (w.GG != null || w.W != null || w.E != null) {
-        dow = 1;
-        doy = 4;
-
-        // TODO: We need to take the current isoWeekYear, but that depends on
-        // how we interpret now (local, utc, fixed offset). So create
-        // a now version of current config (take local/utc/offset flags, and
-        // create now).
-        weekYear = defaults(w.GG, config._a[YEAR], weekOfYear(createLocal(), 1, 4).year);
-        week = defaults(w.W, 1);
-        weekday = defaults(w.E, 1);
-        if (weekday < 1 || weekday > 7) {
-            weekdayOverflow = true;
+    // date from string and format string
+    function configFromStringAndFormat(config) {
+        // TODO: Move this to another part of the creation flow to prevent circular deps
+        if (config._f === hooks.ISO_8601) {
+            configFromISO(config);
+            return;
         }
-    } else {
-        dow = config._locale._week.dow;
-        doy = config._locale._week.doy;
-
-        var curWeek = weekOfYear(createLocal(), dow, doy);
-
-        weekYear = defaults(w.gg, config._a[YEAR], curWeek.year);
-
-        // Default to current week.
-        week = defaults(w.w, curWeek.week);
-
-        if (w.d != null) {
-            // weekday -- low day numbers are considered next week
-            weekday = w.d;
-            if (weekday < 0 || weekday > 6) {
-                weekdayOverflow = true;
-            }
-        } else if (w.e != null) {
-            // local weekday -- counting starts from begining of week
-            weekday = w.e + dow;
-            if (w.e < 0 || w.e > 6) {
-                weekdayOverflow = true;
-            }
-        } else {
-            // default to begining of week
-            weekday = dow;
+        if (config._f === hooks.RFC_2822) {
+            configFromRFC2822(config);
+            return;
         }
-    }
-    if (week < 1 || week > weeksInYear(weekYear, dow, doy)) {
-        getParsingFlags(config)._overflowWeeks = true;
-    } else if (weekdayOverflow != null) {
-        getParsingFlags(config)._overflowWeekday = true;
-    } else {
-        temp = dayOfYearFromWeeks(weekYear, week, weekday, dow, doy);
-        config._a[YEAR] = temp.year;
-        config._dayOfYear = temp.dayOfYear;
-    }
-}
+        config._a = [];
+        getParsingFlags(config).empty = true;
 
-// constant that refers to the ISO standard
-hooks.ISO_8601 = function () {};
+        // This array is used to make a Date, either with `new Date` or `Date.UTC`
+        var string = '' + config._i,
+            i, parsedInput, tokens, token, skipped,
+            stringLength = string.length,
+            totalParsedInputLength = 0;
 
-// date from string and format string
-function configFromStringAndFormat(config) {
-    // TODO: Move this to another part of the creation flow to prevent circular deps
-    if (config._f === hooks.ISO_8601) {
-        configFromISO(config);
-        return;
-    }
+        tokens = expandFormat(config._f, config._locale).match(formattingTokens) || [];
 
-    config._a = [];
-    getParsingFlags(config).empty = true;
-
-    // This array is used to make a Date, either with `new Date` or `Date.UTC`
-    var string = '' + config._i,
-        i, parsedInput, tokens, token, skipped,
-        stringLength = string.length,
-        totalParsedInputLength = 0;
-
-    tokens = expandFormat(config._f, config._locale).match(formattingTokens) || [];
-
-    for (i = 0; i < tokens.length; i++) {
-        token = tokens[i];
-        parsedInput = (string.match(getParseRegexForToken(token, config)) || [])[0];
-        // console.log('token', token, 'parsedInput', parsedInput,
-        //         'regex', getParseRegexForToken(token, config));
-        if (parsedInput) {
-            skipped = string.substr(0, string.indexOf(parsedInput));
-            if (skipped.length > 0) {
-                getParsingFlags(config).unusedInput.push(skipped);
-            }
-            string = string.slice(string.indexOf(parsedInput) + parsedInput.length);
-            totalParsedInputLength += parsedInput.length;
-        }
-        // don't parse if it's not a known token
-        if (formatTokenFunctions[token]) {
+        for (i = 0; i < tokens.length; i++) {
+            token = tokens[i];
+            parsedInput = (string.match(getParseRegexForToken(token, config)) || [])[0];
+            // console.log('token', token, 'parsedInput', parsedInput,
+            //         'regex', getParseRegexForToken(token, config));
             if (parsedInput) {
-                getParsingFlags(config).empty = false;
+                skipped = string.substr(0, string.indexOf(parsedInput));
+                if (skipped.length > 0) {
+                    getParsingFlags(config).unusedInput.push(skipped);
+                }
+                string = string.slice(string.indexOf(parsedInput) + parsedInput.length);
+                totalParsedInputLength += parsedInput.length;
             }
-            else {
+            // don't parse if it's not a known token
+            if (formatTokenFunctions[token]) {
+                if (parsedInput) {
+                    getParsingFlags(config).empty = false;
+                }
+                else {
+                    getParsingFlags(config).unusedTokens.push(token);
+                }
+                addTimeToArrayFromToken(token, parsedInput, config);
+            }
+            else if (config._strict && !parsedInput) {
                 getParsingFlags(config).unusedTokens.push(token);
             }
-            addTimeToArrayFromToken(token, parsedInput, config);
-        }
-        else if (config._strict && !parsedInput) {
-            getParsingFlags(config).unusedTokens.push(token);
-        }
-    }
-
-    // add remaining unparsed input length to the string
-    getParsingFlags(config).charsLeftOver = stringLength - totalParsedInputLength;
-    if (string.length > 0) {
-        getParsingFlags(config).unusedInput.push(string);
-    }
-
-    // clear _12h flag if hour is <= 12
-    if (config._a[HOUR] <= 12 &&
-        getParsingFlags(config).bigHour === true &&
-        config._a[HOUR] > 0) {
-        getParsingFlags(config).bigHour = undefined;
-    }
-
-    getParsingFlags(config).parsedDateParts = config._a.slice(0);
-    getParsingFlags(config).meridiem = config._meridiem;
-    // handle meridiem
-    config._a[HOUR] = meridiemFixWrap(config._locale, config._a[HOUR], config._meridiem);
-
-    configFromArray(config);
-    checkOverflow(config);
-}
-
-
-function meridiemFixWrap (locale, hour, meridiem) {
-    var isPm;
-
-    if (meridiem == null) {
-        // nothing to do
-        return hour;
-    }
-    if (locale.meridiemHour != null) {
-        return locale.meridiemHour(hour, meridiem);
-    } else if (locale.isPM != null) {
-        // Fallback
-        isPm = locale.isPM(meridiem);
-        if (isPm && hour < 12) {
-            hour += 12;
-        }
-        if (!isPm && hour === 12) {
-            hour = 0;
-        }
-        return hour;
-    } else {
-        // this is not supposed to happen
-        return hour;
-    }
-}
-
-// date from string and array of format strings
-function configFromStringAndArray(config) {
-    var tempConfig,
-        bestMoment,
-
-        scoreToBeat,
-        i,
-        currentScore;
-
-    if (config._f.length === 0) {
-        getParsingFlags(config).invalidFormat = true;
-        config._d = new Date(NaN);
-        return;
-    }
-
-    for (i = 0; i < config._f.length; i++) {
-        currentScore = 0;
-        tempConfig = copyConfig({}, config);
-        if (config._useUTC != null) {
-            tempConfig._useUTC = config._useUTC;
-        }
-        tempConfig._f = config._f[i];
-        configFromStringAndFormat(tempConfig);
-
-        if (!isValid(tempConfig)) {
-            continue;
         }
 
-        // if there is any input that was not parsed add a penalty for that format
-        currentScore += getParsingFlags(tempConfig).charsLeftOver;
-
-        //or tokens
-        currentScore += getParsingFlags(tempConfig).unusedTokens.length * 10;
-
-        getParsingFlags(tempConfig).score = currentScore;
-
-        if (scoreToBeat == null || currentScore < scoreToBeat) {
-            scoreToBeat = currentScore;
-            bestMoment = tempConfig;
+        // add remaining unparsed input length to the string
+        getParsingFlags(config).charsLeftOver = stringLength - totalParsedInputLength;
+        if (string.length > 0) {
+            getParsingFlags(config).unusedInput.push(string);
         }
-    }
 
-    extend(config, bestMoment || tempConfig);
-}
+        // clear _12h flag if hour is <= 12
+        if (config._a[HOUR] <= 12 &&
+            getParsingFlags(config).bigHour === true &&
+            config._a[HOUR] > 0) {
+            getParsingFlags(config).bigHour = undefined;
+        }
 
-function configFromObject(config) {
-    if (config._d) {
-        return;
-    }
+        getParsingFlags(config).parsedDateParts = config._a.slice(0);
+        getParsingFlags(config).meridiem = config._meridiem;
+        // handle meridiem
+        config._a[HOUR] = meridiemFixWrap(config._locale, config._a[HOUR], config._meridiem);
 
-    var i = normalizeObjectUnits(config._i);
-    config._a = map([i.year, i.month, i.day || i.date, i.hour, i.minute, i.second, i.millisecond], function (obj) {
-        return obj && parseInt(obj, 10);
-    });
-
-    configFromArray(config);
-}
-
-function createFromConfig (config) {
-    var res = new Moment(checkOverflow(prepareConfig(config)));
-    if (res._nextDay) {
-        // Adding is smart enough around DST
-        res.add(1, 'd');
-        res._nextDay = undefined;
-    }
-
-    return res;
-}
-
-function prepareConfig (config) {
-    var input = config._i,
-        format = config._f;
-
-    config._locale = config._locale || getLocale(config._l);
-
-    if (input === null || (format === undefined && input === '')) {
-        return createInvalid({nullInput: true});
-    }
-
-    if (typeof input === 'string') {
-        config._i = input = config._locale.preparse(input);
-    }
-
-    if (isMoment(input)) {
-        return new Moment(checkOverflow(input));
-    } else if (isDate(input)) {
-        config._d = input;
-    } else if (isArray(format)) {
-        configFromStringAndArray(config);
-    } else if (format) {
-        configFromStringAndFormat(config);
-    }  else {
-        configFromInput(config);
-    }
-
-    if (!isValid(config)) {
-        config._d = null;
-    }
-
-    return config;
-}
-
-function configFromInput(config) {
-    var input = config._i;
-    if (input === undefined) {
-        config._d = new Date(hooks.now());
-    } else if (isDate(input)) {
-        config._d = new Date(input.valueOf());
-    } else if (typeof input === 'string') {
-        configFromString(config);
-    } else if (isArray(input)) {
-        config._a = map(input.slice(0), function (obj) {
-            return parseInt(obj, 10);
-        });
         configFromArray(config);
-    } else if (typeof(input) === 'object') {
-        configFromObject(config);
-    } else if (isNumber(input)) {
-        // from milliseconds
-        config._d = new Date(input);
-    } else {
-        hooks.createFromInputFallback(config);
-    }
-}
-
-function createLocalOrUTC (input, format, locale, strict, isUTC) {
-    var c = {};
-
-    if (locale === true || locale === false) {
-        strict = locale;
-        locale = undefined;
+        checkOverflow(config);
     }
 
-    if ((isObject(input) && isObjectEmpty(input)) ||
-            (isArray(input) && input.length === 0)) {
-        input = undefined;
-    }
-    // object construction must be done this way.
-    // https://github.com/moment/moment/issues/1423
-    c._isAMomentObject = true;
-    c._useUTC = c._isUTC = isUTC;
-    c._l = locale;
-    c._i = input;
-    c._f = format;
-    c._strict = strict;
 
-    return createFromConfig(c);
-}
+    function meridiemFixWrap (locale, hour, meridiem) {
+        var isPm;
 
-function createLocal (input, format, locale, strict) {
-    return createLocalOrUTC(input, format, locale, strict, false);
-}
-
-var prototypeMin = deprecate(
-    'moment().min is deprecated, use moment.max instead. http://momentjs.com/guides/#/warnings/min-max/',
-    function () {
-        var other = createLocal.apply(null, arguments);
-        if (this.isValid() && other.isValid()) {
-            return other < this ? this : other;
+        if (meridiem == null) {
+            // nothing to do
+            return hour;
+        }
+        if (locale.meridiemHour != null) {
+            return locale.meridiemHour(hour, meridiem);
+        } else if (locale.isPM != null) {
+            // Fallback
+            isPm = locale.isPM(meridiem);
+            if (isPm && hour < 12) {
+                hour += 12;
+            }
+            if (!isPm && hour === 12) {
+                hour = 0;
+            }
+            return hour;
         } else {
-            return createInvalid();
+            // this is not supposed to happen
+            return hour;
         }
     }
-);
 
-var prototypeMax = deprecate(
-    'moment().max is deprecated, use moment.min instead. http://momentjs.com/guides/#/warnings/min-max/',
-    function () {
-        var other = createLocal.apply(null, arguments);
-        if (this.isValid() && other.isValid()) {
-            return other > this ? this : other;
-        } else {
-            return createInvalid();
+    // date from string and array of format strings
+    function configFromStringAndArray(config) {
+        var tempConfig,
+            bestMoment,
+
+            scoreToBeat,
+            i,
+            currentScore;
+
+        if (config._f.length === 0) {
+            getParsingFlags(config).invalidFormat = true;
+            config._d = new Date(NaN);
+            return;
         }
-    }
-);
 
-// Pick a moment m from moments so that m[fn](other) is true for all
-// other. This relies on the function fn to be transitive.
-//
-// moments should either be an array of moment objects or an array, whose
-// first element is an array of moment objects.
-function pickBy(fn, moments) {
-    var res, i;
-    if (moments.length === 1 && isArray(moments[0])) {
-        moments = moments[0];
-    }
-    if (!moments.length) {
-        return createLocal();
-    }
-    res = moments[0];
-    for (i = 1; i < moments.length; ++i) {
-        if (!moments[i].isValid() || moments[i][fn](res)) {
-            res = moments[i];
+        for (i = 0; i < config._f.length; i++) {
+            currentScore = 0;
+            tempConfig = copyConfig({}, config);
+            if (config._useUTC != null) {
+                tempConfig._useUTC = config._useUTC;
+            }
+            tempConfig._f = config._f[i];
+            configFromStringAndFormat(tempConfig);
+
+            if (!isValid(tempConfig)) {
+                continue;
+            }
+
+            // if there is any input that was not parsed add a penalty for that format
+            currentScore += getParsingFlags(tempConfig).charsLeftOver;
+
+            //or tokens
+            currentScore += getParsingFlags(tempConfig).unusedTokens.length * 10;
+
+            getParsingFlags(tempConfig).score = currentScore;
+
+            if (scoreToBeat == null || currentScore < scoreToBeat) {
+                scoreToBeat = currentScore;
+                bestMoment = tempConfig;
+            }
         }
+
+        extend(config, bestMoment || tempConfig);
     }
-    return res;
-}
 
-// TODO: Use [].sort instead?
-function min () {
-    var args = [].slice.call(arguments, 0);
-
-    return pickBy('isBefore', args);
-}
-
-function max () {
-    var args = [].slice.call(arguments, 0);
-
-    return pickBy('isAfter', args);
-}
-
-var now = function () {
-    return Date.now ? Date.now() : +(new Date());
-};
-
-function Duration (duration) {
-    var normalizedInput = normalizeObjectUnits(duration),
-        years = normalizedInput.year || 0,
-        quarters = normalizedInput.quarter || 0,
-        months = normalizedInput.month || 0,
-        weeks = normalizedInput.week || 0,
-        days = normalizedInput.day || 0,
-        hours = normalizedInput.hour || 0,
-        minutes = normalizedInput.minute || 0,
-        seconds = normalizedInput.second || 0,
-        milliseconds = normalizedInput.millisecond || 0;
-
-    // representation for dateAddRemove
-    this._milliseconds = +milliseconds +
-        seconds * 1e3 + // 1000
-        minutes * 6e4 + // 1000 * 60
-        hours * 1000 * 60 * 60; //using 1000 * 60 * 60 instead of 36e5 to avoid floating point rounding errors https://github.com/moment/moment/issues/2978
-    // Because of dateAddRemove treats 24 hours as different from a
-    // day when working around DST, we need to store them separately
-    this._days = +days +
-        weeks * 7;
-    // It is impossible translate months into days without knowing
-    // which months you are are talking about, so we have to store
-    // it separately.
-    this._months = +months +
-        quarters * 3 +
-        years * 12;
-
-    this._data = {};
-
-    this._locale = getLocale();
-
-    this._bubble();
-}
-
-function isDuration (obj) {
-    return obj instanceof Duration;
-}
-
-function absRound (number) {
-    if (number < 0) {
-        return Math.round(-1 * number) * -1;
-    } else {
-        return Math.round(number);
-    }
-}
-
-// FORMATTING
-
-function offset (token, separator) {
-    addFormatToken(token, 0, 0, function () {
-        var offset = this.utcOffset();
-        var sign = '+';
-        if (offset < 0) {
-            offset = -offset;
-            sign = '-';
+    function configFromObject(config) {
+        if (config._d) {
+            return;
         }
-        return sign + zeroFill(~~(offset / 60), 2) + separator + zeroFill(~~(offset) % 60, 2);
-    });
-}
 
-offset('Z', ':');
-offset('ZZ', '');
+        var i = normalizeObjectUnits(config._i);
+        config._a = map([i.year, i.month, i.day || i.date, i.hour, i.minute, i.second, i.millisecond], function (obj) {
+            return obj && parseInt(obj, 10);
+        });
 
-// PARSING
-
-addRegexToken('Z',  matchShortOffset);
-addRegexToken('ZZ', matchShortOffset);
-addParseToken(['Z', 'ZZ'], function (input, array, config) {
-    config._useUTC = true;
-    config._tzm = offsetFromString(matchShortOffset, input);
-});
-
-// HELPERS
-
-// timezone chunker
-// '+10:00' > ['10',  '00']
-// '-1530'  > ['-15', '30']
-var chunkOffset = /([\+\-]|\d\d)/gi;
-
-function offsetFromString(matcher, string) {
-    var matches = (string || '').match(matcher);
-
-    if (matches === null) {
-        return null;
+        configFromArray(config);
     }
 
-    var chunk   = matches[matches.length - 1] || [];
-    var parts   = (chunk + '').match(chunkOffset) || ['-', 0, 0];
-    var minutes = +(parts[1] * 60) + toInt(parts[2]);
+    function createFromConfig (config) {
+        var res = new Moment(checkOverflow(prepareConfig(config)));
+        if (res._nextDay) {
+            // Adding is smart enough around DST
+            res.add(1, 'd');
+            res._nextDay = undefined;
+        }
 
-    return minutes === 0 ?
-      0 :
-      parts[0] === '+' ? minutes : -minutes;
-}
-
-// Return a moment from input, that is local/utc/zone equivalent to model.
-function cloneWithOffset(input, model) {
-    var res, diff;
-    if (model._isUTC) {
-        res = model.clone();
-        diff = (isMoment(input) || isDate(input) ? input.valueOf() : createLocal(input).valueOf()) - res.valueOf();
-        // Use low-level api, because this fn is low-level api.
-        res._d.setTime(res._d.valueOf() + diff);
-        hooks.updateOffset(res, false);
         return res;
-    } else {
-        return createLocal(input).local();
     }
-}
 
-function getDateOffset (m) {
-    // On Firefox.24 Date#getTimezoneOffset returns a floating point.
-    // https://github.com/moment/moment/pull/1871
-    return -Math.round(m._d.getTimezoneOffset() / 15) * 15;
-}
+    function prepareConfig (config) {
+        var input = config._i,
+            format = config._f;
 
-// HOOKS
+        config._locale = config._locale || getLocale(config._l);
 
-// This function will be called whenever a moment is mutated.
-// It is intended to keep the offset in sync with the timezone.
-hooks.updateOffset = function () {};
+        if (input === null || (format === undefined && input === '')) {
+            return createInvalid({nullInput: true});
+        }
 
-// MOMENTS
-
-// keepLocalTime = true means only change the timezone, without
-// affecting the local hour. So 5:31:26 +0300 --[utcOffset(2, true)]-->
-// 5:31:26 +0200 It is possible that 5:31:26 doesn't exist with offset
-// +0200, so we adjust the time as needed, to be valid.
-//
-// Keeping the time actually adds/subtracts (one hour)
-// from the actual represented time. That is why we call updateOffset
-// a second time. In case it wants us to change the offset again
-// _changeInProgress == true case, then we have to adjust, because
-// there is no such time in the given timezone.
-function getSetOffset (input, keepLocalTime) {
-    var offset = this._offset || 0,
-        localAdjust;
-    if (!this.isValid()) {
-        return input != null ? this : NaN;
-    }
-    if (input != null) {
         if (typeof input === 'string') {
-            input = offsetFromString(matchShortOffset, input);
-            if (input === null) {
-                return this;
+            config._i = input = config._locale.preparse(input);
+        }
+
+        if (isMoment(input)) {
+            return new Moment(checkOverflow(input));
+        } else if (isDate(input)) {
+            config._d = input;
+        } else if (isArray(format)) {
+            configFromStringAndArray(config);
+        } else if (format) {
+            configFromStringAndFormat(config);
+        }  else {
+            configFromInput(config);
+        }
+
+        if (!isValid(config)) {
+            config._d = null;
+        }
+
+        return config;
+    }
+
+    function configFromInput(config) {
+        var input = config._i;
+        if (isUndefined(input)) {
+            config._d = new Date(hooks.now());
+        } else if (isDate(input)) {
+            config._d = new Date(input.valueOf());
+        } else if (typeof input === 'string') {
+            configFromString(config);
+        } else if (isArray(input)) {
+            config._a = map(input.slice(0), function (obj) {
+                return parseInt(obj, 10);
+            });
+            configFromArray(config);
+        } else if (isObject(input)) {
+            configFromObject(config);
+        } else if (isNumber(input)) {
+            // from milliseconds
+            config._d = new Date(input);
+        } else {
+            hooks.createFromInputFallback(config);
+        }
+    }
+
+    function createLocalOrUTC (input, format, locale, strict, isUTC) {
+        var c = {};
+
+        if (locale === true || locale === false) {
+            strict = locale;
+            locale = undefined;
+        }
+
+        if ((isObject(input) && isObjectEmpty(input)) ||
+                (isArray(input) && input.length === 0)) {
+            input = undefined;
+        }
+        // object construction must be done this way.
+        // https://github.com/moment/moment/issues/1423
+        c._isAMomentObject = true;
+        c._useUTC = c._isUTC = isUTC;
+        c._l = locale;
+        c._i = input;
+        c._f = format;
+        c._strict = strict;
+
+        return createFromConfig(c);
+    }
+
+    function createLocal (input, format, locale, strict) {
+        return createLocalOrUTC(input, format, locale, strict, false);
+    }
+
+    var prototypeMin = deprecate(
+        'moment().min is deprecated, use moment.max instead. http://momentjs.com/guides/#/warnings/min-max/',
+        function () {
+            var other = createLocal.apply(null, arguments);
+            if (this.isValid() && other.isValid()) {
+                return other < this ? this : other;
+            } else {
+                return createInvalid();
             }
-        } else if (Math.abs(input) < 16) {
-            input = input * 60;
         }
-        if (!this._isUTC && keepLocalTime) {
-            localAdjust = getDateOffset(this);
-        }
-        this._offset = input;
-        this._isUTC = true;
-        if (localAdjust != null) {
-            this.add(localAdjust, 'm');
-        }
-        if (offset !== input) {
-            if (!keepLocalTime || this._changeInProgress) {
-                addSubtract(this, createDuration(input - offset, 'm'), 1, false);
-            } else if (!this._changeInProgress) {
-                this._changeInProgress = true;
-                hooks.updateOffset(this, true);
-                this._changeInProgress = null;
-            }
-        }
-        return this;
-    } else {
-        return this._isUTC ? offset : getDateOffset(this);
-    }
-}
-
-function getSetZone (input, keepLocalTime) {
-    if (input != null) {
-        if (typeof input !== 'string') {
-            input = -input;
-        }
-
-        this.utcOffset(input, keepLocalTime);
-
-        return this;
-    } else {
-        return -this.utcOffset();
-    }
-}
-
-function setOffsetToUTC (keepLocalTime) {
-    return this.utcOffset(0, keepLocalTime);
-}
-
-function setOffsetToLocal (keepLocalTime) {
-    if (this._isUTC) {
-        this.utcOffset(0, keepLocalTime);
-        this._isUTC = false;
-
-        if (keepLocalTime) {
-            this.subtract(getDateOffset(this), 'm');
-        }
-    }
-    return this;
-}
-
-function setOffsetToParsedOffset () {
-    if (this._tzm != null) {
-        this.utcOffset(this._tzm);
-    } else if (typeof this._i === 'string') {
-        var tZone = offsetFromString(matchOffset, this._i);
-        if (tZone != null) {
-            this.utcOffset(tZone);
-        }
-        else {
-            this.utcOffset(0, true);
-        }
-    }
-    return this;
-}
-
-function hasAlignedHourOffset (input) {
-    if (!this.isValid()) {
-        return false;
-    }
-    input = input ? createLocal(input).utcOffset() : 0;
-
-    return (this.utcOffset() - input) % 60 === 0;
-}
-
-function isDaylightSavingTime () {
-    return (
-        this.utcOffset() > this.clone().month(0).utcOffset() ||
-        this.utcOffset() > this.clone().month(5).utcOffset()
     );
-}
 
-function isDaylightSavingTimeShifted () {
-    if (!isUndefined(this._isDSTShifted)) {
+    var prototypeMax = deprecate(
+        'moment().max is deprecated, use moment.min instead. http://momentjs.com/guides/#/warnings/min-max/',
+        function () {
+            var other = createLocal.apply(null, arguments);
+            if (this.isValid() && other.isValid()) {
+                return other > this ? this : other;
+            } else {
+                return createInvalid();
+            }
+        }
+    );
+
+    // Pick a moment m from moments so that m[fn](other) is true for all
+    // other. This relies on the function fn to be transitive.
+    //
+    // moments should either be an array of moment objects or an array, whose
+    // first element is an array of moment objects.
+    function pickBy(fn, moments) {
+        var res, i;
+        if (moments.length === 1 && isArray(moments[0])) {
+            moments = moments[0];
+        }
+        if (!moments.length) {
+            return createLocal();
+        }
+        res = moments[0];
+        for (i = 1; i < moments.length; ++i) {
+            if (!moments[i].isValid() || moments[i][fn](res)) {
+                res = moments[i];
+            }
+        }
+        return res;
+    }
+
+    // TODO: Use [].sort instead?
+    function min () {
+        var args = [].slice.call(arguments, 0);
+
+        return pickBy('isBefore', args);
+    }
+
+    function max () {
+        var args = [].slice.call(arguments, 0);
+
+        return pickBy('isAfter', args);
+    }
+
+    var now = function () {
+        return Date.now ? Date.now() : +(new Date());
+    };
+
+    var ordering = ['year', 'quarter', 'month', 'week', 'day', 'hour', 'minute', 'second', 'millisecond'];
+
+    function isDurationValid(m) {
+        for (var key in m) {
+            if (!(indexOf.call(ordering, key) !== -1 && (m[key] == null || !isNaN(m[key])))) {
+                return false;
+            }
+        }
+
+        var unitHasDecimal = false;
+        for (var i = 0; i < ordering.length; ++i) {
+            if (m[ordering[i]]) {
+                if (unitHasDecimal) {
+                    return false; // only allow non-integers for smallest unit
+                }
+                if (parseFloat(m[ordering[i]]) !== toInt(m[ordering[i]])) {
+                    unitHasDecimal = true;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    function isValid$1() {
+        return this._isValid;
+    }
+
+    function createInvalid$1() {
+        return createDuration(NaN);
+    }
+
+    function Duration (duration) {
+        var normalizedInput = normalizeObjectUnits(duration),
+            years = normalizedInput.year || 0,
+            quarters = normalizedInput.quarter || 0,
+            months = normalizedInput.month || 0,
+            weeks = normalizedInput.week || 0,
+            days = normalizedInput.day || 0,
+            hours = normalizedInput.hour || 0,
+            minutes = normalizedInput.minute || 0,
+            seconds = normalizedInput.second || 0,
+            milliseconds = normalizedInput.millisecond || 0;
+
+        this._isValid = isDurationValid(normalizedInput);
+
+        // representation for dateAddRemove
+        this._milliseconds = +milliseconds +
+            seconds * 1e3 + // 1000
+            minutes * 6e4 + // 1000 * 60
+            hours * 1000 * 60 * 60; //using 1000 * 60 * 60 instead of 36e5 to avoid floating point rounding errors https://github.com/moment/moment/issues/2978
+        // Because of dateAddRemove treats 24 hours as different from a
+        // day when working around DST, we need to store them separately
+        this._days = +days +
+            weeks * 7;
+        // It is impossible to translate months into days without knowing
+        // which months you are are talking about, so we have to store
+        // it separately.
+        this._months = +months +
+            quarters * 3 +
+            years * 12;
+
+        this._data = {};
+
+        this._locale = getLocale();
+
+        this._bubble();
+    }
+
+    function isDuration (obj) {
+        return obj instanceof Duration;
+    }
+
+    function absRound (number) {
+        if (number < 0) {
+            return Math.round(-1 * number) * -1;
+        } else {
+            return Math.round(number);
+        }
+    }
+
+    // FORMATTING
+
+    function offset (token, separator) {
+        addFormatToken(token, 0, 0, function () {
+            var offset = this.utcOffset();
+            var sign = '+';
+            if (offset < 0) {
+                offset = -offset;
+                sign = '-';
+            }
+            return sign + zeroFill(~~(offset / 60), 2) + separator + zeroFill(~~(offset) % 60, 2);
+        });
+    }
+
+    offset('Z', ':');
+    offset('ZZ', '');
+
+    // PARSING
+
+    addRegexToken('Z',  matchShortOffset);
+    addRegexToken('ZZ', matchShortOffset);
+    addParseToken(['Z', 'ZZ'], function (input, array, config) {
+        config._useUTC = true;
+        config._tzm = offsetFromString(matchShortOffset, input);
+    });
+
+    // HELPERS
+
+    // timezone chunker
+    // '+10:00' > ['10',  '00']
+    // '-1530'  > ['-15', '30']
+    var chunkOffset = /([\+\-]|\d\d)/gi;
+
+    function offsetFromString(matcher, string) {
+        var matches = (string || '').match(matcher);
+
+        if (matches === null) {
+            return null;
+        }
+
+        var chunk   = matches[matches.length - 1] || [];
+        var parts   = (chunk + '').match(chunkOffset) || ['-', 0, 0];
+        var minutes = +(parts[1] * 60) + toInt(parts[2]);
+
+        return minutes === 0 ?
+          0 :
+          parts[0] === '+' ? minutes : -minutes;
+    }
+
+    // Return a moment from input, that is local/utc/zone equivalent to model.
+    function cloneWithOffset(input, model) {
+        var res, diff;
+        if (model._isUTC) {
+            res = model.clone();
+            diff = (isMoment(input) || isDate(input) ? input.valueOf() : createLocal(input).valueOf()) - res.valueOf();
+            // Use low-level api, because this fn is low-level api.
+            res._d.setTime(res._d.valueOf() + diff);
+            hooks.updateOffset(res, false);
+            return res;
+        } else {
+            return createLocal(input).local();
+        }
+    }
+
+    function getDateOffset (m) {
+        // On Firefox.24 Date#getTimezoneOffset returns a floating point.
+        // https://github.com/moment/moment/pull/1871
+        return -Math.round(m._d.getTimezoneOffset() / 15) * 15;
+    }
+
+    // HOOKS
+
+    // This function will be called whenever a moment is mutated.
+    // It is intended to keep the offset in sync with the timezone.
+    hooks.updateOffset = function () {};
+
+    // MOMENTS
+
+    // keepLocalTime = true means only change the timezone, without
+    // affecting the local hour. So 5:31:26 +0300 --[utcOffset(2, true)]-->
+    // 5:31:26 +0200 It is possible that 5:31:26 doesn't exist with offset
+    // +0200, so we adjust the time as needed, to be valid.
+    //
+    // Keeping the time actually adds/subtracts (one hour)
+    // from the actual represented time. That is why we call updateOffset
+    // a second time. In case it wants us to change the offset again
+    // _changeInProgress == true case, then we have to adjust, because
+    // there is no such time in the given timezone.
+    function getSetOffset (input, keepLocalTime, keepMinutes) {
+        var offset = this._offset || 0,
+            localAdjust;
+        if (!this.isValid()) {
+            return input != null ? this : NaN;
+        }
+        if (input != null) {
+            if (typeof input === 'string') {
+                input = offsetFromString(matchShortOffset, input);
+                if (input === null) {
+                    return this;
+                }
+            } else if (Math.abs(input) < 16 && !keepMinutes) {
+                input = input * 60;
+            }
+            if (!this._isUTC && keepLocalTime) {
+                localAdjust = getDateOffset(this);
+            }
+            this._offset = input;
+            this._isUTC = true;
+            if (localAdjust != null) {
+                this.add(localAdjust, 'm');
+            }
+            if (offset !== input) {
+                if (!keepLocalTime || this._changeInProgress) {
+                    addSubtract(this, createDuration(input - offset, 'm'), 1, false);
+                } else if (!this._changeInProgress) {
+                    this._changeInProgress = true;
+                    hooks.updateOffset(this, true);
+                    this._changeInProgress = null;
+                }
+            }
+            return this;
+        } else {
+            return this._isUTC ? offset : getDateOffset(this);
+        }
+    }
+
+    function getSetZone (input, keepLocalTime) {
+        if (input != null) {
+            if (typeof input !== 'string') {
+                input = -input;
+            }
+
+            this.utcOffset(input, keepLocalTime);
+
+            return this;
+        } else {
+            return -this.utcOffset();
+        }
+    }
+
+    function setOffsetToUTC (keepLocalTime) {
+        return this.utcOffset(0, keepLocalTime);
+    }
+
+    function setOffsetToLocal (keepLocalTime) {
+        if (this._isUTC) {
+            this.utcOffset(0, keepLocalTime);
+            this._isUTC = false;
+
+            if (keepLocalTime) {
+                this.subtract(getDateOffset(this), 'm');
+            }
+        }
+        return this;
+    }
+
+    function setOffsetToParsedOffset () {
+        if (this._tzm != null) {
+            this.utcOffset(this._tzm, false, true);
+        } else if (typeof this._i === 'string') {
+            var tZone = offsetFromString(matchOffset, this._i);
+            if (tZone != null) {
+                this.utcOffset(tZone);
+            }
+            else {
+                this.utcOffset(0, true);
+            }
+        }
+        return this;
+    }
+
+    function hasAlignedHourOffset (input) {
+        if (!this.isValid()) {
+            return false;
+        }
+        input = input ? createLocal(input).utcOffset() : 0;
+
+        return (this.utcOffset() - input) % 60 === 0;
+    }
+
+    function isDaylightSavingTime () {
+        return (
+            this.utcOffset() > this.clone().month(0).utcOffset() ||
+            this.utcOffset() > this.clone().month(5).utcOffset()
+        );
+    }
+
+    function isDaylightSavingTimeShifted () {
+        if (!isUndefined(this._isDSTShifted)) {
+            return this._isDSTShifted;
+        }
+
+        var c = {};
+
+        copyConfig(c, this);
+        c = prepareConfig(c);
+
+        if (c._a) {
+            var other = c._isUTC ? createUTC(c._a) : createLocal(c._a);
+            this._isDSTShifted = this.isValid() &&
+                compareArrays(c._a, other.toArray()) > 0;
+        } else {
+            this._isDSTShifted = false;
+        }
+
         return this._isDSTShifted;
     }
 
-    var c = {};
-
-    copyConfig(c, this);
-    c = prepareConfig(c);
-
-    if (c._a) {
-        var other = c._isUTC ? createUTC(c._a) : createLocal(c._a);
-        this._isDSTShifted = this.isValid() &&
-            compareArrays(c._a, other.toArray()) > 0;
-    } else {
-        this._isDSTShifted = false;
+    function isLocal () {
+        return this.isValid() ? !this._isUTC : false;
     }
 
-    return this._isDSTShifted;
-}
+    function isUtcOffset () {
+        return this.isValid() ? this._isUTC : false;
+    }
 
-function isLocal () {
-    return this.isValid() ? !this._isUTC : false;
-}
+    function isUtc () {
+        return this.isValid() ? this._isUTC && this._offset === 0 : false;
+    }
 
-function isUtcOffset () {
-    return this.isValid() ? this._isUTC : false;
-}
+    // ASP.NET json date format regex
+    var aspNetRegex = /^(\-|\+)?(?:(\d*)[. ])?(\d+)\:(\d+)(?:\:(\d+)(\.\d*)?)?$/;
 
-function isUtc () {
-    return this.isValid() ? this._isUTC && this._offset === 0 : false;
-}
+    // from http://docs.closure-library.googlecode.com/git/closure_goog_date_date.js.source.html
+    // somewhat more in line with 4.4.3.2 2004 spec, but allows decimal anywhere
+    // and further modified to allow for strings containing both week and day
+    var isoRegex = /^(-|\+)?P(?:([-+]?[0-9,.]*)Y)?(?:([-+]?[0-9,.]*)M)?(?:([-+]?[0-9,.]*)W)?(?:([-+]?[0-9,.]*)D)?(?:T(?:([-+]?[0-9,.]*)H)?(?:([-+]?[0-9,.]*)M)?(?:([-+]?[0-9,.]*)S)?)?$/;
 
-// ASP.NET json date format regex
-var aspNetRegex = /^(\-)?(?:(\d*)[. ])?(\d+)\:(\d+)(?:\:(\d+)(\.\d*)?)?$/;
+    function createDuration (input, key) {
+        var duration = input,
+            // matching against regexp is expensive, do it on demand
+            match = null,
+            sign,
+            ret,
+            diffRes;
 
-// from http://docs.closure-library.googlecode.com/git/closure_goog_date_date.js.source.html
-// somewhat more in line with 4.4.3.2 2004 spec, but allows decimal anywhere
-// and further modified to allow for strings containing both week and day
-var isoRegex = /^(-)?P(?:(-?[0-9,.]*)Y)?(?:(-?[0-9,.]*)M)?(?:(-?[0-9,.]*)W)?(?:(-?[0-9,.]*)D)?(?:T(?:(-?[0-9,.]*)H)?(?:(-?[0-9,.]*)M)?(?:(-?[0-9,.]*)S)?)?$/;
+        if (isDuration(input)) {
+            duration = {
+                ms : input._milliseconds,
+                d  : input._days,
+                M  : input._months
+            };
+        } else if (isNumber(input)) {
+            duration = {};
+            if (key) {
+                duration[key] = input;
+            } else {
+                duration.milliseconds = input;
+            }
+        } else if (!!(match = aspNetRegex.exec(input))) {
+            sign = (match[1] === '-') ? -1 : 1;
+            duration = {
+                y  : 0,
+                d  : toInt(match[DATE])                         * sign,
+                h  : toInt(match[HOUR])                         * sign,
+                m  : toInt(match[MINUTE])                       * sign,
+                s  : toInt(match[SECOND])                       * sign,
+                ms : toInt(absRound(match[MILLISECOND] * 1000)) * sign // the millisecond decimal point is included in the match
+            };
+        } else if (!!(match = isoRegex.exec(input))) {
+            sign = (match[1] === '-') ? -1 : (match[1] === '+') ? 1 : 1;
+            duration = {
+                y : parseIso(match[2], sign),
+                M : parseIso(match[3], sign),
+                w : parseIso(match[4], sign),
+                d : parseIso(match[5], sign),
+                h : parseIso(match[6], sign),
+                m : parseIso(match[7], sign),
+                s : parseIso(match[8], sign)
+            };
+        } else if (duration == null) {// checks for null or undefined
+            duration = {};
+        } else if (typeof duration === 'object' && ('from' in duration || 'to' in duration)) {
+            diffRes = momentsDifference(createLocal(duration.from), createLocal(duration.to));
 
-function createDuration (input, key) {
-    var duration = input,
-        // matching against regexp is expensive, do it on demand
-        match = null,
-        sign,
-        ret,
-        diffRes;
+            duration = {};
+            duration.ms = diffRes.milliseconds;
+            duration.M = diffRes.months;
+        }
 
-    if (isDuration(input)) {
-        duration = {
-            ms : input._milliseconds,
-            d  : input._days,
-            M  : input._months
-        };
-    } else if (isNumber(input)) {
-        duration = {};
-        if (key) {
-            duration[key] = input;
+        ret = new Duration(duration);
+
+        if (isDuration(input) && hasOwnProp(input, '_locale')) {
+            ret._locale = input._locale;
+        }
+
+        return ret;
+    }
+
+    createDuration.fn = Duration.prototype;
+    createDuration.invalid = createInvalid$1;
+
+    function parseIso (inp, sign) {
+        // We'd normally use ~~inp for this, but unfortunately it also
+        // converts floats to ints.
+        // inp may be undefined, so careful calling replace on it.
+        var res = inp && parseFloat(inp.replace(',', '.'));
+        // apply sign while we're at it
+        return (isNaN(res) ? 0 : res) * sign;
+    }
+
+    function positiveMomentsDifference(base, other) {
+        var res = {milliseconds: 0, months: 0};
+
+        res.months = other.month() - base.month() +
+            (other.year() - base.year()) * 12;
+        if (base.clone().add(res.months, 'M').isAfter(other)) {
+            --res.months;
+        }
+
+        res.milliseconds = +other - +(base.clone().add(res.months, 'M'));
+
+        return res;
+    }
+
+    function momentsDifference(base, other) {
+        var res;
+        if (!(base.isValid() && other.isValid())) {
+            return {milliseconds: 0, months: 0};
+        }
+
+        other = cloneWithOffset(other, base);
+        if (base.isBefore(other)) {
+            res = positiveMomentsDifference(base, other);
         } else {
-            duration.milliseconds = input;
+            res = positiveMomentsDifference(other, base);
+            res.milliseconds = -res.milliseconds;
+            res.months = -res.months;
         }
-    } else if (!!(match = aspNetRegex.exec(input))) {
-        sign = (match[1] === '-') ? -1 : 1;
-        duration = {
-            y  : 0,
-            d  : toInt(match[DATE])                         * sign,
-            h  : toInt(match[HOUR])                         * sign,
-            m  : toInt(match[MINUTE])                       * sign,
-            s  : toInt(match[SECOND])                       * sign,
-            ms : toInt(absRound(match[MILLISECOND] * 1000)) * sign // the millisecond decimal point is included in the match
+
+        return res;
+    }
+
+    // TODO: remove 'name' arg after deprecation is removed
+    function createAdder(direction, name) {
+        return function (val, period) {
+            var dur, tmp;
+            //invert the arguments, but complain about it
+            if (period !== null && !isNaN(+period)) {
+                deprecateSimple(name, 'moment().' + name  + '(period, number) is deprecated. Please use moment().' + name + '(number, period). ' +
+                'See http://momentjs.com/guides/#/warnings/add-inverted-param/ for more info.');
+                tmp = val; val = period; period = tmp;
+            }
+
+            val = typeof val === 'string' ? +val : val;
+            dur = createDuration(val, period);
+            addSubtract(this, dur, direction);
+            return this;
         };
-    } else if (!!(match = isoRegex.exec(input))) {
-        sign = (match[1] === '-') ? -1 : 1;
-        duration = {
-            y : parseIso(match[2], sign),
-            M : parseIso(match[3], sign),
-            w : parseIso(match[4], sign),
-            d : parseIso(match[5], sign),
-            h : parseIso(match[6], sign),
-            m : parseIso(match[7], sign),
-            s : parseIso(match[8], sign)
-        };
-    } else if (duration == null) {// checks for null or undefined
-        duration = {};
-    } else if (typeof duration === 'object' && ('from' in duration || 'to' in duration)) {
-        diffRes = momentsDifference(createLocal(duration.from), createLocal(duration.to));
-
-        duration = {};
-        duration.ms = diffRes.milliseconds;
-        duration.M = diffRes.months;
     }
 
-    ret = new Duration(duration);
+    function addSubtract (mom, duration, isAdding, updateOffset) {
+        var milliseconds = duration._milliseconds,
+            days = absRound(duration._days),
+            months = absRound(duration._months);
 
-    if (isDuration(input) && hasOwnProp(input, '_locale')) {
-        ret._locale = input._locale;
-    }
-
-    return ret;
-}
-
-createDuration.fn = Duration.prototype;
-
-function parseIso (inp, sign) {
-    // We'd normally use ~~inp for this, but unfortunately it also
-    // converts floats to ints.
-    // inp may be undefined, so careful calling replace on it.
-    var res = inp && parseFloat(inp.replace(',', '.'));
-    // apply sign while we're at it
-    return (isNaN(res) ? 0 : res) * sign;
-}
-
-function positiveMomentsDifference(base, other) {
-    var res = {milliseconds: 0, months: 0};
-
-    res.months = other.month() - base.month() +
-        (other.year() - base.year()) * 12;
-    if (base.clone().add(res.months, 'M').isAfter(other)) {
-        --res.months;
-    }
-
-    res.milliseconds = +other - +(base.clone().add(res.months, 'M'));
-
-    return res;
-}
-
-function momentsDifference(base, other) {
-    var res;
-    if (!(base.isValid() && other.isValid())) {
-        return {milliseconds: 0, months: 0};
-    }
-
-    other = cloneWithOffset(other, base);
-    if (base.isBefore(other)) {
-        res = positiveMomentsDifference(base, other);
-    } else {
-        res = positiveMomentsDifference(other, base);
-        res.milliseconds = -res.milliseconds;
-        res.months = -res.months;
-    }
-
-    return res;
-}
-
-// TODO: remove 'name' arg after deprecation is removed
-function createAdder(direction, name) {
-    return function (val, period) {
-        var dur, tmp;
-        //invert the arguments, but complain about it
-        if (period !== null && !isNaN(+period)) {
-            deprecateSimple(name, 'moment().' + name  + '(period, number) is deprecated. Please use moment().' + name + '(number, period). ' +
-            'See http://momentjs.com/guides/#/warnings/add-inverted-param/ for more info.');
-            tmp = val; val = period; period = tmp;
+        if (!mom.isValid()) {
+            // No op
+            return;
         }
 
-        val = typeof val === 'string' ? +val : val;
-        dur = createDuration(val, period);
-        addSubtract(this, dur, direction);
-        return this;
-    };
-}
+        updateOffset = updateOffset == null ? true : updateOffset;
 
-function addSubtract (mom, duration, isAdding, updateOffset) {
-    var milliseconds = duration._milliseconds,
-        days = absRound(duration._days),
-        months = absRound(duration._months);
-
-    if (!mom.isValid()) {
-        // No op
-        return;
-    }
-
-    updateOffset = updateOffset == null ? true : updateOffset;
-
-    if (milliseconds) {
-        mom._d.setTime(mom._d.valueOf() + milliseconds * isAdding);
-    }
-    if (days) {
-        set$1(mom, 'Date', get(mom, 'Date') + days * isAdding);
-    }
-    if (months) {
-        setMonth(mom, get(mom, 'Month') + months * isAdding);
-    }
-    if (updateOffset) {
-        hooks.updateOffset(mom, days || months);
-    }
-}
-
-var add      = createAdder(1, 'add');
-var subtract = createAdder(-1, 'subtract');
-
-function getCalendarFormat(myMoment, now) {
-    var diff = myMoment.diff(now, 'days', true);
-    return diff < -6 ? 'sameElse' :
-            diff < -1 ? 'lastWeek' :
-            diff < 0 ? 'lastDay' :
-            diff < 1 ? 'sameDay' :
-            diff < 2 ? 'nextDay' :
-            diff < 7 ? 'nextWeek' : 'sameElse';
-}
-
-function calendar$1 (time, formats) {
-    // We want to compare the start of today, vs this.
-    // Getting start-of-today depends on whether we're local/utc/offset or not.
-    var now = time || createLocal(),
-        sod = cloneWithOffset(now, this).startOf('day'),
-        format = hooks.calendarFormat(this, sod) || 'sameElse';
-
-    var output = formats && (isFunction(formats[format]) ? formats[format].call(this, now) : formats[format]);
-
-    return this.format(output || this.localeData().calendar(format, this, createLocal(now)));
-}
-
-function clone () {
-    return new Moment(this);
-}
-
-function isAfter (input, units) {
-    var localInput = isMoment(input) ? input : createLocal(input);
-    if (!(this.isValid() && localInput.isValid())) {
-        return false;
-    }
-    units = normalizeUnits(!isUndefined(units) ? units : 'millisecond');
-    if (units === 'millisecond') {
-        return this.valueOf() > localInput.valueOf();
-    } else {
-        return localInput.valueOf() < this.clone().startOf(units).valueOf();
-    }
-}
-
-function isBefore (input, units) {
-    var localInput = isMoment(input) ? input : createLocal(input);
-    if (!(this.isValid() && localInput.isValid())) {
-        return false;
-    }
-    units = normalizeUnits(!isUndefined(units) ? units : 'millisecond');
-    if (units === 'millisecond') {
-        return this.valueOf() < localInput.valueOf();
-    } else {
-        return this.clone().endOf(units).valueOf() < localInput.valueOf();
-    }
-}
-
-function isBetween (from, to, units, inclusivity) {
-    inclusivity = inclusivity || '()';
-    return (inclusivity[0] === '(' ? this.isAfter(from, units) : !this.isBefore(from, units)) &&
-        (inclusivity[1] === ')' ? this.isBefore(to, units) : !this.isAfter(to, units));
-}
-
-function isSame (input, units) {
-    var localInput = isMoment(input) ? input : createLocal(input),
-        inputMs;
-    if (!(this.isValid() && localInput.isValid())) {
-        return false;
-    }
-    units = normalizeUnits(units || 'millisecond');
-    if (units === 'millisecond') {
-        return this.valueOf() === localInput.valueOf();
-    } else {
-        inputMs = localInput.valueOf();
-        return this.clone().startOf(units).valueOf() <= inputMs && inputMs <= this.clone().endOf(units).valueOf();
-    }
-}
-
-function isSameOrAfter (input, units) {
-    return this.isSame(input, units) || this.isAfter(input,units);
-}
-
-function isSameOrBefore (input, units) {
-    return this.isSame(input, units) || this.isBefore(input,units);
-}
-
-function diff (input, units, asFloat) {
-    var that,
-        zoneDelta,
-        delta, output;
-
-    if (!this.isValid()) {
-        return NaN;
-    }
-
-    that = cloneWithOffset(input, this);
-
-    if (!that.isValid()) {
-        return NaN;
-    }
-
-    zoneDelta = (that.utcOffset() - this.utcOffset()) * 6e4;
-
-    units = normalizeUnits(units);
-
-    if (units === 'year' || units === 'month' || units === 'quarter') {
-        output = monthDiff(this, that);
-        if (units === 'quarter') {
-            output = output / 3;
-        } else if (units === 'year') {
-            output = output / 12;
+        if (months) {
+            setMonth(mom, get(mom, 'Month') + months * isAdding);
         }
-    } else {
-        delta = this - that;
-        output = units === 'second' ? delta / 1e3 : // 1000
-            units === 'minute' ? delta / 6e4 : // 1000 * 60
-            units === 'hour' ? delta / 36e5 : // 1000 * 60 * 60
-            units === 'day' ? (delta - zoneDelta) / 864e5 : // 1000 * 60 * 60 * 24, negate dst
-            units === 'week' ? (delta - zoneDelta) / 6048e5 : // 1000 * 60 * 60 * 24 * 7, negate dst
-            delta;
-    }
-    return asFloat ? output : absFloor(output);
-}
-
-function monthDiff (a, b) {
-    // difference in months
-    var wholeMonthDiff = ((b.year() - a.year()) * 12) + (b.month() - a.month()),
-        // b is in (anchor - 1 month, anchor + 1 month)
-        anchor = a.clone().add(wholeMonthDiff, 'months'),
-        anchor2, adjust;
-
-    if (b - anchor < 0) {
-        anchor2 = a.clone().add(wholeMonthDiff - 1, 'months');
-        // linear across the month
-        adjust = (b - anchor) / (anchor - anchor2);
-    } else {
-        anchor2 = a.clone().add(wholeMonthDiff + 1, 'months');
-        // linear across the month
-        adjust = (b - anchor) / (anchor2 - anchor);
+        if (days) {
+            set$1(mom, 'Date', get(mom, 'Date') + days * isAdding);
+        }
+        if (milliseconds) {
+            mom._d.setTime(mom._d.valueOf() + milliseconds * isAdding);
+        }
+        if (updateOffset) {
+            hooks.updateOffset(mom, days || months);
+        }
     }
 
-    //check for negative zero, return zero if negative zero
-    return -(wholeMonthDiff + adjust) || 0;
-}
+    var add      = createAdder(1, 'add');
+    var subtract = createAdder(-1, 'subtract');
 
-hooks.defaultFormat = 'YYYY-MM-DDTHH:mm:ssZ';
-hooks.defaultFormatUtc = 'YYYY-MM-DDTHH:mm:ss[Z]';
+    function getCalendarFormat(myMoment, now) {
+        var diff = myMoment.diff(now, 'days', true);
+        return diff < -6 ? 'sameElse' :
+                diff < -1 ? 'lastWeek' :
+                diff < 0 ? 'lastDay' :
+                diff < 1 ? 'sameDay' :
+                diff < 2 ? 'nextDay' :
+                diff < 7 ? 'nextWeek' : 'sameElse';
+    }
 
-function toString () {
-    return this.clone().locale('en').format('ddd MMM DD YYYY HH:mm:ss [GMT]ZZ');
-}
+    function calendar$1 (time, formats) {
+        // We want to compare the start of today, vs this.
+        // Getting start-of-today depends on whether we're local/utc/offset or not.
+        var now = time || createLocal(),
+            sod = cloneWithOffset(now, this).startOf('day'),
+            format = hooks.calendarFormat(this, sod) || 'sameElse';
 
-function toISOString () {
-    var m = this.clone().utc();
-    if (0 < m.year() && m.year() <= 9999) {
+        var output = formats && (isFunction(formats[format]) ? formats[format].call(this, now) : formats[format]);
+
+        return this.format(output || this.localeData().calendar(format, this, createLocal(now)));
+    }
+
+    function clone () {
+        return new Moment(this);
+    }
+
+    function isAfter (input, units) {
+        var localInput = isMoment(input) ? input : createLocal(input);
+        if (!(this.isValid() && localInput.isValid())) {
+            return false;
+        }
+        units = normalizeUnits(!isUndefined(units) ? units : 'millisecond');
+        if (units === 'millisecond') {
+            return this.valueOf() > localInput.valueOf();
+        } else {
+            return localInput.valueOf() < this.clone().startOf(units).valueOf();
+        }
+    }
+
+    function isBefore (input, units) {
+        var localInput = isMoment(input) ? input : createLocal(input);
+        if (!(this.isValid() && localInput.isValid())) {
+            return false;
+        }
+        units = normalizeUnits(!isUndefined(units) ? units : 'millisecond');
+        if (units === 'millisecond') {
+            return this.valueOf() < localInput.valueOf();
+        } else {
+            return this.clone().endOf(units).valueOf() < localInput.valueOf();
+        }
+    }
+
+    function isBetween (from, to, units, inclusivity) {
+        inclusivity = inclusivity || '()';
+        return (inclusivity[0] === '(' ? this.isAfter(from, units) : !this.isBefore(from, units)) &&
+            (inclusivity[1] === ')' ? this.isBefore(to, units) : !this.isAfter(to, units));
+    }
+
+    function isSame (input, units) {
+        var localInput = isMoment(input) ? input : createLocal(input),
+            inputMs;
+        if (!(this.isValid() && localInput.isValid())) {
+            return false;
+        }
+        units = normalizeUnits(units || 'millisecond');
+        if (units === 'millisecond') {
+            return this.valueOf() === localInput.valueOf();
+        } else {
+            inputMs = localInput.valueOf();
+            return this.clone().startOf(units).valueOf() <= inputMs && inputMs <= this.clone().endOf(units).valueOf();
+        }
+    }
+
+    function isSameOrAfter (input, units) {
+        return this.isSame(input, units) || this.isAfter(input,units);
+    }
+
+    function isSameOrBefore (input, units) {
+        return this.isSame(input, units) || this.isBefore(input,units);
+    }
+
+    function diff (input, units, asFloat) {
+        var that,
+            zoneDelta,
+            output;
+
+        if (!this.isValid()) {
+            return NaN;
+        }
+
+        that = cloneWithOffset(input, this);
+
+        if (!that.isValid()) {
+            return NaN;
+        }
+
+        zoneDelta = (that.utcOffset() - this.utcOffset()) * 6e4;
+
+        units = normalizeUnits(units);
+
+        switch (units) {
+            case 'year': output = monthDiff(this, that) / 12; break;
+            case 'month': output = monthDiff(this, that); break;
+            case 'quarter': output = monthDiff(this, that) / 3; break;
+            case 'second': output = (this - that) / 1e3; break; // 1000
+            case 'minute': output = (this - that) / 6e4; break; // 1000 * 60
+            case 'hour': output = (this - that) / 36e5; break; // 1000 * 60 * 60
+            case 'day': output = (this - that - zoneDelta) / 864e5; break; // 1000 * 60 * 60 * 24, negate dst
+            case 'week': output = (this - that - zoneDelta) / 6048e5; break; // 1000 * 60 * 60 * 24 * 7, negate dst
+            default: output = this - that;
+        }
+
+        return asFloat ? output : absFloor(output);
+    }
+
+    function monthDiff (a, b) {
+        // difference in months
+        var wholeMonthDiff = ((b.year() - a.year()) * 12) + (b.month() - a.month()),
+            // b is in (anchor - 1 month, anchor + 1 month)
+            anchor = a.clone().add(wholeMonthDiff, 'months'),
+            anchor2, adjust;
+
+        if (b - anchor < 0) {
+            anchor2 = a.clone().add(wholeMonthDiff - 1, 'months');
+            // linear across the month
+            adjust = (b - anchor) / (anchor - anchor2);
+        } else {
+            anchor2 = a.clone().add(wholeMonthDiff + 1, 'months');
+            // linear across the month
+            adjust = (b - anchor) / (anchor2 - anchor);
+        }
+
+        //check for negative zero, return zero if negative zero
+        return -(wholeMonthDiff + adjust) || 0;
+    }
+
+    hooks.defaultFormat = 'YYYY-MM-DDTHH:mm:ssZ';
+    hooks.defaultFormatUtc = 'YYYY-MM-DDTHH:mm:ss[Z]';
+
+    function toString () {
+        return this.clone().locale('en').format('ddd MMM DD YYYY HH:mm:ss [GMT]ZZ');
+    }
+
+    function toISOString(keepOffset) {
+        if (!this.isValid()) {
+            return null;
+        }
+        var utc = keepOffset !== true;
+        var m = utc ? this.clone().utc() : this;
+        if (m.year() < 0 || m.year() > 9999) {
+            return formatMoment(m, utc ? 'YYYYYY-MM-DD[T]HH:mm:ss.SSS[Z]' : 'YYYYYY-MM-DD[T]HH:mm:ss.SSSZ');
+        }
         if (isFunction(Date.prototype.toISOString)) {
             // native implementation is ~50x faster, use it when we can
-            return this.toDate().toISOString();
+            if (utc) {
+                return this.toDate().toISOString();
+            } else {
+                return new Date(this.valueOf() + this.utcOffset() * 60 * 1000).toISOString().replace('Z', formatMoment(m, 'Z'));
+            }
+        }
+        return formatMoment(m, utc ? 'YYYY-MM-DD[T]HH:mm:ss.SSS[Z]' : 'YYYY-MM-DD[T]HH:mm:ss.SSSZ');
+    }
+
+    /**
+     * Return a human readable representation of a moment that can
+     * also be evaluated to get a new moment which is the same
+     *
+     * @link https://nodejs.org/dist/latest/docs/api/util.html#util_custom_inspect_function_on_objects
+     */
+    function inspect () {
+        if (!this.isValid()) {
+            return 'moment.invalid(/* ' + this._i + ' */)';
+        }
+        var func = 'moment';
+        var zone = '';
+        if (!this.isLocal()) {
+            func = this.utcOffset() === 0 ? 'moment.utc' : 'moment.parseZone';
+            zone = 'Z';
+        }
+        var prefix = '[' + func + '("]';
+        var year = (0 <= this.year() && this.year() <= 9999) ? 'YYYY' : 'YYYYYY';
+        var datetime = '-MM-DD[T]HH:mm:ss.SSS';
+        var suffix = zone + '[")]';
+
+        return this.format(prefix + year + datetime + suffix);
+    }
+
+    function format (inputString) {
+        if (!inputString) {
+            inputString = this.isUtc() ? hooks.defaultFormatUtc : hooks.defaultFormat;
+        }
+        var output = formatMoment(this, inputString);
+        return this.localeData().postformat(output);
+    }
+
+    function from (time, withoutSuffix) {
+        if (this.isValid() &&
+                ((isMoment(time) && time.isValid()) ||
+                 createLocal(time).isValid())) {
+            return createDuration({to: this, from: time}).locale(this.locale()).humanize(!withoutSuffix);
         } else {
-            return formatMoment(m, 'YYYY-MM-DD[T]HH:mm:ss.SSS[Z]');
+            return this.localeData().invalidDate();
         }
-    } else {
-        return formatMoment(m, 'YYYYYY-MM-DD[T]HH:mm:ss.SSS[Z]');
     }
-}
 
-/**
- * Return a human readable representation of a moment that can
- * also be evaluated to get a new moment which is the same
- *
- * @link https://nodejs.org/dist/latest/docs/api/util.html#util_custom_inspect_function_on_objects
- */
-function inspect () {
-    if (!this.isValid()) {
-        return 'moment.invalid(/* ' + this._i + ' */)';
+    function fromNow (withoutSuffix) {
+        return this.from(createLocal(), withoutSuffix);
     }
-    var func = 'moment';
-    var zone = '';
-    if (!this.isLocal()) {
-        func = this.utcOffset() === 0 ? 'moment.utc' : 'moment.parseZone';
-        zone = 'Z';
-    }
-    var prefix = '[' + func + '("]';
-    var year = (0 < this.year() && this.year() <= 9999) ? 'YYYY' : 'YYYYYY';
-    var datetime = '-MM-DD[T]HH:mm:ss.SSS';
-    var suffix = zone + '[")]';
 
-    return this.format(prefix + year + datetime + suffix);
-}
-
-function format (inputString) {
-    if (!inputString) {
-        inputString = this.isUtc() ? hooks.defaultFormatUtc : hooks.defaultFormat;
-    }
-    var output = formatMoment(this, inputString);
-    return this.localeData().postformat(output);
-}
-
-function from (time, withoutSuffix) {
-    if (this.isValid() &&
-            ((isMoment(time) && time.isValid()) ||
-             createLocal(time).isValid())) {
-        return createDuration({to: this, from: time}).locale(this.locale()).humanize(!withoutSuffix);
-    } else {
-        return this.localeData().invalidDate();
-    }
-}
-
-function fromNow (withoutSuffix) {
-    return this.from(createLocal(), withoutSuffix);
-}
-
-function to (time, withoutSuffix) {
-    if (this.isValid() &&
-            ((isMoment(time) && time.isValid()) ||
-             createLocal(time).isValid())) {
-        return createDuration({from: this, to: time}).locale(this.locale()).humanize(!withoutSuffix);
-    } else {
-        return this.localeData().invalidDate();
-    }
-}
-
-function toNow (withoutSuffix) {
-    return this.to(createLocal(), withoutSuffix);
-}
-
-// If passed a locale key, it will set the locale for this
-// instance.  Otherwise, it will return the locale configuration
-// variables for this instance.
-function locale (key) {
-    var newLocaleData;
-
-    if (key === undefined) {
-        return this._locale._abbr;
-    } else {
-        newLocaleData = getLocale(key);
-        if (newLocaleData != null) {
-            this._locale = newLocaleData;
+    function to (time, withoutSuffix) {
+        if (this.isValid() &&
+                ((isMoment(time) && time.isValid()) ||
+                 createLocal(time).isValid())) {
+            return createDuration({from: this, to: time}).locale(this.locale()).humanize(!withoutSuffix);
+        } else {
+            return this.localeData().invalidDate();
         }
-        return this;
     }
-}
 
-var lang = deprecate(
-    'moment().lang() is deprecated. Instead, use moment().localeData() to get the language configuration. Use moment().locale() to change languages.',
-    function (key) {
+    function toNow (withoutSuffix) {
+        return this.to(createLocal(), withoutSuffix);
+    }
+
+    // If passed a locale key, it will set the locale for this
+    // instance.  Otherwise, it will return the locale configuration
+    // variables for this instance.
+    function locale (key) {
+        var newLocaleData;
+
         if (key === undefined) {
-            return this.localeData();
+            return this._locale._abbr;
         } else {
-            return this.locale(key);
+            newLocaleData = getLocale(key);
+            if (newLocaleData != null) {
+                this._locale = newLocaleData;
+            }
+            return this;
         }
     }
-);
 
-function localeData () {
-    return this._locale;
-}
+    var lang = deprecate(
+        'moment().lang() is deprecated. Instead, use moment().localeData() to get the language configuration. Use moment().locale() to change languages.',
+        function (key) {
+            if (key === undefined) {
+                return this.localeData();
+            } else {
+                return this.locale(key);
+            }
+        }
+    );
 
-function startOf (units) {
-    units = normalizeUnits(units);
-    // the following switch intentionally omits break keywords
-    // to utilize falling through the cases.
-    switch (units) {
-        case 'year':
-            this.month(0);
-            /* falls through */
-        case 'quarter':
-        case 'month':
-            this.date(1);
-            /* falls through */
-        case 'week':
-        case 'isoWeek':
-        case 'day':
-        case 'date':
-            this.hours(0);
-            /* falls through */
-        case 'hour':
-            this.minutes(0);
-            /* falls through */
-        case 'minute':
-            this.seconds(0);
-            /* falls through */
-        case 'second':
-            this.milliseconds(0);
+    function localeData () {
+        return this._locale;
     }
 
-    // weeks are a special case
-    if (units === 'week') {
-        this.weekday(0);
-    }
-    if (units === 'isoWeek') {
-        this.isoWeekday(1);
-    }
+    function startOf (units) {
+        units = normalizeUnits(units);
+        // the following switch intentionally omits break keywords
+        // to utilize falling through the cases.
+        switch (units) {
+            case 'year':
+                this.month(0);
+                /* falls through */
+            case 'quarter':
+            case 'month':
+                this.date(1);
+                /* falls through */
+            case 'week':
+            case 'isoWeek':
+            case 'day':
+            case 'date':
+                this.hours(0);
+                /* falls through */
+            case 'hour':
+                this.minutes(0);
+                /* falls through */
+            case 'minute':
+                this.seconds(0);
+                /* falls through */
+            case 'second':
+                this.milliseconds(0);
+        }
 
-    // quarters are also special
-    if (units === 'quarter') {
-        this.month(Math.floor(this.month() / 3) * 3);
-    }
+        // weeks are a special case
+        if (units === 'week') {
+            this.weekday(0);
+        }
+        if (units === 'isoWeek') {
+            this.isoWeekday(1);
+        }
 
-    return this;
-}
+        // quarters are also special
+        if (units === 'quarter') {
+            this.month(Math.floor(this.month() / 3) * 3);
+        }
 
-function endOf (units) {
-    units = normalizeUnits(units);
-    if (units === undefined || units === 'millisecond') {
         return this;
     }
 
-    // 'date' is an alias for 'day', so it should be considered as such.
-    if (units === 'date') {
-        units = 'day';
-    }
-
-    return this.startOf(units).add(1, (units === 'isoWeek' ? 'week' : units)).subtract(1, 'ms');
-}
-
-function valueOf () {
-    return this._d.valueOf() - ((this._offset || 0) * 60000);
-}
-
-function unix () {
-    return Math.floor(this.valueOf() / 1000);
-}
-
-function toDate () {
-    return new Date(this.valueOf());
-}
-
-function toArray () {
-    var m = this;
-    return [m.year(), m.month(), m.date(), m.hour(), m.minute(), m.second(), m.millisecond()];
-}
-
-function toObject () {
-    var m = this;
-    return {
-        years: m.year(),
-        months: m.month(),
-        date: m.date(),
-        hours: m.hours(),
-        minutes: m.minutes(),
-        seconds: m.seconds(),
-        milliseconds: m.milliseconds()
-    };
-}
-
-function toJSON () {
-    // new Date(NaN).toJSON() === null
-    return this.isValid() ? this.toISOString() : null;
-}
-
-function isValid$1 () {
-    return isValid(this);
-}
-
-function parsingFlags () {
-    return extend({}, getParsingFlags(this));
-}
-
-function invalidAt () {
-    return getParsingFlags(this).overflow;
-}
-
-function creationData() {
-    return {
-        input: this._i,
-        format: this._f,
-        locale: this._locale,
-        isUTC: this._isUTC,
-        strict: this._strict
-    };
-}
-
-// FORMATTING
-
-addFormatToken(0, ['gg', 2], 0, function () {
-    return this.weekYear() % 100;
-});
-
-addFormatToken(0, ['GG', 2], 0, function () {
-    return this.isoWeekYear() % 100;
-});
-
-function addWeekYearFormatToken (token, getter) {
-    addFormatToken(0, [token, token.length], 0, getter);
-}
-
-addWeekYearFormatToken('gggg',     'weekYear');
-addWeekYearFormatToken('ggggg',    'weekYear');
-addWeekYearFormatToken('GGGG',  'isoWeekYear');
-addWeekYearFormatToken('GGGGG', 'isoWeekYear');
-
-// ALIASES
-
-addUnitAlias('weekYear', 'gg');
-addUnitAlias('isoWeekYear', 'GG');
-
-// PRIORITY
-
-addUnitPriority('weekYear', 1);
-addUnitPriority('isoWeekYear', 1);
-
-
-// PARSING
-
-addRegexToken('G',      matchSigned);
-addRegexToken('g',      matchSigned);
-addRegexToken('GG',     match1to2, match2);
-addRegexToken('gg',     match1to2, match2);
-addRegexToken('GGGG',   match1to4, match4);
-addRegexToken('gggg',   match1to4, match4);
-addRegexToken('GGGGG',  match1to6, match6);
-addRegexToken('ggggg',  match1to6, match6);
-
-addWeekParseToken(['gggg', 'ggggg', 'GGGG', 'GGGGG'], function (input, week, config, token) {
-    week[token.substr(0, 2)] = toInt(input);
-});
-
-addWeekParseToken(['gg', 'GG'], function (input, week, config, token) {
-    week[token] = hooks.parseTwoDigitYear(input);
-});
-
-// MOMENTS
-
-function getSetWeekYear (input) {
-    return getSetWeekYearHelper.call(this,
-            input,
-            this.week(),
-            this.weekday(),
-            this.localeData()._week.dow,
-            this.localeData()._week.doy);
-}
-
-function getSetISOWeekYear (input) {
-    return getSetWeekYearHelper.call(this,
-            input, this.isoWeek(), this.isoWeekday(), 1, 4);
-}
-
-function getISOWeeksInYear () {
-    return weeksInYear(this.year(), 1, 4);
-}
-
-function getWeeksInYear () {
-    var weekInfo = this.localeData()._week;
-    return weeksInYear(this.year(), weekInfo.dow, weekInfo.doy);
-}
-
-function getSetWeekYearHelper(input, week, weekday, dow, doy) {
-    var weeksTarget;
-    if (input == null) {
-        return weekOfYear(this, dow, doy).year;
-    } else {
-        weeksTarget = weeksInYear(input, dow, doy);
-        if (week > weeksTarget) {
-            week = weeksTarget;
+    function endOf (units) {
+        units = normalizeUnits(units);
+        if (units === undefined || units === 'millisecond') {
+            return this;
         }
-        return setWeekAll.call(this, input, week, weekday, dow, doy);
-    }
-}
 
-function setWeekAll(weekYear, week, weekday, dow, doy) {
-    var dayOfYearData = dayOfYearFromWeeks(weekYear, week, weekday, dow, doy),
-        date = createUTCDate(dayOfYearData.year, 0, dayOfYearData.dayOfYear);
+        // 'date' is an alias for 'day', so it should be considered as such.
+        if (units === 'date') {
+            units = 'day';
+        }
 
-    this.year(date.getUTCFullYear());
-    this.month(date.getUTCMonth());
-    this.date(date.getUTCDate());
-    return this;
-}
-
-// FORMATTING
-
-addFormatToken('Q', 0, 'Qo', 'quarter');
-
-// ALIASES
-
-addUnitAlias('quarter', 'Q');
-
-// PRIORITY
-
-addUnitPriority('quarter', 7);
-
-// PARSING
-
-addRegexToken('Q', match1);
-addParseToken('Q', function (input, array) {
-    array[MONTH] = (toInt(input) - 1) * 3;
-});
-
-// MOMENTS
-
-function getSetQuarter (input) {
-    return input == null ? Math.ceil((this.month() + 1) / 3) : this.month((input - 1) * 3 + this.month() % 3);
-}
-
-// FORMATTING
-
-addFormatToken('D', ['DD', 2], 'Do', 'date');
-
-// ALIASES
-
-addUnitAlias('date', 'D');
-
-// PRIOROITY
-addUnitPriority('date', 9);
-
-// PARSING
-
-addRegexToken('D',  match1to2);
-addRegexToken('DD', match1to2, match2);
-addRegexToken('Do', function (isStrict, locale) {
-    return isStrict ? locale._ordinalParse : locale._ordinalParseLenient;
-});
-
-addParseToken(['D', 'DD'], DATE);
-addParseToken('Do', function (input, array) {
-    array[DATE] = toInt(input.match(match1to2)[0], 10);
-});
-
-// MOMENTS
-
-var getSetDayOfMonth = makeGetSet('Date', true);
-
-// FORMATTING
-
-addFormatToken('DDD', ['DDDD', 3], 'DDDo', 'dayOfYear');
-
-// ALIASES
-
-addUnitAlias('dayOfYear', 'DDD');
-
-// PRIORITY
-addUnitPriority('dayOfYear', 4);
-
-// PARSING
-
-addRegexToken('DDD',  match1to3);
-addRegexToken('DDDD', match3);
-addParseToken(['DDD', 'DDDD'], function (input, array, config) {
-    config._dayOfYear = toInt(input);
-});
-
-// HELPERS
-
-// MOMENTS
-
-function getSetDayOfYear (input) {
-    var dayOfYear = Math.round((this.clone().startOf('day') - this.clone().startOf('year')) / 864e5) + 1;
-    return input == null ? dayOfYear : this.add((input - dayOfYear), 'd');
-}
-
-// FORMATTING
-
-addFormatToken('m', ['mm', 2], 0, 'minute');
-
-// ALIASES
-
-addUnitAlias('minute', 'm');
-
-// PRIORITY
-
-addUnitPriority('minute', 14);
-
-// PARSING
-
-addRegexToken('m',  match1to2);
-addRegexToken('mm', match1to2, match2);
-addParseToken(['m', 'mm'], MINUTE);
-
-// MOMENTS
-
-var getSetMinute = makeGetSet('Minutes', false);
-
-// FORMATTING
-
-addFormatToken('s', ['ss', 2], 0, 'second');
-
-// ALIASES
-
-addUnitAlias('second', 's');
-
-// PRIORITY
-
-addUnitPriority('second', 15);
-
-// PARSING
-
-addRegexToken('s',  match1to2);
-addRegexToken('ss', match1to2, match2);
-addParseToken(['s', 'ss'], SECOND);
-
-// MOMENTS
-
-var getSetSecond = makeGetSet('Seconds', false);
-
-// FORMATTING
-
-addFormatToken('S', 0, 0, function () {
-    return ~~(this.millisecond() / 100);
-});
-
-addFormatToken(0, ['SS', 2], 0, function () {
-    return ~~(this.millisecond() / 10);
-});
-
-addFormatToken(0, ['SSS', 3], 0, 'millisecond');
-addFormatToken(0, ['SSSS', 4], 0, function () {
-    return this.millisecond() * 10;
-});
-addFormatToken(0, ['SSSSS', 5], 0, function () {
-    return this.millisecond() * 100;
-});
-addFormatToken(0, ['SSSSSS', 6], 0, function () {
-    return this.millisecond() * 1000;
-});
-addFormatToken(0, ['SSSSSSS', 7], 0, function () {
-    return this.millisecond() * 10000;
-});
-addFormatToken(0, ['SSSSSSSS', 8], 0, function () {
-    return this.millisecond() * 100000;
-});
-addFormatToken(0, ['SSSSSSSSS', 9], 0, function () {
-    return this.millisecond() * 1000000;
-});
-
-
-// ALIASES
-
-addUnitAlias('millisecond', 'ms');
-
-// PRIORITY
-
-addUnitPriority('millisecond', 16);
-
-// PARSING
-
-addRegexToken('S',    match1to3, match1);
-addRegexToken('SS',   match1to3, match2);
-addRegexToken('SSS',  match1to3, match3);
-
-var token;
-for (token = 'SSSS'; token.length <= 9; token += 'S') {
-    addRegexToken(token, matchUnsigned);
-}
-
-function parseMs(input, array) {
-    array[MILLISECOND] = toInt(('0.' + input) * 1000);
-}
-
-for (token = 'S'; token.length <= 9; token += 'S') {
-    addParseToken(token, parseMs);
-}
-// MOMENTS
-
-var getSetMillisecond = makeGetSet('Milliseconds', false);
-
-// FORMATTING
-
-addFormatToken('z',  0, 0, 'zoneAbbr');
-addFormatToken('zz', 0, 0, 'zoneName');
-
-// MOMENTS
-
-function getZoneAbbr () {
-    return this._isUTC ? 'UTC' : '';
-}
-
-function getZoneName () {
-    return this._isUTC ? 'Coordinated Universal Time' : '';
-}
-
-var proto = Moment.prototype;
-
-proto.add               = add;
-proto.calendar          = calendar$1;
-proto.clone             = clone;
-proto.diff              = diff;
-proto.endOf             = endOf;
-proto.format            = format;
-proto.from              = from;
-proto.fromNow           = fromNow;
-proto.to                = to;
-proto.toNow             = toNow;
-proto.get               = stringGet;
-proto.invalidAt         = invalidAt;
-proto.isAfter           = isAfter;
-proto.isBefore          = isBefore;
-proto.isBetween         = isBetween;
-proto.isSame            = isSame;
-proto.isSameOrAfter     = isSameOrAfter;
-proto.isSameOrBefore    = isSameOrBefore;
-proto.isValid           = isValid$1;
-proto.lang              = lang;
-proto.locale            = locale;
-proto.localeData        = localeData;
-proto.max               = prototypeMax;
-proto.min               = prototypeMin;
-proto.parsingFlags      = parsingFlags;
-proto.set               = stringSet;
-proto.startOf           = startOf;
-proto.subtract          = subtract;
-proto.toArray           = toArray;
-proto.toObject          = toObject;
-proto.toDate            = toDate;
-proto.toISOString       = toISOString;
-proto.inspect           = inspect;
-proto.toJSON            = toJSON;
-proto.toString          = toString;
-proto.unix              = unix;
-proto.valueOf           = valueOf;
-proto.creationData      = creationData;
-
-// Year
-proto.year       = getSetYear;
-proto.isLeapYear = getIsLeapYear;
-
-// Week Year
-proto.weekYear    = getSetWeekYear;
-proto.isoWeekYear = getSetISOWeekYear;
-
-// Quarter
-proto.quarter = proto.quarters = getSetQuarter;
-
-// Month
-proto.month       = getSetMonth;
-proto.daysInMonth = getDaysInMonth;
-
-// Week
-proto.week           = proto.weeks        = getSetWeek;
-proto.isoWeek        = proto.isoWeeks     = getSetISOWeek;
-proto.weeksInYear    = getWeeksInYear;
-proto.isoWeeksInYear = getISOWeeksInYear;
-
-// Day
-proto.date       = getSetDayOfMonth;
-proto.day        = proto.days             = getSetDayOfWeek;
-proto.weekday    = getSetLocaleDayOfWeek;
-proto.isoWeekday = getSetISODayOfWeek;
-proto.dayOfYear  = getSetDayOfYear;
-
-// Hour
-proto.hour = proto.hours = getSetHour;
-
-// Minute
-proto.minute = proto.minutes = getSetMinute;
-
-// Second
-proto.second = proto.seconds = getSetSecond;
-
-// Millisecond
-proto.millisecond = proto.milliseconds = getSetMillisecond;
-
-// Offset
-proto.utcOffset            = getSetOffset;
-proto.utc                  = setOffsetToUTC;
-proto.local                = setOffsetToLocal;
-proto.parseZone            = setOffsetToParsedOffset;
-proto.hasAlignedHourOffset = hasAlignedHourOffset;
-proto.isDST                = isDaylightSavingTime;
-proto.isLocal              = isLocal;
-proto.isUtcOffset          = isUtcOffset;
-proto.isUtc                = isUtc;
-proto.isUTC                = isUtc;
-
-// Timezone
-proto.zoneAbbr = getZoneAbbr;
-proto.zoneName = getZoneName;
-
-// Deprecations
-proto.dates  = deprecate('dates accessor is deprecated. Use date instead.', getSetDayOfMonth);
-proto.months = deprecate('months accessor is deprecated. Use month instead', getSetMonth);
-proto.years  = deprecate('years accessor is deprecated. Use year instead', getSetYear);
-proto.zone   = deprecate('moment().zone is deprecated, use moment().utcOffset instead. http://momentjs.com/guides/#/warnings/zone/', getSetZone);
-proto.isDSTShifted = deprecate('isDSTShifted is deprecated. See http://momentjs.com/guides/#/warnings/dst-shifted/ for more information', isDaylightSavingTimeShifted);
-
-function createUnix (input) {
-    return createLocal(input * 1000);
-}
-
-function createInZone () {
-    return createLocal.apply(null, arguments).parseZone();
-}
-
-function preParsePostFormat (string) {
-    return string;
-}
-
-var proto$1 = Locale.prototype;
-
-proto$1.calendar        = calendar;
-proto$1.longDateFormat  = longDateFormat;
-proto$1.invalidDate     = invalidDate;
-proto$1.ordinal         = ordinal;
-proto$1.preparse        = preParsePostFormat;
-proto$1.postformat      = preParsePostFormat;
-proto$1.relativeTime    = relativeTime;
-proto$1.pastFuture      = pastFuture;
-proto$1.set             = set;
-
-// Month
-proto$1.months            =        localeMonths;
-proto$1.monthsShort       =        localeMonthsShort;
-proto$1.monthsParse       =        localeMonthsParse;
-proto$1.monthsRegex       = monthsRegex;
-proto$1.monthsShortRegex  = monthsShortRegex;
-
-// Week
-proto$1.week = localeWeek;
-proto$1.firstDayOfYear = localeFirstDayOfYear;
-proto$1.firstDayOfWeek = localeFirstDayOfWeek;
-
-// Day of Week
-proto$1.weekdays       =        localeWeekdays;
-proto$1.weekdaysMin    =        localeWeekdaysMin;
-proto$1.weekdaysShort  =        localeWeekdaysShort;
-proto$1.weekdaysParse  =        localeWeekdaysParse;
-
-proto$1.weekdaysRegex       =        weekdaysRegex;
-proto$1.weekdaysShortRegex  =        weekdaysShortRegex;
-proto$1.weekdaysMinRegex    =        weekdaysMinRegex;
-
-// Hours
-proto$1.isPM = localeIsPM;
-proto$1.meridiem = localeMeridiem;
-
-function get$1 (format, index, field, setter) {
-    var locale = getLocale();
-    var utc = createUTC().set(setter, index);
-    return locale[field](utc, format);
-}
-
-function listMonthsImpl (format, index, field) {
-    if (isNumber(format)) {
-        index = format;
-        format = undefined;
+        return this.startOf(units).add(1, (units === 'isoWeek' ? 'week' : units)).subtract(1, 'ms');
     }
 
-    format = format || '';
-
-    if (index != null) {
-        return get$1(format, index, field, 'month');
+    function valueOf () {
+        return this._d.valueOf() - ((this._offset || 0) * 60000);
     }
 
-    var i;
-    var out = [];
-    for (i = 0; i < 12; i++) {
-        out[i] = get$1(format, i, field, 'month');
+    function unix () {
+        return Math.floor(this.valueOf() / 1000);
     }
-    return out;
-}
 
-// ()
-// (5)
-// (fmt, 5)
-// (fmt)
-// (true)
-// (true, 5)
-// (true, fmt, 5)
-// (true, fmt)
-function listWeekdaysImpl (localeSorted, format, index, field) {
-    if (typeof localeSorted === 'boolean') {
+    function toDate () {
+        return new Date(this.valueOf());
+    }
+
+    function toArray () {
+        var m = this;
+        return [m.year(), m.month(), m.date(), m.hour(), m.minute(), m.second(), m.millisecond()];
+    }
+
+    function toObject () {
+        var m = this;
+        return {
+            years: m.year(),
+            months: m.month(),
+            date: m.date(),
+            hours: m.hours(),
+            minutes: m.minutes(),
+            seconds: m.seconds(),
+            milliseconds: m.milliseconds()
+        };
+    }
+
+    function toJSON () {
+        // new Date(NaN).toJSON() === null
+        return this.isValid() ? this.toISOString() : null;
+    }
+
+    function isValid$2 () {
+        return isValid(this);
+    }
+
+    function parsingFlags () {
+        return extend({}, getParsingFlags(this));
+    }
+
+    function invalidAt () {
+        return getParsingFlags(this).overflow;
+    }
+
+    function creationData() {
+        return {
+            input: this._i,
+            format: this._f,
+            locale: this._locale,
+            isUTC: this._isUTC,
+            strict: this._strict
+        };
+    }
+
+    // FORMATTING
+
+    addFormatToken(0, ['gg', 2], 0, function () {
+        return this.weekYear() % 100;
+    });
+
+    addFormatToken(0, ['GG', 2], 0, function () {
+        return this.isoWeekYear() % 100;
+    });
+
+    function addWeekYearFormatToken (token, getter) {
+        addFormatToken(0, [token, token.length], 0, getter);
+    }
+
+    addWeekYearFormatToken('gggg',     'weekYear');
+    addWeekYearFormatToken('ggggg',    'weekYear');
+    addWeekYearFormatToken('GGGG',  'isoWeekYear');
+    addWeekYearFormatToken('GGGGG', 'isoWeekYear');
+
+    // ALIASES
+
+    addUnitAlias('weekYear', 'gg');
+    addUnitAlias('isoWeekYear', 'GG');
+
+    // PRIORITY
+
+    addUnitPriority('weekYear', 1);
+    addUnitPriority('isoWeekYear', 1);
+
+
+    // PARSING
+
+    addRegexToken('G',      matchSigned);
+    addRegexToken('g',      matchSigned);
+    addRegexToken('GG',     match1to2, match2);
+    addRegexToken('gg',     match1to2, match2);
+    addRegexToken('GGGG',   match1to4, match4);
+    addRegexToken('gggg',   match1to4, match4);
+    addRegexToken('GGGGG',  match1to6, match6);
+    addRegexToken('ggggg',  match1to6, match6);
+
+    addWeekParseToken(['gggg', 'ggggg', 'GGGG', 'GGGGG'], function (input, week, config, token) {
+        week[token.substr(0, 2)] = toInt(input);
+    });
+
+    addWeekParseToken(['gg', 'GG'], function (input, week, config, token) {
+        week[token] = hooks.parseTwoDigitYear(input);
+    });
+
+    // MOMENTS
+
+    function getSetWeekYear (input) {
+        return getSetWeekYearHelper.call(this,
+                input,
+                this.week(),
+                this.weekday(),
+                this.localeData()._week.dow,
+                this.localeData()._week.doy);
+    }
+
+    function getSetISOWeekYear (input) {
+        return getSetWeekYearHelper.call(this,
+                input, this.isoWeek(), this.isoWeekday(), 1, 4);
+    }
+
+    function getISOWeeksInYear () {
+        return weeksInYear(this.year(), 1, 4);
+    }
+
+    function getWeeksInYear () {
+        var weekInfo = this.localeData()._week;
+        return weeksInYear(this.year(), weekInfo.dow, weekInfo.doy);
+    }
+
+    function getSetWeekYearHelper(input, week, weekday, dow, doy) {
+        var weeksTarget;
+        if (input == null) {
+            return weekOfYear(this, dow, doy).year;
+        } else {
+            weeksTarget = weeksInYear(input, dow, doy);
+            if (week > weeksTarget) {
+                week = weeksTarget;
+            }
+            return setWeekAll.call(this, input, week, weekday, dow, doy);
+        }
+    }
+
+    function setWeekAll(weekYear, week, weekday, dow, doy) {
+        var dayOfYearData = dayOfYearFromWeeks(weekYear, week, weekday, dow, doy),
+            date = createUTCDate(dayOfYearData.year, 0, dayOfYearData.dayOfYear);
+
+        this.year(date.getUTCFullYear());
+        this.month(date.getUTCMonth());
+        this.date(date.getUTCDate());
+        return this;
+    }
+
+    // FORMATTING
+
+    addFormatToken('Q', 0, 'Qo', 'quarter');
+
+    // ALIASES
+
+    addUnitAlias('quarter', 'Q');
+
+    // PRIORITY
+
+    addUnitPriority('quarter', 7);
+
+    // PARSING
+
+    addRegexToken('Q', match1);
+    addParseToken('Q', function (input, array) {
+        array[MONTH] = (toInt(input) - 1) * 3;
+    });
+
+    // MOMENTS
+
+    function getSetQuarter (input) {
+        return input == null ? Math.ceil((this.month() + 1) / 3) : this.month((input - 1) * 3 + this.month() % 3);
+    }
+
+    // FORMATTING
+
+    addFormatToken('D', ['DD', 2], 'Do', 'date');
+
+    // ALIASES
+
+    addUnitAlias('date', 'D');
+
+    // PRIORITY
+    addUnitPriority('date', 9);
+
+    // PARSING
+
+    addRegexToken('D',  match1to2);
+    addRegexToken('DD', match1to2, match2);
+    addRegexToken('Do', function (isStrict, locale) {
+        // TODO: Remove "ordinalParse" fallback in next major release.
+        return isStrict ?
+          (locale._dayOfMonthOrdinalParse || locale._ordinalParse) :
+          locale._dayOfMonthOrdinalParseLenient;
+    });
+
+    addParseToken(['D', 'DD'], DATE);
+    addParseToken('Do', function (input, array) {
+        array[DATE] = toInt(input.match(match1to2)[0]);
+    });
+
+    // MOMENTS
+
+    var getSetDayOfMonth = makeGetSet('Date', true);
+
+    // FORMATTING
+
+    addFormatToken('DDD', ['DDDD', 3], 'DDDo', 'dayOfYear');
+
+    // ALIASES
+
+    addUnitAlias('dayOfYear', 'DDD');
+
+    // PRIORITY
+    addUnitPriority('dayOfYear', 4);
+
+    // PARSING
+
+    addRegexToken('DDD',  match1to3);
+    addRegexToken('DDDD', match3);
+    addParseToken(['DDD', 'DDDD'], function (input, array, config) {
+        config._dayOfYear = toInt(input);
+    });
+
+    // HELPERS
+
+    // MOMENTS
+
+    function getSetDayOfYear (input) {
+        var dayOfYear = Math.round((this.clone().startOf('day') - this.clone().startOf('year')) / 864e5) + 1;
+        return input == null ? dayOfYear : this.add((input - dayOfYear), 'd');
+    }
+
+    // FORMATTING
+
+    addFormatToken('m', ['mm', 2], 0, 'minute');
+
+    // ALIASES
+
+    addUnitAlias('minute', 'm');
+
+    // PRIORITY
+
+    addUnitPriority('minute', 14);
+
+    // PARSING
+
+    addRegexToken('m',  match1to2);
+    addRegexToken('mm', match1to2, match2);
+    addParseToken(['m', 'mm'], MINUTE);
+
+    // MOMENTS
+
+    var getSetMinute = makeGetSet('Minutes', false);
+
+    // FORMATTING
+
+    addFormatToken('s', ['ss', 2], 0, 'second');
+
+    // ALIASES
+
+    addUnitAlias('second', 's');
+
+    // PRIORITY
+
+    addUnitPriority('second', 15);
+
+    // PARSING
+
+    addRegexToken('s',  match1to2);
+    addRegexToken('ss', match1to2, match2);
+    addParseToken(['s', 'ss'], SECOND);
+
+    // MOMENTS
+
+    var getSetSecond = makeGetSet('Seconds', false);
+
+    // FORMATTING
+
+    addFormatToken('S', 0, 0, function () {
+        return ~~(this.millisecond() / 100);
+    });
+
+    addFormatToken(0, ['SS', 2], 0, function () {
+        return ~~(this.millisecond() / 10);
+    });
+
+    addFormatToken(0, ['SSS', 3], 0, 'millisecond');
+    addFormatToken(0, ['SSSS', 4], 0, function () {
+        return this.millisecond() * 10;
+    });
+    addFormatToken(0, ['SSSSS', 5], 0, function () {
+        return this.millisecond() * 100;
+    });
+    addFormatToken(0, ['SSSSSS', 6], 0, function () {
+        return this.millisecond() * 1000;
+    });
+    addFormatToken(0, ['SSSSSSS', 7], 0, function () {
+        return this.millisecond() * 10000;
+    });
+    addFormatToken(0, ['SSSSSSSS', 8], 0, function () {
+        return this.millisecond() * 100000;
+    });
+    addFormatToken(0, ['SSSSSSSSS', 9], 0, function () {
+        return this.millisecond() * 1000000;
+    });
+
+
+    // ALIASES
+
+    addUnitAlias('millisecond', 'ms');
+
+    // PRIORITY
+
+    addUnitPriority('millisecond', 16);
+
+    // PARSING
+
+    addRegexToken('S',    match1to3, match1);
+    addRegexToken('SS',   match1to3, match2);
+    addRegexToken('SSS',  match1to3, match3);
+
+    var token;
+    for (token = 'SSSS'; token.length <= 9; token += 'S') {
+        addRegexToken(token, matchUnsigned);
+    }
+
+    function parseMs(input, array) {
+        array[MILLISECOND] = toInt(('0.' + input) * 1000);
+    }
+
+    for (token = 'S'; token.length <= 9; token += 'S') {
+        addParseToken(token, parseMs);
+    }
+    // MOMENTS
+
+    var getSetMillisecond = makeGetSet('Milliseconds', false);
+
+    // FORMATTING
+
+    addFormatToken('z',  0, 0, 'zoneAbbr');
+    addFormatToken('zz', 0, 0, 'zoneName');
+
+    // MOMENTS
+
+    function getZoneAbbr () {
+        return this._isUTC ? 'UTC' : '';
+    }
+
+    function getZoneName () {
+        return this._isUTC ? 'Coordinated Universal Time' : '';
+    }
+
+    var proto = Moment.prototype;
+
+    proto.add               = add;
+    proto.calendar          = calendar$1;
+    proto.clone             = clone;
+    proto.diff              = diff;
+    proto.endOf             = endOf;
+    proto.format            = format;
+    proto.from              = from;
+    proto.fromNow           = fromNow;
+    proto.to                = to;
+    proto.toNow             = toNow;
+    proto.get               = stringGet;
+    proto.invalidAt         = invalidAt;
+    proto.isAfter           = isAfter;
+    proto.isBefore          = isBefore;
+    proto.isBetween         = isBetween;
+    proto.isSame            = isSame;
+    proto.isSameOrAfter     = isSameOrAfter;
+    proto.isSameOrBefore    = isSameOrBefore;
+    proto.isValid           = isValid$2;
+    proto.lang              = lang;
+    proto.locale            = locale;
+    proto.localeData        = localeData;
+    proto.max               = prototypeMax;
+    proto.min               = prototypeMin;
+    proto.parsingFlags      = parsingFlags;
+    proto.set               = stringSet;
+    proto.startOf           = startOf;
+    proto.subtract          = subtract;
+    proto.toArray           = toArray;
+    proto.toObject          = toObject;
+    proto.toDate            = toDate;
+    proto.toISOString       = toISOString;
+    proto.inspect           = inspect;
+    proto.toJSON            = toJSON;
+    proto.toString          = toString;
+    proto.unix              = unix;
+    proto.valueOf           = valueOf;
+    proto.creationData      = creationData;
+    proto.year       = getSetYear;
+    proto.isLeapYear = getIsLeapYear;
+    proto.weekYear    = getSetWeekYear;
+    proto.isoWeekYear = getSetISOWeekYear;
+    proto.quarter = proto.quarters = getSetQuarter;
+    proto.month       = getSetMonth;
+    proto.daysInMonth = getDaysInMonth;
+    proto.week           = proto.weeks        = getSetWeek;
+    proto.isoWeek        = proto.isoWeeks     = getSetISOWeek;
+    proto.weeksInYear    = getWeeksInYear;
+    proto.isoWeeksInYear = getISOWeeksInYear;
+    proto.date       = getSetDayOfMonth;
+    proto.day        = proto.days             = getSetDayOfWeek;
+    proto.weekday    = getSetLocaleDayOfWeek;
+    proto.isoWeekday = getSetISODayOfWeek;
+    proto.dayOfYear  = getSetDayOfYear;
+    proto.hour = proto.hours = getSetHour;
+    proto.minute = proto.minutes = getSetMinute;
+    proto.second = proto.seconds = getSetSecond;
+    proto.millisecond = proto.milliseconds = getSetMillisecond;
+    proto.utcOffset            = getSetOffset;
+    proto.utc                  = setOffsetToUTC;
+    proto.local                = setOffsetToLocal;
+    proto.parseZone            = setOffsetToParsedOffset;
+    proto.hasAlignedHourOffset = hasAlignedHourOffset;
+    proto.isDST                = isDaylightSavingTime;
+    proto.isLocal              = isLocal;
+    proto.isUtcOffset          = isUtcOffset;
+    proto.isUtc                = isUtc;
+    proto.isUTC                = isUtc;
+    proto.zoneAbbr = getZoneAbbr;
+    proto.zoneName = getZoneName;
+    proto.dates  = deprecate('dates accessor is deprecated. Use date instead.', getSetDayOfMonth);
+    proto.months = deprecate('months accessor is deprecated. Use month instead', getSetMonth);
+    proto.years  = deprecate('years accessor is deprecated. Use year instead', getSetYear);
+    proto.zone   = deprecate('moment().zone is deprecated, use moment().utcOffset instead. http://momentjs.com/guides/#/warnings/zone/', getSetZone);
+    proto.isDSTShifted = deprecate('isDSTShifted is deprecated. See http://momentjs.com/guides/#/warnings/dst-shifted/ for more information', isDaylightSavingTimeShifted);
+
+    function createUnix (input) {
+        return createLocal(input * 1000);
+    }
+
+    function createInZone () {
+        return createLocal.apply(null, arguments).parseZone();
+    }
+
+    function preParsePostFormat (string) {
+        return string;
+    }
+
+    var proto$1 = Locale.prototype;
+
+    proto$1.calendar        = calendar;
+    proto$1.longDateFormat  = longDateFormat;
+    proto$1.invalidDate     = invalidDate;
+    proto$1.ordinal         = ordinal;
+    proto$1.preparse        = preParsePostFormat;
+    proto$1.postformat      = preParsePostFormat;
+    proto$1.relativeTime    = relativeTime;
+    proto$1.pastFuture      = pastFuture;
+    proto$1.set             = set;
+
+    proto$1.months            =        localeMonths;
+    proto$1.monthsShort       =        localeMonthsShort;
+    proto$1.monthsParse       =        localeMonthsParse;
+    proto$1.monthsRegex       = monthsRegex;
+    proto$1.monthsShortRegex  = monthsShortRegex;
+    proto$1.week = localeWeek;
+    proto$1.firstDayOfYear = localeFirstDayOfYear;
+    proto$1.firstDayOfWeek = localeFirstDayOfWeek;
+
+    proto$1.weekdays       =        localeWeekdays;
+    proto$1.weekdaysMin    =        localeWeekdaysMin;
+    proto$1.weekdaysShort  =        localeWeekdaysShort;
+    proto$1.weekdaysParse  =        localeWeekdaysParse;
+
+    proto$1.weekdaysRegex       =        weekdaysRegex;
+    proto$1.weekdaysShortRegex  =        weekdaysShortRegex;
+    proto$1.weekdaysMinRegex    =        weekdaysMinRegex;
+
+    proto$1.isPM = localeIsPM;
+    proto$1.meridiem = localeMeridiem;
+
+    function get$1 (format, index, field, setter) {
+        var locale = getLocale();
+        var utc = createUTC().set(setter, index);
+        return locale[field](utc, format);
+    }
+
+    function listMonthsImpl (format, index, field) {
         if (isNumber(format)) {
             index = format;
             format = undefined;
         }
 
         format = format || '';
-    } else {
-        format = localeSorted;
-        index = format;
-        localeSorted = false;
 
-        if (isNumber(format)) {
+        if (index != null) {
+            return get$1(format, index, field, 'month');
+        }
+
+        var i;
+        var out = [];
+        for (i = 0; i < 12; i++) {
+            out[i] = get$1(format, i, field, 'month');
+        }
+        return out;
+    }
+
+    // ()
+    // (5)
+    // (fmt, 5)
+    // (fmt)
+    // (true)
+    // (true, 5)
+    // (true, fmt, 5)
+    // (true, fmt)
+    function listWeekdaysImpl (localeSorted, format, index, field) {
+        if (typeof localeSorted === 'boolean') {
+            if (isNumber(format)) {
+                index = format;
+                format = undefined;
+            }
+
+            format = format || '';
+        } else {
+            format = localeSorted;
             index = format;
-            format = undefined;
+            localeSorted = false;
+
+            if (isNumber(format)) {
+                index = format;
+                format = undefined;
+            }
+
+            format = format || '';
         }
 
-        format = format || '';
+        var locale = getLocale(),
+            shift = localeSorted ? locale._week.dow : 0;
+
+        if (index != null) {
+            return get$1(format, (index + shift) % 7, field, 'day');
+        }
+
+        var i;
+        var out = [];
+        for (i = 0; i < 7; i++) {
+            out[i] = get$1(format, (i + shift) % 7, field, 'day');
+        }
+        return out;
     }
 
-    var locale = getLocale(),
-        shift = localeSorted ? locale._week.dow : 0;
-
-    if (index != null) {
-        return get$1(format, (index + shift) % 7, field, 'day');
+    function listMonths (format, index) {
+        return listMonthsImpl(format, index, 'months');
     }
 
-    var i;
-    var out = [];
-    for (i = 0; i < 7; i++) {
-        out[i] = get$1(format, (i + shift) % 7, field, 'day');
-    }
-    return out;
-}
-
-function listMonths (format, index) {
-    return listMonthsImpl(format, index, 'months');
-}
-
-function listMonthsShort (format, index) {
-    return listMonthsImpl(format, index, 'monthsShort');
-}
-
-function listWeekdays (localeSorted, format, index) {
-    return listWeekdaysImpl(localeSorted, format, index, 'weekdays');
-}
-
-function listWeekdaysShort (localeSorted, format, index) {
-    return listWeekdaysImpl(localeSorted, format, index, 'weekdaysShort');
-}
-
-function listWeekdaysMin (localeSorted, format, index) {
-    return listWeekdaysImpl(localeSorted, format, index, 'weekdaysMin');
-}
-
-getSetGlobalLocale('en', {
-    ordinalParse: /\d{1,2}(th|st|nd|rd)/,
-    ordinal : function (number) {
-        var b = number % 10,
-            output = (toInt(number % 100 / 10) === 1) ? 'th' :
-            (b === 1) ? 'st' :
-            (b === 2) ? 'nd' :
-            (b === 3) ? 'rd' : 'th';
-        return number + output;
-    }
-});
-
-// Side effect imports
-hooks.lang = deprecate('moment.lang is deprecated. Use moment.locale instead.', getSetGlobalLocale);
-hooks.langData = deprecate('moment.langData is deprecated. Use moment.localeData instead.', getLocale);
-
-var mathAbs = Math.abs;
-
-function abs () {
-    var data           = this._data;
-
-    this._milliseconds = mathAbs(this._milliseconds);
-    this._days         = mathAbs(this._days);
-    this._months       = mathAbs(this._months);
-
-    data.milliseconds  = mathAbs(data.milliseconds);
-    data.seconds       = mathAbs(data.seconds);
-    data.minutes       = mathAbs(data.minutes);
-    data.hours         = mathAbs(data.hours);
-    data.months        = mathAbs(data.months);
-    data.years         = mathAbs(data.years);
-
-    return this;
-}
-
-function addSubtract$1 (duration, input, value, direction) {
-    var other = createDuration(input, value);
-
-    duration._milliseconds += direction * other._milliseconds;
-    duration._days         += direction * other._days;
-    duration._months       += direction * other._months;
-
-    return duration._bubble();
-}
-
-// supports only 2.0-style add(1, 's') or add(duration)
-function add$1 (input, value) {
-    return addSubtract$1(this, input, value, 1);
-}
-
-// supports only 2.0-style subtract(1, 's') or subtract(duration)
-function subtract$1 (input, value) {
-    return addSubtract$1(this, input, value, -1);
-}
-
-function absCeil (number) {
-    if (number < 0) {
-        return Math.floor(number);
-    } else {
-        return Math.ceil(number);
-    }
-}
-
-function bubble () {
-    var milliseconds = this._milliseconds;
-    var days         = this._days;
-    var months       = this._months;
-    var data         = this._data;
-    var seconds, minutes, hours, years, monthsFromDays;
-
-    // if we have a mix of positive and negative values, bubble down first
-    // check: https://github.com/moment/moment/issues/2166
-    if (!((milliseconds >= 0 && days >= 0 && months >= 0) ||
-            (milliseconds <= 0 && days <= 0 && months <= 0))) {
-        milliseconds += absCeil(monthsToDays(months) + days) * 864e5;
-        days = 0;
-        months = 0;
+    function listMonthsShort (format, index) {
+        return listMonthsImpl(format, index, 'monthsShort');
     }
 
-    // The following code bubbles up values, see the tests for
-    // examples of what that means.
-    data.milliseconds = milliseconds % 1000;
+    function listWeekdays (localeSorted, format, index) {
+        return listWeekdaysImpl(localeSorted, format, index, 'weekdays');
+    }
 
-    seconds           = absFloor(milliseconds / 1000);
-    data.seconds      = seconds % 60;
+    function listWeekdaysShort (localeSorted, format, index) {
+        return listWeekdaysImpl(localeSorted, format, index, 'weekdaysShort');
+    }
 
-    minutes           = absFloor(seconds / 60);
-    data.minutes      = minutes % 60;
+    function listWeekdaysMin (localeSorted, format, index) {
+        return listWeekdaysImpl(localeSorted, format, index, 'weekdaysMin');
+    }
 
-    hours             = absFloor(minutes / 60);
-    data.hours        = hours % 24;
+    getSetGlobalLocale('en', {
+        dayOfMonthOrdinalParse: /\d{1,2}(th|st|nd|rd)/,
+        ordinal : function (number) {
+            var b = number % 10,
+                output = (toInt(number % 100 / 10) === 1) ? 'th' :
+                (b === 1) ? 'st' :
+                (b === 2) ? 'nd' :
+                (b === 3) ? 'rd' : 'th';
+            return number + output;
+        }
+    });
 
-    days += absFloor(hours / 24);
+    // Side effect imports
 
-    // convert days to months
-    monthsFromDays = absFloor(daysToMonths(days));
-    months += monthsFromDays;
-    days -= absCeil(monthsToDays(monthsFromDays));
+    hooks.lang = deprecate('moment.lang is deprecated. Use moment.locale instead.', getSetGlobalLocale);
+    hooks.langData = deprecate('moment.langData is deprecated. Use moment.localeData instead.', getLocale);
 
-    // 12 months -> 1 year
-    years = absFloor(months / 12);
-    months %= 12;
+    var mathAbs = Math.abs;
 
-    data.days   = days;
-    data.months = months;
-    data.years  = years;
+    function abs () {
+        var data           = this._data;
 
-    return this;
-}
+        this._milliseconds = mathAbs(this._milliseconds);
+        this._days         = mathAbs(this._days);
+        this._months       = mathAbs(this._months);
 
-function daysToMonths (days) {
-    // 400 years have 146097 days (taking into account leap year rules)
-    // 400 years have 12 months === 4800
-    return days * 4800 / 146097;
-}
+        data.milliseconds  = mathAbs(data.milliseconds);
+        data.seconds       = mathAbs(data.seconds);
+        data.minutes       = mathAbs(data.minutes);
+        data.hours         = mathAbs(data.hours);
+        data.months        = mathAbs(data.months);
+        data.years         = mathAbs(data.years);
 
-function monthsToDays (months) {
-    // the reverse of daysToMonths
-    return months * 146097 / 4800;
-}
+        return this;
+    }
 
-function as (units) {
-    var days;
-    var months;
-    var milliseconds = this._milliseconds;
+    function addSubtract$1 (duration, input, value, direction) {
+        var other = createDuration(input, value);
 
-    units = normalizeUnits(units);
+        duration._milliseconds += direction * other._milliseconds;
+        duration._days         += direction * other._days;
+        duration._months       += direction * other._months;
 
-    if (units === 'month' || units === 'year') {
-        days   = this._days   + milliseconds / 864e5;
-        months = this._months + daysToMonths(days);
-        return units === 'month' ? months : months / 12;
-    } else {
-        // handle milliseconds separately because of floating point math errors (issue #1867)
-        days = this._days + Math.round(monthsToDays(this._months));
-        switch (units) {
-            case 'week'   : return days / 7     + milliseconds / 6048e5;
-            case 'day'    : return days         + milliseconds / 864e5;
-            case 'hour'   : return days * 24    + milliseconds / 36e5;
-            case 'minute' : return days * 1440  + milliseconds / 6e4;
-            case 'second' : return days * 86400 + milliseconds / 1000;
-            // Math.floor prevents floating point math errors here
-            case 'millisecond': return Math.floor(days * 864e5) + milliseconds;
-            default: throw new Error('Unknown unit ' + units);
+        return duration._bubble();
+    }
+
+    // supports only 2.0-style add(1, 's') or add(duration)
+    function add$1 (input, value) {
+        return addSubtract$1(this, input, value, 1);
+    }
+
+    // supports only 2.0-style subtract(1, 's') or subtract(duration)
+    function subtract$1 (input, value) {
+        return addSubtract$1(this, input, value, -1);
+    }
+
+    function absCeil (number) {
+        if (number < 0) {
+            return Math.floor(number);
+        } else {
+            return Math.ceil(number);
         }
     }
-}
 
-// TODO: Use this.as('ms')?
-function valueOf$1 () {
-    return (
-        this._milliseconds +
-        this._days * 864e5 +
-        (this._months % 12) * 2592e6 +
-        toInt(this._months / 12) * 31536e6
-    );
-}
+    function bubble () {
+        var milliseconds = this._milliseconds;
+        var days         = this._days;
+        var months       = this._months;
+        var data         = this._data;
+        var seconds, minutes, hours, years, monthsFromDays;
 
-function makeAs (alias) {
-    return function () {
-        return this.as(alias);
-    };
-}
+        // if we have a mix of positive and negative values, bubble down first
+        // check: https://github.com/moment/moment/issues/2166
+        if (!((milliseconds >= 0 && days >= 0 && months >= 0) ||
+                (milliseconds <= 0 && days <= 0 && months <= 0))) {
+            milliseconds += absCeil(monthsToDays(months) + days) * 864e5;
+            days = 0;
+            months = 0;
+        }
 
-var asMilliseconds = makeAs('ms');
-var asSeconds      = makeAs('s');
-var asMinutes      = makeAs('m');
-var asHours        = makeAs('h');
-var asDays         = makeAs('d');
-var asWeeks        = makeAs('w');
-var asMonths       = makeAs('M');
-var asYears        = makeAs('y');
+        // The following code bubbles up values, see the tests for
+        // examples of what that means.
+        data.milliseconds = milliseconds % 1000;
 
-function get$2 (units) {
-    units = normalizeUnits(units);
-    return this[units + 's']();
-}
+        seconds           = absFloor(milliseconds / 1000);
+        data.seconds      = seconds % 60;
 
-function makeGetter(name) {
-    return function () {
-        return this._data[name];
-    };
-}
+        minutes           = absFloor(seconds / 60);
+        data.minutes      = minutes % 60;
 
-var milliseconds = makeGetter('milliseconds');
-var seconds      = makeGetter('seconds');
-var minutes      = makeGetter('minutes');
-var hours        = makeGetter('hours');
-var days         = makeGetter('days');
-var months       = makeGetter('months');
-var years        = makeGetter('years');
+        hours             = absFloor(minutes / 60);
+        data.hours        = hours % 24;
 
-function weeks () {
-    return absFloor(this.days() / 7);
-}
+        days += absFloor(hours / 24);
 
-var round = Math.round;
-var thresholds = {
-    s: 45,  // seconds to minute
-    m: 45,  // minutes to hour
-    h: 22,  // hours to day
-    d: 26,  // days to month
-    M: 11   // months to year
-};
+        // convert days to months
+        monthsFromDays = absFloor(daysToMonths(days));
+        months += monthsFromDays;
+        days -= absCeil(monthsToDays(monthsFromDays));
 
-// helper function for moment.fn.from, moment.fn.fromNow, and moment.duration.fn.humanize
-function substituteTimeAgo(string, number, withoutSuffix, isFuture, locale) {
-    return locale.relativeTime(number || 1, !!withoutSuffix, string, isFuture);
-}
+        // 12 months -> 1 year
+        years = absFloor(months / 12);
+        months %= 12;
 
-function relativeTime$1 (posNegDuration, withoutSuffix, locale) {
-    var duration = createDuration(posNegDuration).abs();
-    var seconds  = round(duration.as('s'));
-    var minutes  = round(duration.as('m'));
-    var hours    = round(duration.as('h'));
-    var days     = round(duration.as('d'));
-    var months   = round(duration.as('M'));
-    var years    = round(duration.as('y'));
+        data.days   = days;
+        data.months = months;
+        data.years  = years;
 
-    var a = seconds < thresholds.s && ['s', seconds]  ||
-            minutes <= 1           && ['m']           ||
-            minutes < thresholds.m && ['mm', minutes] ||
-            hours   <= 1           && ['h']           ||
-            hours   < thresholds.h && ['hh', hours]   ||
-            days    <= 1           && ['d']           ||
-            days    < thresholds.d && ['dd', days]    ||
-            months  <= 1           && ['M']           ||
-            months  < thresholds.M && ['MM', months]  ||
-            years   <= 1           && ['y']           || ['yy', years];
-
-    a[2] = withoutSuffix;
-    a[3] = +posNegDuration > 0;
-    a[4] = locale;
-    return substituteTimeAgo.apply(null, a);
-}
-
-// This function allows you to set the rounding function for relative time strings
-function getSetRelativeTimeRounding (roundingFunction) {
-    if (roundingFunction === undefined) {
-        return round;
+        return this;
     }
-    if (typeof(roundingFunction) === 'function') {
-        round = roundingFunction;
-        return true;
-    }
-    return false;
-}
 
-// This function allows you to set a threshold for relative time strings
-function getSetRelativeTimeThreshold (threshold, limit) {
-    if (thresholds[threshold] === undefined) {
+    function daysToMonths (days) {
+        // 400 years have 146097 days (taking into account leap year rules)
+        // 400 years have 12 months === 4800
+        return days * 4800 / 146097;
+    }
+
+    function monthsToDays (months) {
+        // the reverse of daysToMonths
+        return months * 146097 / 4800;
+    }
+
+    function as (units) {
+        if (!this.isValid()) {
+            return NaN;
+        }
+        var days;
+        var months;
+        var milliseconds = this._milliseconds;
+
+        units = normalizeUnits(units);
+
+        if (units === 'month' || units === 'year') {
+            days   = this._days   + milliseconds / 864e5;
+            months = this._months + daysToMonths(days);
+            return units === 'month' ? months : months / 12;
+        } else {
+            // handle milliseconds separately because of floating point math errors (issue #1867)
+            days = this._days + Math.round(monthsToDays(this._months));
+            switch (units) {
+                case 'week'   : return days / 7     + milliseconds / 6048e5;
+                case 'day'    : return days         + milliseconds / 864e5;
+                case 'hour'   : return days * 24    + milliseconds / 36e5;
+                case 'minute' : return days * 1440  + milliseconds / 6e4;
+                case 'second' : return days * 86400 + milliseconds / 1000;
+                // Math.floor prevents floating point math errors here
+                case 'millisecond': return Math.floor(days * 864e5) + milliseconds;
+                default: throw new Error('Unknown unit ' + units);
+            }
+        }
+    }
+
+    // TODO: Use this.as('ms')?
+    function valueOf$1 () {
+        if (!this.isValid()) {
+            return NaN;
+        }
+        return (
+            this._milliseconds +
+            this._days * 864e5 +
+            (this._months % 12) * 2592e6 +
+            toInt(this._months / 12) * 31536e6
+        );
+    }
+
+    function makeAs (alias) {
+        return function () {
+            return this.as(alias);
+        };
+    }
+
+    var asMilliseconds = makeAs('ms');
+    var asSeconds      = makeAs('s');
+    var asMinutes      = makeAs('m');
+    var asHours        = makeAs('h');
+    var asDays         = makeAs('d');
+    var asWeeks        = makeAs('w');
+    var asMonths       = makeAs('M');
+    var asYears        = makeAs('y');
+
+    function clone$1 () {
+        return createDuration(this);
+    }
+
+    function get$2 (units) {
+        units = normalizeUnits(units);
+        return this.isValid() ? this[units + 's']() : NaN;
+    }
+
+    function makeGetter(name) {
+        return function () {
+            return this.isValid() ? this._data[name] : NaN;
+        };
+    }
+
+    var milliseconds = makeGetter('milliseconds');
+    var seconds      = makeGetter('seconds');
+    var minutes      = makeGetter('minutes');
+    var hours        = makeGetter('hours');
+    var days         = makeGetter('days');
+    var months       = makeGetter('months');
+    var years        = makeGetter('years');
+
+    function weeks () {
+        return absFloor(this.days() / 7);
+    }
+
+    var round = Math.round;
+    var thresholds = {
+        ss: 44,         // a few seconds to seconds
+        s : 45,         // seconds to minute
+        m : 45,         // minutes to hour
+        h : 22,         // hours to day
+        d : 26,         // days to month
+        M : 11          // months to year
+    };
+
+    // helper function for moment.fn.from, moment.fn.fromNow, and moment.duration.fn.humanize
+    function substituteTimeAgo(string, number, withoutSuffix, isFuture, locale) {
+        return locale.relativeTime(number || 1, !!withoutSuffix, string, isFuture);
+    }
+
+    function relativeTime$1 (posNegDuration, withoutSuffix, locale) {
+        var duration = createDuration(posNegDuration).abs();
+        var seconds  = round(duration.as('s'));
+        var minutes  = round(duration.as('m'));
+        var hours    = round(duration.as('h'));
+        var days     = round(duration.as('d'));
+        var months   = round(duration.as('M'));
+        var years    = round(duration.as('y'));
+
+        var a = seconds <= thresholds.ss && ['s', seconds]  ||
+                seconds < thresholds.s   && ['ss', seconds] ||
+                minutes <= 1             && ['m']           ||
+                minutes < thresholds.m   && ['mm', minutes] ||
+                hours   <= 1             && ['h']           ||
+                hours   < thresholds.h   && ['hh', hours]   ||
+                days    <= 1             && ['d']           ||
+                days    < thresholds.d   && ['dd', days]    ||
+                months  <= 1             && ['M']           ||
+                months  < thresholds.M   && ['MM', months]  ||
+                years   <= 1             && ['y']           || ['yy', years];
+
+        a[2] = withoutSuffix;
+        a[3] = +posNegDuration > 0;
+        a[4] = locale;
+        return substituteTimeAgo.apply(null, a);
+    }
+
+    // This function allows you to set the rounding function for relative time strings
+    function getSetRelativeTimeRounding (roundingFunction) {
+        if (roundingFunction === undefined) {
+            return round;
+        }
+        if (typeof(roundingFunction) === 'function') {
+            round = roundingFunction;
+            return true;
+        }
         return false;
     }
-    if (limit === undefined) {
-        return thresholds[threshold];
-    }
-    thresholds[threshold] = limit;
-    return true;
-}
 
-function humanize (withSuffix) {
-    var locale = this.localeData();
-    var output = relativeTime$1(this, !withSuffix, locale);
-
-    if (withSuffix) {
-        output = locale.pastFuture(+this, output);
-    }
-
-    return locale.postformat(output);
-}
-
-var abs$1 = Math.abs;
-
-function toISOString$1() {
-    // for ISO strings we do not use the normal bubbling rules:
-    //  * milliseconds bubble up until they become hours
-    //  * days do not bubble at all
-    //  * months bubble up until they become years
-    // This is because there is no context-free conversion between hours and days
-    // (think of clock changes)
-    // and also not between days and months (28-31 days per month)
-    var seconds = abs$1(this._milliseconds) / 1000;
-    var days         = abs$1(this._days);
-    var months       = abs$1(this._months);
-    var minutes, hours, years;
-
-    // 3600 seconds -> 60 minutes -> 1 hour
-    minutes           = absFloor(seconds / 60);
-    hours             = absFloor(minutes / 60);
-    seconds %= 60;
-    minutes %= 60;
-
-    // 12 months -> 1 year
-    years  = absFloor(months / 12);
-    months %= 12;
-
-
-    // inspired by https://github.com/dordille/moment-isoduration/blob/master/moment.isoduration.js
-    var Y = years;
-    var M = months;
-    var D = days;
-    var h = hours;
-    var m = minutes;
-    var s = seconds;
-    var total = this.asSeconds();
-
-    if (!total) {
-        // this is the same as C#'s (Noda) and python (isodate)...
-        // but not other JS (goog.date)
-        return 'P0D';
+    // This function allows you to set a threshold for relative time strings
+    function getSetRelativeTimeThreshold (threshold, limit) {
+        if (thresholds[threshold] === undefined) {
+            return false;
+        }
+        if (limit === undefined) {
+            return thresholds[threshold];
+        }
+        thresholds[threshold] = limit;
+        if (threshold === 's') {
+            thresholds.ss = limit - 1;
+        }
+        return true;
     }
 
-    return (total < 0 ? '-' : '') +
-        'P' +
-        (Y ? Y + 'Y' : '') +
-        (M ? M + 'M' : '') +
-        (D ? D + 'D' : '') +
-        ((h || m || s) ? 'T' : '') +
-        (h ? h + 'H' : '') +
-        (m ? m + 'M' : '') +
-        (s ? s + 'S' : '');
-}
+    function humanize (withSuffix) {
+        if (!this.isValid()) {
+            return this.localeData().invalidDate();
+        }
 
-var proto$2 = Duration.prototype;
+        var locale = this.localeData();
+        var output = relativeTime$1(this, !withSuffix, locale);
 
-proto$2.abs            = abs;
-proto$2.add            = add$1;
-proto$2.subtract       = subtract$1;
-proto$2.as             = as;
-proto$2.asMilliseconds = asMilliseconds;
-proto$2.asSeconds      = asSeconds;
-proto$2.asMinutes      = asMinutes;
-proto$2.asHours        = asHours;
-proto$2.asDays         = asDays;
-proto$2.asWeeks        = asWeeks;
-proto$2.asMonths       = asMonths;
-proto$2.asYears        = asYears;
-proto$2.valueOf        = valueOf$1;
-proto$2._bubble        = bubble;
-proto$2.get            = get$2;
-proto$2.milliseconds   = milliseconds;
-proto$2.seconds        = seconds;
-proto$2.minutes        = minutes;
-proto$2.hours          = hours;
-proto$2.days           = days;
-proto$2.weeks          = weeks;
-proto$2.months         = months;
-proto$2.years          = years;
-proto$2.humanize       = humanize;
-proto$2.toISOString    = toISOString$1;
-proto$2.toString       = toISOString$1;
-proto$2.toJSON         = toISOString$1;
-proto$2.locale         = locale;
-proto$2.localeData     = localeData;
+        if (withSuffix) {
+            output = locale.pastFuture(+this, output);
+        }
 
-// Deprecations
-proto$2.toIsoString = deprecate('toIsoString() is deprecated. Please use toISOString() instead (notice the capitals)', toISOString$1);
-proto$2.lang = lang;
+        return locale.postformat(output);
+    }
 
-// Side effect imports
+    var abs$1 = Math.abs;
 
-// FORMATTING
+    function sign(x) {
+        return ((x > 0) - (x < 0)) || +x;
+    }
 
-addFormatToken('X', 0, 0, 'unix');
-addFormatToken('x', 0, 0, 'valueOf');
+    function toISOString$1() {
+        // for ISO strings we do not use the normal bubbling rules:
+        //  * milliseconds bubble up until they become hours
+        //  * days do not bubble at all
+        //  * months bubble up until they become years
+        // This is because there is no context-free conversion between hours and days
+        // (think of clock changes)
+        // and also not between days and months (28-31 days per month)
+        if (!this.isValid()) {
+            return this.localeData().invalidDate();
+        }
 
-// PARSING
+        var seconds = abs$1(this._milliseconds) / 1000;
+        var days         = abs$1(this._days);
+        var months       = abs$1(this._months);
+        var minutes, hours, years;
 
-addRegexToken('x', matchSigned);
-addRegexToken('X', matchTimestamp);
-addParseToken('X', function (input, array, config) {
-    config._d = new Date(parseFloat(input, 10) * 1000);
-});
-addParseToken('x', function (input, array, config) {
-    config._d = new Date(toInt(input));
-});
+        // 3600 seconds -> 60 minutes -> 1 hour
+        minutes           = absFloor(seconds / 60);
+        hours             = absFloor(minutes / 60);
+        seconds %= 60;
+        minutes %= 60;
 
-// Side effect imports
+        // 12 months -> 1 year
+        years  = absFloor(months / 12);
+        months %= 12;
 
 
-hooks.version = '2.17.1';
+        // inspired by https://github.com/dordille/moment-isoduration/blob/master/moment.isoduration.js
+        var Y = years;
+        var M = months;
+        var D = days;
+        var h = hours;
+        var m = minutes;
+        var s = seconds ? seconds.toFixed(3).replace(/\.?0+$/, '') : '';
+        var total = this.asSeconds();
 
-setHookCallback(createLocal);
+        if (!total) {
+            // this is the same as C#'s (Noda) and python (isodate)...
+            // but not other JS (goog.date)
+            return 'P0D';
+        }
 
-hooks.fn                    = proto;
-hooks.min                   = min;
-hooks.max                   = max;
-hooks.now                   = now;
-hooks.utc                   = createUTC;
-hooks.unix                  = createUnix;
-hooks.months                = listMonths;
-hooks.isDate                = isDate;
-hooks.locale                = getSetGlobalLocale;
-hooks.invalid               = createInvalid;
-hooks.duration              = createDuration;
-hooks.isMoment              = isMoment;
-hooks.weekdays              = listWeekdays;
-hooks.parseZone             = createInZone;
-hooks.localeData            = getLocale;
-hooks.isDuration            = isDuration;
-hooks.monthsShort           = listMonthsShort;
-hooks.weekdaysMin           = listWeekdaysMin;
-hooks.defineLocale          = defineLocale;
-hooks.updateLocale          = updateLocale;
-hooks.locales               = listLocales;
-hooks.weekdaysShort         = listWeekdaysShort;
-hooks.normalizeUnits        = normalizeUnits;
-hooks.relativeTimeRounding = getSetRelativeTimeRounding;
-hooks.relativeTimeThreshold = getSetRelativeTimeThreshold;
-hooks.calendarFormat        = getCalendarFormat;
-hooks.prototype             = proto;
+        var totalSign = total < 0 ? '-' : '';
+        var ymSign = sign(this._months) !== sign(total) ? '-' : '';
+        var daysSign = sign(this._days) !== sign(total) ? '-' : '';
+        var hmsSign = sign(this._milliseconds) !== sign(total) ? '-' : '';
 
-return hooks;
+        return totalSign + 'P' +
+            (Y ? ymSign + Y + 'Y' : '') +
+            (M ? ymSign + M + 'M' : '') +
+            (D ? daysSign + D + 'D' : '') +
+            ((h || m || s) ? 'T' : '') +
+            (h ? hmsSign + h + 'H' : '') +
+            (m ? hmsSign + m + 'M' : '') +
+            (s ? hmsSign + s + 'S' : '');
+    }
+
+    var proto$2 = Duration.prototype;
+
+    proto$2.isValid        = isValid$1;
+    proto$2.abs            = abs;
+    proto$2.add            = add$1;
+    proto$2.subtract       = subtract$1;
+    proto$2.as             = as;
+    proto$2.asMilliseconds = asMilliseconds;
+    proto$2.asSeconds      = asSeconds;
+    proto$2.asMinutes      = asMinutes;
+    proto$2.asHours        = asHours;
+    proto$2.asDays         = asDays;
+    proto$2.asWeeks        = asWeeks;
+    proto$2.asMonths       = asMonths;
+    proto$2.asYears        = asYears;
+    proto$2.valueOf        = valueOf$1;
+    proto$2._bubble        = bubble;
+    proto$2.clone          = clone$1;
+    proto$2.get            = get$2;
+    proto$2.milliseconds   = milliseconds;
+    proto$2.seconds        = seconds;
+    proto$2.minutes        = minutes;
+    proto$2.hours          = hours;
+    proto$2.days           = days;
+    proto$2.weeks          = weeks;
+    proto$2.months         = months;
+    proto$2.years          = years;
+    proto$2.humanize       = humanize;
+    proto$2.toISOString    = toISOString$1;
+    proto$2.toString       = toISOString$1;
+    proto$2.toJSON         = toISOString$1;
+    proto$2.locale         = locale;
+    proto$2.localeData     = localeData;
+
+    proto$2.toIsoString = deprecate('toIsoString() is deprecated. Please use toISOString() instead (notice the capitals)', toISOString$1);
+    proto$2.lang = lang;
+
+    // Side effect imports
+
+    // FORMATTING
+
+    addFormatToken('X', 0, 0, 'unix');
+    addFormatToken('x', 0, 0, 'valueOf');
+
+    // PARSING
+
+    addRegexToken('x', matchSigned);
+    addRegexToken('X', matchTimestamp);
+    addParseToken('X', function (input, array, config) {
+        config._d = new Date(parseFloat(input, 10) * 1000);
+    });
+    addParseToken('x', function (input, array, config) {
+        config._d = new Date(toInt(input));
+    });
+
+    // Side effect imports
+
+
+    hooks.version = '2.22.1';
+
+    setHookCallback(createLocal);
+
+    hooks.fn                    = proto;
+    hooks.min                   = min;
+    hooks.max                   = max;
+    hooks.now                   = now;
+    hooks.utc                   = createUTC;
+    hooks.unix                  = createUnix;
+    hooks.months                = listMonths;
+    hooks.isDate                = isDate;
+    hooks.locale                = getSetGlobalLocale;
+    hooks.invalid               = createInvalid;
+    hooks.duration              = createDuration;
+    hooks.isMoment              = isMoment;
+    hooks.weekdays              = listWeekdays;
+    hooks.parseZone             = createInZone;
+    hooks.localeData            = getLocale;
+    hooks.isDuration            = isDuration;
+    hooks.monthsShort           = listMonthsShort;
+    hooks.weekdaysMin           = listWeekdaysMin;
+    hooks.defineLocale          = defineLocale;
+    hooks.updateLocale          = updateLocale;
+    hooks.locales               = listLocales;
+    hooks.weekdaysShort         = listWeekdaysShort;
+    hooks.normalizeUnits        = normalizeUnits;
+    hooks.relativeTimeRounding  = getSetRelativeTimeRounding;
+    hooks.relativeTimeThreshold = getSetRelativeTimeThreshold;
+    hooks.calendarFormat        = getCalendarFormat;
+    hooks.prototype             = proto;
+
+    // currently HTML5 input type only supports 24-hour formats
+    hooks.HTML5_FMT = {
+        DATETIME_LOCAL: 'YYYY-MM-DDTHH:mm',             // <input type="datetime-local" />
+        DATETIME_LOCAL_SECONDS: 'YYYY-MM-DDTHH:mm:ss',  // <input type="datetime-local" step="1" />
+        DATETIME_LOCAL_MS: 'YYYY-MM-DDTHH:mm:ss.SSS',   // <input type="datetime-local" step="0.001" />
+        DATE: 'YYYY-MM-DD',                             // <input type="date" />
+        TIME: 'HH:mm',                                  // <input type="time" />
+        TIME_SECONDS: 'HH:mm:ss',                       // <input type="time" step="1" />
+        TIME_MS: 'HH:mm:ss.SSS',                        // <input type="time" step="0.001" />
+        WEEK: 'YYYY-[W]WW',                             // <input type="week" />
+        MONTH: 'YYYY-MM'                                // <input type="month" />
+    };
+
+    return hooks;
 
 })));
-;/*! JsRender v1.0.0-rc.70 (Beta - Release Candidate): http://jsviews.com/#jsrender */
-/*! **VERSION FOR WEB** (For NODE.JS see http://jsviews.com/download/jsrender-node.js) */
-/*
- * Best-of-breed templating in browser or on Node.js.
- * Does not require jQuery, or HTML DOM
- * Integrates with JsViews (http://jsviews.com/#jsviews)
- *
- * Copyright 2015, Boris Moore
- * Released under the MIT License.
- */
-
-//jshint -W018, -W041
-
-(function(factory) {
-	// global var is the this object, which is window when running in the usual browser environment
-	var global = (0, eval)('this'), // jshint ignore:line
-		$ = global.jQuery;
-
-	if (typeof define === "function" && define.amd) { // AMD script loader, e.g. RequireJS
-		define(factory);
-	} else if (typeof exports === "object") { // CommonJS e.g. Browserify
-		module.exports = $
-			? factory($)
-			: function($) { // If no global jQuery, take optional jQuery passed as parameter: require('jsrender')(jQuery)
-				if ($ && !$.fn) {
-					throw "Provide jQuery or null";
-				}
-				return factory($);
-			};
-	} else { // Browser using plain <script> tag
-		factory(false);
-	}
-} (
-
-// factory (for jquery.views.js)
-function($) {
-"use strict";
-
-//========================== Top-level vars ==========================
-
-// global var is the this object, which is window when running in the usual browser environment
-var global = (0, eval)('this'), // jshint ignore:line
-	setGlobals = $ === false; // Only set globals if script block in browser (not AMD and not CommonJS)
-
-$ = $ && $.fn ? $ : global.jQuery; // $ is jQuery passed in by CommonJS loader (Browserify), or global jQuery.
-
-var versionNumber = "v1.0.0-beta",
-	jsvStoreName, rTag, rTmplString, topView, $views,
-
-//TODO	tmplFnsCache = {},
-	$isFunction, $isArray, $templates, $converters, $helpers, $tags, $sub, $viewsSettings,
-
-	delimOpenChar0 = "{", delimOpenChar1 = "{", delimCloseChar0 = "}", delimCloseChar1 = "}", linkChar = "^",
-
-	rPath = /^(!*?)(?:null|true|false|\d[\d.]*|([\w$]+|\.|~([\w$]+)|#(view|([\w$]+))?)([\w$.^]*?)(?:[.[^]([\w$]+)\]?)?)$/g,
-	//        not                               object     helper    view  viewProperty pathTokens      leafToken
-
-	rParams = /(\()(?=\s*\()|(?:([([])\s*)?(?:(\^?)(!*?[#~]?[\w$.^]+)?\s*((\+\+|--)|\+|-|&&|\|\||===|!==|==|!=|<=|>=|[<>%*:?\/]|(=))\s*|(!*?[#~]?[\w$.^]+)([([])?)|(,\s*)|(\(?)\\?(?:(')|("))|(?:\s*(([)\]])(?=\s*[.^]|\s*$|[^\(\[])|[)\]])([([]?))|(\s+)/g,
-	//          lftPrn0        lftPrn        bound            path    operator err                                                eq             path2       prn    comma   lftPrn2   apos quot      rtPrn rtPrnDot                           prn2  space
-	// (left paren? followed by (path? followed by operator) or (path followed by left paren?)) or comma or apos or quot or right paren or space
-
-	isRenderCall,
-	rNewLine = /[ \t]*(\r\n|\n|\r)/g,
-	rUnescapeQuotes = /\\(['"])/g,
-	rEscapeQuotes = /['"\\]/g, // Escape quotes and \ character
-	rBuildHash = /(?:\x08|^)(onerror:)?(?:(~?)(([\w$_\.]+):)?([^\x08]+))\x08(,)?([^\x08]+)/gi,
-	rTestElseIf = /^if\s/,
-	rFirstElem = /<(\w+)[>\s]/,
-	rAttrEncode = /[\x00`><"'&]/g, // Includes > encoding since rConvertMarkers in JsViews does not skip > characters in attribute strings
-	rIsHtml = /[\x00`><\"'&]/,
-	rHasHandlers = /^on[A-Z]|^convert(Back)?$/,
-	rHtmlEncode = rAttrEncode,
-	viewId = 0,
-	charEntities = {
-		"&": "&amp;",
-		"<": "&lt;",
-		">": "&gt;",
-		"\x00": "&#0;",
-		"'": "&#39;",
-		'"': "&#34;",
-		"`": "&#96;"
-	},
-	HTML = "html",
-	OBJECT = "object",
-	tmplAttr = "data-jsv-tmpl",
-	jsvTmpl = "jsvTmpl",
-	indexStr = "For #index in nested block use #getIndex().",
-	$render = {},
-
-	jsr = global.jsrender,
-	jsrToJq = jsr && $ && !$.render, // JsRender already loaded, without jQuery. but we will re-load it now to attach to jQuery
-
-	jsvStores = {
-		template: {
-			compile: compileTmpl
-		},
-		tag: {
-			compile: compileTag
-		},
-		helper: {},
-		converter: {}
-	};
-
-// views object ($.views if jQuery is loaded, jsrender.views if no jQuery, e.g. in Node.js)
-	$views = {
-		jsviews: versionNumber,
-		settings: function(settings) {
-			$extend($viewsSettings, settings);
-			dbgMode($viewsSettings._dbgMode);
-			if ($viewsSettings.jsv) {
-				$viewsSettings.jsv();
-			}
-		},
-		sub: {
-			// subscription, e.g. JsViews integration
-			View: View,
-			Err: JsViewsError,
-			tmplFn: tmplFn,
-			parse: parseParams,
-			extend: $extend,
-			extendCtx: extendCtx,
-			syntaxErr: syntaxError,
-			onStore: {},
-			_ths: tagHandlersFromProps,
-			_tg: function() {} // Constructor for tagDef
-		},
-		map: dataMap, // If jsObservable loaded first, use that definition of dataMap
-		_cnvt: convertVal,
-		_tag: renderTag,
-		_err: error
-	};
-
-function getDerivedMethod(baseMethod, method) {
-	return function() {
-		var ret,
-			tag = this,
-			prevBase = tag.base;
-
-		tag.base = baseMethod; // Within method call, calling this.base will call the base method
-		ret = method.apply(tag, arguments); // Call the method
-		tag.base = prevBase; // Replace this.base to be the base method of the previous call, for chained calls
-		return ret;
-	};
-}
-
-function getMethod(baseMethod, method) {
-	// For derived methods (or handlers declared declaratively as in {{:foo onChange=~fooChanged}} replace by a derived method, to allow using this.base(...)
-	// or this.baseApply(arguments) to call the base implementation. (Equivalent to this._super(...) and this._superApply(arguments) in jQuery UI)
-	if ($isFunction(method)) {
-		method = getDerivedMethod(
-				!baseMethod
-					? noop // no base method implementation, so use noop as base method
-					: baseMethod._d
-						? baseMethod // baseMethod is a derived method, so us it
-						: getDerivedMethod(noop, baseMethod), // baseMethod is not derived so make its base method be the noop method
-				method
-			);
-		method._d = 1; // Add flag that this is a derived method
-	}
-	return method;
-}
-
-function tagHandlersFromProps(tag, tagCtx) {
-	for (var prop in tagCtx.props) {
-		if (rHasHandlers.test(prop)) {
-			tag[prop] = getMethod(tag[prop], tagCtx.props[prop]);
-			// Copy over the onFoo props, convert and convertBack from tagCtx.props to tag (overrides values in tagDef).
-			// Note: unsupported scenario: if handlers are dynamically added ^onFoo=expression this will work, but dynamically removing will not work.
-		}
-	}
-}
-
-function retVal(val) {
-	return val;
-}
-
-function noop() {
-	return "";
-}
-
-function dbgBreak(val) {
-	// Usage examples: {{dbg:...}}, {{:~dbg(...)}}, {{for ... onAfterLink=~dbg}}, {{dbg .../}} etc.
-	// To break here, stop on caught exceptions.
-	try {
-		debugger;
-		throw "dbg breakpoint";
-	}
-	catch (e) {}
-	return this.base ? this.baseApply(arguments) : val;
-}
-
-function dbgMode(debugMode) {
-	$viewsSettings._dbgMode = debugMode !== false; // Pass in false to unset. Otherwise sets to true.
-}
-
-function JsViewsError(message) {
-	// Error exception type for JsViews/JsRender
-	// Override of $.views.sub.Error is possible
-	this.name = ($.link ? "JsViews" : "JsRender") + " Error";
-	this.message = message || this.name;
-}
-
-function $extend(target, source) {
-	var name;
-	for (name in source) {
-		target[name] = source[name];
-	}
-	return target;
-}
-
-(JsViewsError.prototype = new Error()).constructor = JsViewsError;
-
-//========================== Top-level functions ==========================
-
-//===================
-// views.delimiters
-//===================
-function $viewsDelimiters(openChars, closeChars, link) {
-	// Set the tag opening and closing delimiters and 'link' character. Default is "{{", "}}" and "^"
-	// openChars, closeChars: opening and closing strings, each with two characters
-
-	if (this !== 0 || openChars) {
-		delimOpenChar0 = openChars ? openChars.charAt(0) : delimOpenChar0; // Escape the characters - since they could be regex special characters
-		delimOpenChar1 = openChars ? openChars.charAt(1) : delimOpenChar1;
-		delimCloseChar0 = closeChars ? closeChars.charAt(0) : delimCloseChar0;
-		delimCloseChar1 = closeChars ? closeChars.charAt(1) : delimCloseChar1;
-		linkChar = link || linkChar;
-		openChars = "\\" + delimOpenChar0 + "(\\" + linkChar + ")?\\" + delimOpenChar1; // Default is "{^{"
-		closeChars = "\\" + delimCloseChar0 + "\\" + delimCloseChar1;                   // Default is "}}"
-		// Build regex with new delimiters
-		//          tag    (followed by / space or })   or cvtr+colon or html or code
-		rTag = "(?:(?:(\\w+(?=[\\/\\s\\" + delimCloseChar0 + "]))|(?:(\\w+)?(:)|(>)|!--((?:[^-]|-(?!-))*)--|(\\*)))"
-			+ "\\s*((?:[^\\" + delimCloseChar0 + "]|\\" + delimCloseChar0 + "(?!\\" + delimCloseChar1 + "))*?)";
-
-		// make rTag available to JsViews (or other components) for parsing binding expressions
-		$sub.rTag = rTag + ")";
-
-		rTag = new RegExp(openChars + rTag + "(\\/)?|(?:\\/(\\w+)))" + closeChars, "g");
-
-		// Default:    bind           tag       converter colon html     comment            code      params            slash   closeBlock
-		//           /{(\^)?{(?:(?:(\w+(?=[\/\s}]))|(?:(\w+)?(:)|(>)|!--((?:[^-]|-(?!-))*)--|(\*)))\s*((?:[^}]|}(?!}))*?)(\/)?|(?:\/(\w+)))}}/g
-
-		rTmplString = new RegExp("<.*>|([^\\\\]|^)[{}]|" + openChars + ".*" + closeChars);
-		// rTmplString looks for html tags or { or } char not preceded by \\, or JsRender tags {{xxx}}. Each of these strings are considered
-		// NOT to be jQuery selectors
-	}
-	return [delimOpenChar0, delimOpenChar1, delimCloseChar0, delimCloseChar1, linkChar];
-}
-
-//=========
-// View.get
-//=========
-
-function getView(inner, type) { //view.get(inner, type)
-	if (!type) {
-		// view.get(type)
-		type = inner;
-		inner = undefined;
-	}
-
-	var views, i, l, found,
-		view = this,
-		root = !type || type === "root";
-		// If type is undefined, returns root view (view under top view).
-
-	if (inner) {
-		// Go through views - this one, and all nested ones, depth-first - and return first one with given type.
-		found = view.type === type ? view : undefined;
-		if (!found) {
-			views = view.views;
-			if (view._.useKey) {
-				for (i in views) {
-					if (found = views[i].get(inner, type)) {
-						break;
-					}
-				}
-			} else {
-				for (i = 0, l = views.length; !found && i < l; i++) {
-					found = views[i].get(inner, type);
-				}
-			}
-		}
-	} else if (root) {
-		// Find root view. (view whose parent is top view)
-		while (view.parent.parent) {
-			found = view = view.parent;
-		}
-	} else {
-		while (view && !found) {
-			// Go through views - this one, and all parent ones - and return first one with given type.
-			found = view.type === type ? view : undefined;
-			view = view.parent;
-		}
-	}
-	return found;
-}
-
-function getNestedIndex() {
-	var view = this.get("item");
-	return view ? view.index : undefined;
-}
-
-getNestedIndex.depends = function() {
-	return [this.get("item"), "index"];
-};
-
-function getIndex() {
-	return this.index;
-}
-
-getIndex.depends = "index";
-
-//==========
-// View.hlp
-//==========
-
-function getHelper(helper) {
-	// Helper method called as view.hlp(key) from compiled template, for helper functions or template parameters ~foo
-	var wrapped,
-		view = this,
-		ctx = view.linkCtx,
-		res = (view.ctx || {})[helper];
-
-	if (res === undefined && ctx && ctx.ctx) {
-		res = ctx.ctx[helper];
-	}
-	if (res === undefined) {
-		res = $helpers[helper];
-	}
-
-	if (res) {
-		if ($isFunction(res) && !res._wrp) {
-			// If it is of type function, and not already wrapped, we will wrap it, so if called with no this pointer it will be called with the
-			// view as 'this' context. If the helper ~foo() was in a data-link expression, the view will have a 'temporary' linkCtx property too.
-			// Note that helper functions on deeper paths will have specific this pointers, from the preceding path.
-			// For example, ~util.foo() will have the ~util object as 'this' pointer
-			wrapped = function() {
-				return res.apply((!this || this === global) ? view : this, arguments);
-			};
-			wrapped._wrp = true;
-			$extend(wrapped, res); // Attach same expandos (if any) to the wrapped function
-		}
-	}
-	return wrapped || res;
-}
-
-//==============
-// views._cnvt
-//==============
-
-function convertVal(converter, view, tagCtx, onError) {
-	// self is template object or linkCtx object
-	var tag, value,
-		// if tagCtx is an integer, then it is the key for the compiled function to return the boundTag tagCtx
-		boundTag = typeof tagCtx === "number" && view.tmpl.bnds[tagCtx-1],
-		linkCtx = view.linkCtx; // For data-link="{cvt:...}"...
-
-	if (onError !== undefined) {
-		tagCtx = onError = {props: {}, args: [onError]};
-	} else if (boundTag) {
-		tagCtx = boundTag(view.data, view, $views);
-	}
-
-	value = tagCtx.args[0];
-	if (converter || boundTag) {
-		tag = linkCtx && linkCtx.tag;
-		if (!tag) {
-			tag = $extend(new $sub._tg(), {
-				_: {
-					inline: !linkCtx,
-					bnd: boundTag,
-					unlinked: true
-				},
-				tagName: ":",
-				cvt: converter,
-				flow: true,
-				tagCtx: tagCtx,
-			});
-			if (linkCtx) {
-				linkCtx.tag = tag;
-				tag.linkCtx = linkCtx;
-			}
-			tagCtx.ctx = extendCtx(tagCtx.ctx, (linkCtx ? linkCtx.view : view).ctx);
-		}
-		tag._er = onError && value;
-		tagHandlersFromProps(tag, tagCtx);
-
-		tagCtx.view = view;
-
-		tag.ctx = tagCtx.ctx || {};
-		tagCtx.ctx = undefined;
-		// Provide this tag on view, for addBindingMarkers on bound tags to add the tag to view._.bnds, associated with the tag id,
-		view._.tag = tag;
-
-		value = tag.cvtArgs(tag.convert || converter !== "true" && converter)[0]; // If there is a convertBack but no convert, converter will be "true"
-
-		// Call onRender (used by JsViews if present, to add binding annotations around rendered content)
-		value = boundTag && view._.onRender
-			? view._.onRender(value, view, boundTag)
-			: value;
-		view._.tag = undefined;
-	}
-	return value != undefined ? value : "";
-}
-
-function convertArgs(converter) {
-	var tag = this,
-		tagCtx = tag.tagCtx,
-		view = tagCtx.view,
-		args = tagCtx.args;
-
-	converter = tag.convert || converter;
-	converter = converter && ("" + converter === converter
-		? (view.getRsc("converters", converter) || error("Unknown converter: '" + converter + "'"))
-		: converter);
-
-	args = !args.length && !tagCtx.index // On the opening tag with no args, bind to the current data context
-		? [view.data]
-		: converter
-			? args.slice() // If there is a converter, use a copy of the tagCtx.args array for rendering, and replace the args[0] in
-			// the copied array with the converted value. But we do not modify the value of tag.tagCtx.args[0] (the original args array)
-			: args; // If no converter, get the original tagCtx.args
-
-	if (converter) {
-		if (converter.depends) {
-			tag.depends = $sub.getDeps(tag.depends, tag, converter.depends, converter);
-		}
-		args[0] = converter.apply(tag, args);
-	}
-	return args;
-}
-
-//=============
-// views._tag
-//=============
-
-function getResource(resourceType, itemName) {
-	var res, store,
-		view = this;
-	while ((res === undefined) && view) {
-		store = view.tmpl && view.tmpl[resourceType];
-		res = store && store[itemName];
-		view = view.parent;
-	}
-	return res || $views[resourceType][itemName];
-}
-
-function renderTag(tagName, parentView, tmpl, tagCtxs, isUpdate, onError) {
-	parentView = parentView || topView;
-	var tag, tag_, tagDef, template, tags, attr, parentTag, i, l, itemRet, tagCtx, tagCtxCtx, content, callInit, mapDef, thisMap, args, props, initialTmpl, tagDataMap,
-		ret = "",
-		linkCtx = parentView.linkCtx || 0,
-		ctx = parentView.ctx,
-		parentTmpl = tmpl || parentView.tmpl,
-		// if tagCtx is an integer, then it is the key for the compiled function to return the boundTag tagCtxs
-		boundTag = typeof tagCtxs === "number" && parentView.tmpl.bnds[tagCtxs-1];
-
-	if (tagName._is === "tag") {
-		tag = tagName;
-		tagName = tag.tagName;
-		tagCtxs = tag.tagCtxs;
-		template = tag.template;
-	} else {
-		tagDef = parentView.getRsc("tags", tagName) || error("Unknown tag: {{" + tagName + "}} ");
-		template = tagDef.template;
-	}
-
-	if (onError !== undefined) {
-		ret += onError;
-		tagCtxs = onError = [{props: {}, args: []}];
-	} else if (boundTag) {
-		tagCtxs = boundTag(parentView.data, parentView, $views);
-	}
-
-	l = tagCtxs.length;
-	for (i = 0; i < l; i++) {
-		tagCtx = tagCtxs[i];
-		if (!linkCtx || !linkCtx.tag || i && !linkCtx.tag._.inline || tag._er) {
-			// Initialize tagCtx
-			// For block tags, tagCtx.tmpl is an integer > 0
-			if (content = tagCtx.tmpl) {
-				content = tagCtx.content = parentTmpl.tmpls[content - 1];
-			}
-			tagCtx.index = i;
-			tagCtx.tmpl = template || content; // Set the tmpl property to the content of the block tag
-			tagCtx.render = renderContent;
-			tagCtx.view = parentView;
-			tagCtx.ctx = extendCtx(tagCtx.ctx, ctx); // Clone and extend parentView.ctx
-		}
-		if (tmpl = tagCtx.props.tmpl) {
-			// If the tmpl property is overridden, set the value (when initializing, or, in case of binding: ^tmpl=..., when updating)
-			tmpl = "" + tmpl === tmpl // if a string
-				? parentView.getRsc("templates", tmpl) || $templates(tmpl)
-				: tmpl;
-
-			tagCtx.tmpl = tmpl;
-		}
-
-		if (!tag) {
-			// This will only be hit for initial tagCtx (not for {{else}}) - if the tag instance does not exist yet
-			// Instantiate tag if it does not yet exist
-			// If the tag has not already been instantiated, we will create a new instance.
-			// ~tag will access the tag, even within the rendering of the template content of this tag.
-			// From child/descendant tags, can access using ~tag.parent, or ~parentTags.tagName
-			tag = new tagDef._ctr();
-			callInit = !!tag.init;
-
-			tag.parent = parentTag = ctx && ctx.tag;
-			tag.tagCtxs = tagCtxs;
-			tagDataMap = tag.dataMap;
-
-			if (linkCtx) {
-				tag._.inline = false;
-				linkCtx.tag = tag;
-				tag.linkCtx = linkCtx;
-			}
-			if (tag._.bnd = boundTag || linkCtx.fn) {
-				// Bound if {^{tag...}} or data-link="{tag...}"
-				tag._.arrVws = {};
-			} else if (tag.dataBoundOnly) {
-				error("{^{" + tagName + "}} tag must be data-bound");
-			}
-			//TODO better perf for childTags() - keep child tag.tags array, (and remove child, when disposed)
-			// tag.tags = [];
-		}
-		tagCtxs = tag.tagCtxs;
-		tagDataMap = tag.dataMap;
-
-		tagCtx.tag = tag;
-		if (tagDataMap && tagCtxs) {
-			tagCtx.map = tagCtxs[i].map; // Copy over the compiled map instance from the previous tagCtxs to the refreshed ones
-		}
-		if (!tag.flow) {
-			tagCtxCtx = tagCtx.ctx = tagCtx.ctx || {};
-
-			// tags hash: tag.ctx.tags, merged with parentView.ctx.tags,
-			tags = tag.parents = tagCtxCtx.parentTags = ctx && extendCtx(tagCtxCtx.parentTags, ctx.parentTags) || {};
-			if (parentTag) {
-				tags[parentTag.tagName] = parentTag;
-				//TODO better perf for childTags: parentTag.tags.push(tag);
-			}
-			tags[tag.tagName] = tagCtxCtx.tag = tag;
-		}
-	}
-	if (boundTag || linkCtx) {
-		// Provide this tag on view, for addBindingMarkers on bound tags to add the tag to view._.bnds, associated with the tag id
-		parentView._.tag = tag;
-	}
-	if (!(tag._er = onError)) {
-		tagHandlersFromProps(tag, tagCtxs[0]);
-		tag.rendering = {}; // Provide object for state during render calls to tag and elses. (Used by {{if}} and {{for}}...)
-		for (i = 0; i < l; i++) {
-			tagCtx = tag.tagCtx = tagCtxs[i];
-			props = tagCtx.props;
-			args = tag.cvtArgs();
-
-			if (mapDef = props.dataMap || tagDataMap) {
-				if (args.length || props.dataMap) {
-					thisMap = tagCtx.map;
-					if (!thisMap || thisMap.src !== args[0] || isUpdate) {
-						if (thisMap && thisMap.src) {
-							thisMap.unmap(); // only called if observable map - not when only used in JsRender, e.g. by {{props}}
-						}
-						thisMap = tagCtx.map = mapDef.map(args[0], props, undefined, !tag._.bnd);
-					}
-					args = [thisMap.tgt];
-				}
-			}
-			tag.ctx = tagCtx.ctx;
-
-			if (!i) {
-				if (callInit) {
-					initialTmpl = tag.template;
-					tag.init(tagCtx, linkCtx, tag.ctx);
-					callInit = undefined;
-					if (tag.template !== initialTmpl) {
-						tag._.tmpl = tag.template; // This will override the tag.template and also tagCtx.props.tmpl for all tagCtxs
-					}
-				}
-				if (linkCtx) {
-					// Set attr on linkCtx to ensure outputting to the correct target attribute.
-					// Setting either linkCtx.attr or this.attr in the init() allows per-instance choice of target attrib.
-					linkCtx.attr = tag.attr = linkCtx.attr || tag.attr;
-				}
-				attr = tag.attr;
-				tag._.noVws = attr && attr !== HTML;
-			}
-
-			itemRet = undefined;
-			if (tag.render) {
-				itemRet = tag.render.apply(tag, args);
-			}
-			if (!args.length) {
-				args = [parentView]; // no arguments - get data context from view.
-			}
-			if (itemRet === undefined) {
-				itemRet = tagCtx.render(args.length ? args[0] : parentView, true) || (isUpdate ? undefined : "");
-			}
-			// No return value from render, and no template/content tagCtx.render(...), so return undefined
-			ret = ret ? ret + (itemRet || "") : itemRet; // If no rendered content, this will be undefined
-		}
-		tag.rendering = undefined;
-	}
-	tag.tagCtx = tagCtxs[0];
-	tag.ctx = tag.tagCtx.ctx;
-
-	if (tag._.noVws) {
-			if (tag._.inline) {
-			// inline tag with attr set to "text" will insert HTML-encoded content - as if it was element-based innerText
-			ret = attr === "text"
-				? $converters.html(ret)
-				: "";
-		}
-	}
-	return boundTag && parentView._.onRender
-		// Call onRender (used by JsViews if present, to add binding annotations around rendered content)
-		? parentView._.onRender(ret, parentView, boundTag)
-		: ret;
-}
-
-//=================
-// View constructor
-//=================
-
-function View(context, type, parentView, data, template, key, contentTmpl, onRender) {
-	// Constructor for view object in view hierarchy. (Augmented by JsViews if JsViews is loaded)
-	var views, parentView_, tag, self_,
-		self = this,
-		isArray = type === "array";
-
-	self.content = contentTmpl;
-	self.views = isArray ? [] : {};
-	self.parent = parentView;
-	self.type = type || "top";
-	self.data = data;
-	self.tmpl = template;
-	// If the data is an array, this is an 'array view' with a views array for each child 'item view'
-	// If the data is not an array, this is an 'item view' with a views 'hash' object for any child nested views
-	// ._.useKey is non zero if is not an 'array view' (owning a data array). Use this as next key for adding to child views hash
-	self_ = self._ = {
-		key: 0,
-		useKey: isArray ? 0 : 1,
-		id: "" + viewId++,
-		onRender: onRender,
-		bnds: {}
-	};
-	self.linked = !!onRender;
-	if (parentView) {
-		views = parentView.views;
-		parentView_ = parentView._;
-		if (parentView_.useKey) {
-			// Parent is an 'item view'. Add this view to its views object
-			// self._key = is the key in the parent view hash
-			views[self_.key = "_" + parentView_.useKey++] = self;
-			self.index = indexStr;
-			self.getIndex = getNestedIndex;
-			tag = parentView_.tag;
-			self_.bnd = isArray && (!tag || !!tag._.bnd && tag); // For array views that are data bound for collection change events, set the
-			// view._.bnd property to true for top-level link() or data-link="{for}", or to the tag instance for a data-bound tag, e.g. {^{for ...}}
-		} else if (views.length === (self_.key = self.index = key)) { // Parent is an 'array view'. Add this view to its views array
-			views.push(self); // Use push when possible (better perf than splice)
-		} else {
-			views.splice(key, 0, self);
-		}
-		// If no context was passed in, use parent context
-		// If context was passed in, it should have been merged already with parent context
-		self.ctx = context || parentView.ctx;
-	} else {
-		self.ctx = context;
-	}
-}
-
-View.prototype = {
-	get: getView,
-	getIndex: getIndex,
-	getRsc: getResource,
-	hlp: getHelper,
-	_is: "view"
-};
-
-//=============
-// Registration
-//=============
-
-function compileChildResources(parentTmpl) {
-	var storeName, resources, resourceName, resource, settings, compile, onStore;
-	for (storeName in jsvStores) {
-		settings = jsvStores[storeName];
-		if ((compile = settings.compile) && (resources = parentTmpl[storeName + "s"])) {
-			for (resourceName in resources) {
-				// compile child resource declarations (templates, tags, tags["for"] or helpers)
-				resource = resources[resourceName] = compile(resourceName, resources[resourceName], parentTmpl, 0);
-				resource._is = storeName; // Only do this for compiled objects (tags, templates...)
-				if (resource && (onStore = $sub.onStore[storeName])) {
-					// e.g. JsViews integration
-					onStore(resourceName, resource, compile);
-				}
-			}
-		}
-	}
-}
-
-function compileTag(name, tagDef, parentTmpl) {
-	var tmpl, baseTag, prop,
-		compiledDef = new $sub._tg();
-
-	function Tag() {
-		var tag = this;
-		tag._ = {
-			inline: true,
-			unlinked: true
-		};
-
-		tag.tagName = name;
-	}
-
-	if ($isFunction(tagDef)) {
-		// Simple tag declared as function. No presenter instantation.
-		tagDef = {
-			depends: tagDef.depends,
-			render: tagDef
-		};
-	} else if ("" + tagDef === tagDef) {
-		tagDef = {template: tagDef};
-	}
-	if (baseTag = tagDef.baseTag) {
-		tagDef.flow = !!tagDef.flow; // Set flow property, so defaults to false even if baseTag has flow=true
-		tagDef.baseTag = baseTag = "" + baseTag === baseTag
-			? (parentTmpl && parentTmpl.tags[baseTag] || $tags[baseTag])
-			: baseTag;
-
-		compiledDef = $extend(compiledDef, baseTag);
-
-		for (prop in tagDef) {
-			compiledDef[prop] = getMethod(baseTag[prop], tagDef[prop]);
-		}
-	} else {
-		compiledDef = $extend(compiledDef, tagDef);
-	}
-
-	// Tag declared as object, used as the prototype for tag instantiation (control/presenter)
-	if ((tmpl = compiledDef.template) !== undefined) {
-		compiledDef.template = "" + tmpl === tmpl ? ($templates[tmpl] || $templates(tmpl)) : tmpl;
-	}
-	if (compiledDef.init !== false) {
-		// Set init: false on tagDef if you want to provide just a render method, or render and template, but no constuctor or prototype.
-		// so equivalent to setting tag to render function, except you can also provide a template.
-		(Tag.prototype = compiledDef).constructor = compiledDef._ctr = Tag;
-	}
-
-	if (parentTmpl) {
-		compiledDef._parentTmpl = parentTmpl;
-	}
-	return compiledDef;
-}
-
-function baseApply(args) {
-	// In derived method (or handler declared declaratively as in {{:foo onChange=~fooChanged}} can call base method,
-	// using this.baseApply(arguments) (Equivalent to this._superApply(arguments) in jQuery UI)
-	return this.base.apply(this, args);
-}
-
-function compileTmpl(name, tmpl, parentTmpl, options) {
-	// tmpl is either a template object, a selector for a template script block, the name of a compiled template, or a template object
-
-	//==== nested functions ====
-	function lookupTemplate(value) {
-		// If value is of type string - treat as selector, or name of compiled template
-		// Return the template object, if already compiled, or the markup string
-		var currentName, tmpl;
-		if (("" + value === value) || value.nodeType > 0 && (elem = value)) {
-			if (!elem) {
-				if (/^\.\/[^\\:*?"<>]*$/.test(value)) {
-					// tmpl="./some/file.html"
-					// If the template is not named, use "./some/file.html" as name.
-					if (tmpl = $templates[name = name || value]) {
-						value = tmpl;
-					} else {
-						// BROWSER-SPECIFIC CODE (not on Node.js):
-						// Look for server-generated script block with id "./some/file.html"
-						elem = document.getElementById(value);
-					}
-				} else if ($.fn && !rTmplString.test(value)) {
-					try {
-						elem = $(document).find(value)[0]; // if jQuery is loaded, test for selector returning elements, and get first element
-					} catch (e) {}
-				}// END BROWSER-SPECIFIC CODE
-			} //BROWSER-SPECIFIC CODE
-			if (elem) {
-				// Generally this is a script element.
-				// However we allow it to be any element, so you can for example take the content of a div,
-				// use it as a template, and replace it by the same content rendered against data.
-				// e.g. for linking the content of a div to a container, and using the initial content as template:
-				// $.link("#content", model, {tmpl: "#content"});
-				if (options) {
-					// We will compile a new template using the markup in the script element
-					value = elem.innerHTML;
-				} else {
-					// We will cache a single copy of the compiled template, and associate it with the name
-					// (renaming from a previous name if there was one).
-					currentName = elem.getAttribute(tmplAttr);
-					if (currentName) {
-						if (currentName !== jsvTmpl) {
-							value = $templates[currentName];
-							delete $templates[currentName];
-						} else if ($.fn) {
-							value = $.data(elem)[jsvTmpl];
-						}
-					} else {
-						name = name || ($.fn ? jsvTmpl : value);
-						value = compileTmpl(name, elem.innerHTML, parentTmpl, options);
-					}
-					value.tmplName = name = name || currentName;
-					if (name !== jsvTmpl) {
-						$templates[name] = value;
-					}
-					elem.setAttribute(tmplAttr, name);
-					if ($.fn) {
-						$.data(elem, jsvTmpl, value);
-					}
-				}
-			} // END BROWSER-SPECIFIC CODE
-			elem = undefined;
-		} else if (!value.fn) {
-			value = undefined;
-			// If value is not a string. HTML element, or compiled template, return undefined
-		}
-		return value;
-	}
-
-	var elem, compiledTmpl,
-		tmplOrMarkup = tmpl = tmpl || "";
-
-	//==== Compile the template ====
-	if (options === 0) {
-		options = undefined;
-		tmplOrMarkup = lookupTemplate(tmplOrMarkup); // Top-level compile so do a template lookup
-	}
-
-	// If options, then this was already compiled from a (script) element template declaration.
-	// If not, then if tmpl is a template object, use it for options
-	options = options || (tmpl.markup ? tmpl : {});
-	options.tmplName = name;
-	if (parentTmpl) {
-		options._parentTmpl = parentTmpl;
-	}
-	// If tmpl is not a markup string or a selector string, then it must be a template object
-	// In that case, get it from the markup property of the object
-	if (!tmplOrMarkup && tmpl.markup && (tmplOrMarkup = lookupTemplate(tmpl.markup))) {
-		if (tmplOrMarkup.fn) {
-			// If the string references a compiled template object, need to recompile to merge any modified options
-			tmplOrMarkup = tmplOrMarkup.markup;
-		}
-	}
-	if (tmplOrMarkup !== undefined) {
-		if (tmplOrMarkup.fn || tmpl.fn) {
-			// tmpl is already compiled, so use it
-			if (tmplOrMarkup.fn) {
-				compiledTmpl = tmplOrMarkup;
-			}
-		} else {
-			// tmplOrMarkup is a markup string, not a compiled template
-			// Create template object
-			tmpl = tmplObject(tmplOrMarkup, options);
-			// Compile to AST and then to compiled function
-			tmplFn(tmplOrMarkup.replace(rEscapeQuotes, "\\$&"), tmpl);
-		}
-		if (!compiledTmpl) {
-			compileChildResources(options);
-
-			compiledTmpl = $extend(function() {
-				return tmpl.render.apply(tmpl, arguments);
-			}, tmpl);
-		}
-		if (name && !parentTmpl && name !== jsvTmpl) {
-			$render[name] = compiledTmpl;
-		}
-		return compiledTmpl;
-	}
-}
-
-//==== /end of function compileTmpl ====
-
-function dataMap(mapDef) {
-	function Map(source, options) {
-		this.tgt = mapDef.getTgt(source, options);
-	}
-
-	if ($isFunction(mapDef)) {
-		// Simple map declared as function
-		mapDef = {
-			getTgt: mapDef
-		};
-	}
-
-	if (mapDef.baseMap) {
-		mapDef = $extend($extend({}, mapDef.baseMap), mapDef);
-	}
-
-	mapDef.map = function(source, options) {
-		return new Map(source, options);
-	};
-	return mapDef;
-}
-
-function tmplObject(markup, options) {
-	// Template object constructor
-	var htmlTag,
-		wrapMap = $viewsSettings.wrapMap || {}, // Only used in JsViews. Otherwise empty: {}
-		tmpl = $extend(
-			{
-				tmpls: [],
-				links: {}, // Compiled functions for link expressions
-				bnds: [],
-				_is: "template",
-				render: renderContent
-			},
-			options
-		);
-
-	tmpl.markup = markup;
-	if (!options.htmlTag) {
-		// Set tmpl.tag to the top-level HTML tag used in the template, if any...
-		htmlTag = rFirstElem.exec(markup);
-		tmpl.htmlTag = htmlTag ? htmlTag[1].toLowerCase() : "";
-	}
-	htmlTag = wrapMap[tmpl.htmlTag];
-	if (htmlTag && htmlTag !== wrapMap.div) {
-		// When using JsViews, we trim templates which are inserted into HTML contexts where text nodes are not rendered (i.e. not 'Phrasing Content').
-		// Currently not trimmed for <li> tag. (Not worth adding perf cost)
-		tmpl.markup = $.trim(tmpl.markup);
-	}
-
-	return tmpl;
-}
-
-function registerStore(storeName, storeSettings) {
-
-	function theStore(name, item, parentTmpl) {
-		// The store is also the function used to add items to the store. e.g. $.templates, or $.views.tags
-
-		// For store of name 'thing', Call as:
-		//    $.views.things(items[, parentTmpl]),
-		// or $.views.things(name, item[, parentTmpl])
-
-		var onStore, compile, itemName, thisStore;
-
-		if (name && typeof name === OBJECT && !name.nodeType && !name.markup && !name.getTgt) {
-			// Call to $.views.things(items[, parentTmpl]),
-
-			// Adding items to the store
-			// If name is a hash, then item is parentTmpl. Iterate over hash and call store for key.
-			for (itemName in name) {
-				theStore(itemName, name[itemName], item);
-			}
-			return $views;
-		}
-		// Adding a single unnamed item to the store
-		if (item === undefined) {
-			item = name;
-			name = undefined;
-		}
-		if (name && "" + name !== name) { // name must be a string
-			parentTmpl = item;
-			item = name;
-			name = undefined;
-		}
-		thisStore = parentTmpl ? parentTmpl[storeNames] = parentTmpl[storeNames] || {} : theStore;
-		compile = storeSettings.compile;
-		if (item === null) {
-			// If item is null, delete this entry
-			if (name) {
-				delete thisStore[name];
-			}
-		} else {
-			item = compile ? compile(name, item, parentTmpl, 0) : item;
-			if (name) {
-				thisStore[name] = item;
-			}
-		}
-		if (compile && item) {
-			item._is = storeName; // Only do this for compiled objects (tags, templates...)
-		}
-		if (item && (onStore = $sub.onStore[storeName])) {
-			// e.g. JsViews integration
-			onStore(name, item, compile);
-		}
-		return item;
-	}
-
-	var storeNames = storeName + "s";
-
-	$views[storeNames] = theStore;
-}
-
-//==============
-// renderContent
-//==============
-
-function renderContent(data, context, noIteration, parentView, key, onRender) {
-	var i, l, tag, tmpl, tagCtx, isTopRenderCall, prevData, prevIndex,
-		view = parentView,
-		result = "";
-
-	if (context === true) {
-		noIteration = context; // passing boolean as second param - noIteration
-		context = undefined;
-	} else if (typeof context !== OBJECT) {
-		context = undefined; // context must be a boolean (noIteration) or a plain object
-	}
-
-	if (tag = this.tag) {
-		// This is a call from renderTag or tagCtx.render(...)
-		tagCtx = this;
-		tmpl = tag._.tmpl || tagCtx.tmpl;
-		view = view || tagCtx.view;
-		if (!arguments.length) {
-			data = view;
-		}
-	} else {
-		// This is a template.render(...) call
-		tmpl = this;
-	}
-
-	if (tmpl) {
-		if (!view && data && data._is === "view") {
-			view = data; // When passing in a view to render or link (and not passing in a parent view) use the passed-in view as parentView
-		}
-
-		if (view) {
-			if (data === view) {
-				// Inherit the data from the parent view.
-				// This may be the contents of an {{if}} block
-				data = view.data;
-			}
-		}
-
-		if (!tmpl.fn) {
-			// Template has not been compiled yet, so compile it.
-			tmpl = tag._.tmpl = $templates[tmpl] || $templates(tmpl);
-		}
-
-		isTopRenderCall = !view;
-		isRenderCall = isRenderCall || isTopRenderCall;
-		if (!view) {
-			(context = context || {}).root = data; // Provide ~root as shortcut to top-level data.
-		}
-		if (!isRenderCall || $viewsSettings.useViews || tmpl.useViews || view && view !== topView) {
-			result = renderWithViews(tmpl, data, context, noIteration, view, key, onRender, tag);
-		} else {
-			if (view) { // In a block
-				prevData = view.data;
-				prevIndex = view.index;
-				view.index = indexStr;
-			} else {
-				view = topView;
-				view.data = data;
-				view.ctx = context;
-			}
-			if ($isArray(data) && !noIteration) {
-				// Create a view for the array, whose child views correspond to each data item. (Note: if key and parentView are passed in
-				// along with parent view, treat as insert -e.g. from view.addViews - so parentView is already the view item for array)
-				for (i = 0, l = data.length; i < l; i++) {
-					view.index = i;
-					view.data = data[i];
-					result += tmpl.fn(data[i], view, $views);
-				}
-			} else {
-				result += tmpl.fn(data, view, $views);
-			}
-			view.data = prevData;
-			view.index = prevIndex;
-		}
-		if (isTopRenderCall) {
-			isRenderCall = undefined;
-		}
-	}
-	return result;
-}
-
-function renderWithViews(tmpl, data, context, noIteration, view, key, onRender, tag) {
-	function setItemVar(item) {
-		// When itemVar is specified, set modified ctx with user-named ~item
-		newCtx = $extend({}, context);
-		newCtx[itemVar] = item;
-	}
-
-	// Render template against data as a tree of subviews (nested rendered template instances), or as a string (top-level template).
-	// If the data is the parent view, treat as noIteration, re-render with the same data context.
-	var i, l, newView, childView, itemResult, swapContent, contentTmpl, outerOnRender, tmplName, itemVar, newCtx, tagCtx,
-		result="" ;
-
-	if (tag) {
-		// This is a call from renderTag or tagCtx.render(...)
-		tmplName = tag.tagName;
-		tagCtx = tag.tagCtx;
-		context = context ? extendCtx(context, tag.ctx) : tag.ctx;
-		contentTmpl = tagCtx.content;
-		if (tagCtx.props.link === false) {
-			// link=false setting on block tag
-			// We will override inherited value of link by the explicit setting link=false taken from props
-			// The child views of an unlinked view are also unlinked. So setting child back to true will not have any effect.
-			context = context || {};
-			context.link = false;
-		}
-		if (itemVar = tagCtx.props.itemVar) {
-			if (itemVar.charAt(0) !== "~") {
-				syntaxError("Use itemVar='~myItem'");
-			}
-			itemVar = itemVar.slice(1);
-		}
-	}
-
-	if (view) {
-		contentTmpl = contentTmpl || view.content; // The wrapped content - to be added as #content property on views, below
-		onRender = onRender || view._.onRender;
-		context = extendCtx(context, view.ctx);
-	}
-
-	if (key === true) {
-		swapContent = true;
-		key = 0;
-	}
-
-	// If link===false, do not call onRender, so no data-linking marker nodes
-	if (onRender && (context && context.link === false || tag && tag._.noVws)) {
-		onRender = undefined;
-	}
-	outerOnRender = onRender;
-	if (onRender === true) {
-		// Used by view.refresh(). Don't create a new wrapper view.
-		outerOnRender = undefined;
-		onRender = view._.onRender;
-	}
-	// Set additional context on views created here, (as modified context inherited from the parent, and to be inherited by child views)
-	context = tmpl.helpers
-		? extendCtx(tmpl.helpers, context)
-		: context;
-
-	newCtx = context;
-	if ($isArray(data) && !noIteration) {
-		// Create a view for the array, whose child views correspond to each data item. (Note: if key and view are passed in
-		// along with parent view, treat as insert -e.g. from view.addViews - so view is already the view item for array)
-		newView = swapContent
-			? view
-			: (key !== undefined && view)
-				|| new View(context, "array", view, data, tmpl, key, contentTmpl, onRender);
-		if (itemVar) {
-			newView.it = itemVar;
-		}
-		itemVar = newView.it;
-		for (i = 0, l = data.length; i < l; i++) {
-			// Create a view for each data item.
-			if (itemVar) {
-				setItemVar(data[i]); // use modified ctx with user-named ~item
-			}
-			childView = new View(newCtx, "item", newView, data[i], tmpl, (key || 0) + i, contentTmpl, onRender);
-
-			itemResult = tmpl.fn(data[i], childView, $views);
-			result += newView._.onRender ? newView._.onRender(itemResult, childView) : itemResult;
-		}
-	} else {
-		// Create a view for singleton data object. The type of the view will be the tag name, e.g. "if" or "myTag" except for
-		// "item", "array" and "data" views. A "data" view is from programmatic render(object) against a 'singleton'.
-		if (itemVar) {
-			setItemVar(data);
-		}
-		newView = swapContent ? view : new View(newCtx, tmplName || "data", view, data, tmpl, key, contentTmpl, onRender);
-		if (tag && !tag.flow) {
-			newView.tag = tag;
-		}
-		result += tmpl.fn(data, newView, $views);
-	}
-	return outerOnRender ? outerOnRender(result, newView) : result;
-}
-
-//===========================
-// Build and compile template
-//===========================
-
-// Generate a reusable function that will serve to render a template against data
-// (Compile AST then build template function)
-
-function error(e, view, fallback) {
-	var message = $viewsSettings.onError(e, view, fallback);
-	if ("" + e === e) { // if e is a string, not an Exception, then throw new Exception
-		throw new $sub.Err(message);
-	}
-	return !view.linkCtx && view.linked ? $converters.html(message) : message;
-}
-
-function syntaxError(message) {
-	error("Syntax error\n" + message);
-}
-
-function tmplFn(markup, tmpl, isLinkExpr, convertBack, hasElse) {
-	// Compile markup to AST (abtract syntax tree) then build the template function code from the AST nodes
-	// Used for compiling templates, and also by JsViews to build functions for data link expressions
-
-	//==== nested functions ====
-	function pushprecedingContent(shift) {
-		shift -= loc;
-		if (shift) {
-			content.push(markup.substr(loc, shift).replace(rNewLine, "\\n"));
-		}
-	}
-
-	function blockTagCheck(tagName, block) {
-		if (tagName) {
-			tagName += '}}';
-			//			'{{include}} block has {{/for}} with no open {{for}}'
-			syntaxError((
-				block
-					? '{{' + block + '}} block has {{/' + tagName + ' without {{' + tagName
-					: 'Unmatched or missing {{/' + tagName) + ', in template:\n' + markup);
-		}
-	}
-
-	function parseTag(all, bind, tagName, converter, colon, html, comment, codeTag, params, slash, closeBlock, index) {
-
-		//    bind         tag        converter colon html     comment            code      params            slash   closeBlock
-		// /{(\^)?{(?:(?:(\w+(?=[\/\s}]))|(?:(\w+)?(:)|(>)|!--((?:[^-]|-(?!-))*)--|(\*)))\s*((?:[^}]|}(?!}))*?)(\/)?|(?:\/(\w+)))}}/g
-		// Build abstract syntax tree (AST): [tagName, converter, params, content, hash, bindings, contentMarkup]
-		if (html) {
-			colon = ":";
-			converter = HTML;
-		}
-		slash = slash || isLinkExpr && !hasElse;
-
-		var pathBindings = (bind || isLinkExpr) && [[]],
-			props = "",
-			args = "",
-			ctxProps = "",
-			paramsArgs = "",
-			paramsProps = "",
-			paramsCtxProps = "",
-			onError = "",
-			useTrigger = "",
-			// Block tag if not self-closing and not {{:}} or {{>}} (special case) and not a data-link expression
-			block = !slash && !colon && !comment;
-
-		//==== nested helper function ====
-		tagName = tagName || (params = params || "#data", colon); // {{:}} is equivalent to {{:#data}}
-		pushprecedingContent(index);
-		loc = index + all.length; // location marker - parsed up to here
-		if (codeTag) {
-			if (allowCode) {
-				content.push(["*", "\n" + params.replace(/^:/, "ret+= ").replace(rUnescapeQuotes, "$1") + ";\n"]);
-			}
-		} else if (tagName) {
-			if (tagName === "else") {
-				if (rTestElseIf.test(params)) {
-					syntaxError('for "{{else if expr}}" use "{{else expr}}"');
-				}
-				pathBindings = current[7] && [[]];
-				current[8] = markup.substring(current[8], index); // contentMarkup for block tag
-				current = stack.pop();
-				content = current[2];
-				block = true;
-			}
-			if (params) {
-				// remove newlines from the params string, to avoid compiled code errors for unterminated strings
-				parseParams(params.replace(rNewLine, " "), pathBindings, tmpl)
-					.replace(rBuildHash, function(all, onerror, isCtx, key, keyToken, keyValue, arg, param) {
-						key = "'" + keyToken + "':";
-						if (arg) {
-							args += keyValue + ",";
-							paramsArgs += "'" + param + "',";
-						} else if (isCtx) {
-							ctxProps += key + keyValue + ",";
-							paramsCtxProps += key + "'" + param + "',";
-						} else if (onerror) {
-							onError += keyValue;
-						} else {
-							if (keyToken === "trigger") {
-								useTrigger += keyValue;
-							}
-							props += key + keyValue + ",";
-							paramsProps += key + "'" + param + "',";
-							hasHandlers = hasHandlers || rHasHandlers.test(keyToken);
-						}
-						return "";
-					}).slice(0, -1);
-			}
-
-			if (pathBindings && pathBindings[0]) {
-				pathBindings.pop(); // Remove the bindings that was prepared for next arg. (There is always an extra one ready).
-			}
-
-			newNode = [
-					tagName,
-					converter || !!convertBack || hasHandlers || "",
-					block && [],
-					parsedParam(paramsArgs, paramsProps, paramsCtxProps),
-					parsedParam(args, props, ctxProps),
-					onError,
-					useTrigger,
-					pathBindings || 0
-				];
-			content.push(newNode);
-			if (block) {
-				stack.push(current);
-				current = newNode;
-				current[8] = loc; // Store current location of open tag, to be able to add contentMarkup when we reach closing tag
-			}
-		} else if (closeBlock) {
-			blockTagCheck(closeBlock !== current[0] && current[0] !== "else" && closeBlock, current[0]);
-			current[8] = markup.substring(current[8], index); // contentMarkup for block tag
-			current = stack.pop();
-		}
-		blockTagCheck(!current && closeBlock);
-		content = current[2];
-	}
-	//==== /end of nested functions ====
-
-	var result, newNode, hasHandlers,
-		allowCode = $viewsSettings.allowCode || tmpl && tmpl.allowCode,
-		astTop = [],
-		loc = 0,
-		stack = [],
-		content = astTop,
-		current = [,,astTop];
-
-	if (allowCode) {
-		tmpl.allowCode = allowCode;
-	}
-
-//TODO	result = tmplFnsCache[markup]; // Only cache if template is not named and markup length < ...,
-//and there are no bindings or subtemplates?? Consider standard optimization for data-link="a.b.c"
-//		if (result) {
-//			tmpl.fn = result;
-//		} else {
-
-//		result = markup;
-	if (isLinkExpr) {
-		markup = delimOpenChar0 + markup + delimCloseChar1;
-	}
-
-	blockTagCheck(stack[0] && stack[0][2].pop()[0]);
-	// Build the AST (abstract syntax tree) under astTop
-	markup.replace(rTag, parseTag);
-
-	pushprecedingContent(markup.length);
-
-	if (loc = astTop[astTop.length - 1]) {
-		blockTagCheck("" + loc !== loc && (+loc[8] === loc[8]) && loc[0]);
-	}
-//			result = tmplFnsCache[markup] = buildCode(astTop, tmpl);
-//		}
-
-	if (isLinkExpr) {
-		result = buildCode(astTop, markup, isLinkExpr);
-		setPaths(result, [astTop[0][7]]); // With data-link expressions, pathBindings array is astTop[0][7]
-	} else {
-		result = buildCode(astTop, tmpl);
-	}
-	return result;
-}
-
-function setPaths(fn, pathsArr) {
-	var key, paths,
-		i = 0,
-		l = pathsArr.length;
-	fn.deps = [];
-	for (; i < l; i++) {
-		paths = pathsArr[i];
-		for (key in paths) {
-			if (key !== "_jsvto" && paths[key].length) {
-				fn.deps = fn.deps.concat(paths[key]); // deps is the concatenation of the paths arrays for the different bindings
-			}
-		}
-	}
-	fn.paths = paths; // The array of paths arrays for the different bindings
-}
-
-function parsedParam(args, props, ctx) {
-	return [args.slice(0, -1), props.slice(0, -1), ctx.slice(0, -1)];
-}
-
-function paramStructure(parts, type) {
-	return '\n\t'
-		+ (type
-			? type + ':{'
-			: '')
-		+ 'args:[' + parts[0] + ']'
-		+ (parts[1] || !type
-			? ',\n\tprops:{' + parts[1] + '}'
-			: "")
-		+ (parts[2] ? ',\n\tctx:{' + parts[2] + '}' : "");
-}
-
-function parseParams(params, pathBindings, tmpl) {
-
-	function parseTokens(all, lftPrn0, lftPrn, bound, path, operator, err, eq, path2, prn, comma, lftPrn2, apos, quot, rtPrn, rtPrnDot, prn2, space, index, full) {
-	// /(\()(?=\s*\()|(?:([([])\s*)?(?:(\^?)(!*?[#~]?[\w$.^]+)?\s*((\+\+|--)|\+|-|&&|\|\||===|!==|==|!=|<=|>=|[<>%*:?\/]|(=))\s*|(!*?[#~]?[\w$.^]+)([([])?)|(,\s*)|(\(?)\\?(?:(')|("))|(?:\s*(([)\]])(?=\s*[.^]|\s*$|\s)|[)\]])([([]?))|(\s+)/g,
-	//   lftPrn0        lftPrn        bound            path    operator err                                                eq             path2       prn    comma   lftPrn2   apos quot      rtPrn rtPrnDot                    prn2  space
-		// (left paren? followed by (path? followed by operator) or (path followed by paren?)) or comma or apos or quot or right paren or space
-		bound = bindings && bound;
-		if (bound && !eq) {
-			path = bound + path; // e.g. some.fn(...)^some.path - so here path is "^some.path"
-		}
-		operator = operator || "";
-		lftPrn = lftPrn || lftPrn0 || lftPrn2;
-		path = path || path2;
-		// Could do this - but not worth perf cost?? :-
-		// if (!path.lastIndexOf("#data.", 0)) { path = path.slice(6); } // If path starts with "#data.", remove that.
-		prn = prn || prn2 || "";
-
-		var expr, exprFn, binds, theOb, newOb;
-
-		function parsePath(allPath, not, object, helper, view, viewProperty, pathTokens, leafToken) {
-			// rPath = /^(?:null|true|false|\d[\d.]*|(!*?)([\w$]+|\.|~([\w$]+)|#(view|([\w$]+))?)([\w$.^]*?)(?:[.[^]([\w$]+)\]?)?)$/g,
-			//                                        none   object     helper    view  viewProperty pathTokens      leafToken
-			var subPath = object === ".";
-			if (object) {
-				path = path.slice(not.length);
-				if (!subPath) {
-					allPath = (helper
-							? 'view.hlp("' + helper + '")'
-							: view
-								? "view"
-								: "data")
-						+ (leafToken
-							? (viewProperty
-								? "." + viewProperty
-								: helper
-									? ""
-									: (view ? "" : "." + object)
-								) + (pathTokens || "")
-							: (leafToken = helper ? "" : view ? viewProperty || "" : object, ""));
-
-					allPath = allPath + (leafToken ? "." + leafToken : "");
-
-					allPath = not + (allPath.slice(0, 9) === "view.data"
-						? allPath.slice(5) // convert #view.data... to data...
-						: allPath);
-				}
-				if (bindings) {
-					binds = named === "linkTo" ? (bindto = pathBindings._jsvto = pathBindings._jsvto || []) : bndCtx.bd;
-					if (theOb = subPath && binds[binds.length-1]) {
-						if (theOb._jsv) {
-							while (theOb.sb) {
-								theOb = theOb.sb;
-							}
-							if (theOb.bnd) {
-								path = "^" + path.slice(1);
-							}
-							theOb.sb = path;
-							theOb.bnd = theOb.bnd || path.charAt(0) === "^";
-						}
-					} else {
-						binds.push(path);
-					}
-					pathStart[parenDepth] = index + (subPath ? 1 : 0);
-				}
-			}
-			return allPath;
-		}
-
-		if (err && !aposed && !quoted) {
-			syntaxError(params);
-		} else {
-			if (bindings && rtPrnDot && !aposed && !quoted) {
-				// This is a binding to a path in which an object is returned by a helper/data function/expression, e.g. foo()^x.y or (a?b:c)^x.y
-				// We create a compiled function to get the object instance (which will be called when the dependent data of the subexpression changes, to return the new object, and trigger re-binding of the subsequent path)
-				if (!named || boundName || bindto) {
-					expr = pathStart[parenDepth - 1];
-					if (full.length - 1 > index - (expr || 0)) { // We need to compile a subexpression
-						expr = full.slice(expr, index + all.length);
-						if (exprFn !== true) { // If not reentrant call during compilation
-							binds = bindto || bndStack[parenDepth-1].bd;
-							// Insert exprOb object, to be used during binding to return the computed object
-							theOb = binds[binds.length-1];
-							if (theOb && theOb.prm) {
-								while (theOb.sb && theOb.sb.prm) {
-									theOb = theOb.sb;
-								}
-								newOb = theOb.sb = {path: theOb.sb, bnd: theOb.bnd};
-							} else {
-								binds.push(newOb = {path: binds.pop()}); // Insert exprOb object, to be used during binding to return the computed object
-							}											 // (e.g. "some.object()" in "some.object().a.b" - to be used as context for binding the following tokens "a.b")
-						}
-						rtPrnDot = delimOpenChar1 + ":" + expr // The parameter or function subexpression
-							+ " onerror=''" // set onerror='' in order to wrap generated code with a try catch - returning '' as object instance if there is an error/missing parent
-							+ delimCloseChar0;
-						exprFn = tmplLinks[rtPrnDot];
-						if (!exprFn) {
-							tmplLinks[rtPrnDot] = true; // Flag that this exprFn (for rtPrnDot) is being compiled
-							tmplLinks[rtPrnDot] = exprFn = tmplFn(rtPrnDot, tmpl, true); // Compile the expression (or use cached copy already in tmpl.links)
-						}
-						if (exprFn !== true && newOb) {
-							// If not reentrant call during compilation
-							newOb._jsv = exprFn;
-							newOb.prm = bndCtx.bd;
-							newOb.bnd = newOb.bnd || newOb.path && newOb.path.indexOf("^") >= 0;
-						}
-					}
-				}
-			}
-			return (aposed
-				// within single-quoted string
-				? (aposed = !apos, (aposed ? all : lftPrn2 + '"'))
-				: quoted
-				// within double-quoted string
-					? (quoted = !quot, (quoted ? all : lftPrn2 + '"'))
-					:
-				(
-					(lftPrn
-						? (pathStart[parenDepth] = index++, bndCtx = bndStack[++parenDepth] = {bd: []}, lftPrn)
-						: "")
-					+ (space
-						? (parenDepth
-							? ""
-				// New arg or prop - so insert backspace \b (\x08) as separator for named params, used subsequently by rBuildHash, and prepare new bindings array
-							: (paramIndex = full.slice(paramIndex, index), named
-								? (named = boundName = bindto = false, "\b")
-								: "\b,") + paramIndex + (paramIndex = index + all.length, bindings && pathBindings.push(bndCtx.bd = []), "\b")
-						)
-						: eq
-				// named param. Remove bindings for arg and create instead bindings array for prop
-							? (parenDepth && syntaxError(params), bindings && pathBindings.pop(), named = path, boundName = bound, paramIndex = index + all.length, bound && (bindings = bndCtx.bd = pathBindings[named] = []), path + ':')
-							: path
-				// path
-								? (path.split("^").join(".").replace(rPath, parsePath)
-									+ (prn
-				// some.fncall(
-										? (bndCtx = bndStack[++parenDepth] = {bd: []}, fnCall[parenDepth] = true, prn)
-										: operator)
-								)
-								: operator
-				// operator
-									? operator
-									: rtPrn
-				// function
-										? ((fnCall[parenDepth] = false, bndCtx = bndStack[--parenDepth], rtPrn)
-											+ (prn // rtPrn and prn, e.g )( in (a)() or a()(), or )[ in a()[]
-												? (bndCtx = bndStack[++parenDepth], fnCall[parenDepth] = true, prn)
-												: "")
-										)
-										: comma
-											? (fnCall[parenDepth] || syntaxError(params), ",") // We don't allow top-level literal arrays or objects
-											: lftPrn0
-												? ""
-												: (aposed = apos, quoted = quot, '"')
-				))
-			);
-		}
-	}
-
-	var named, bindto, boundName,
-		quoted, // boolean for string content in double quotes
-		aposed, // or in single quotes
-		bindings = pathBindings && pathBindings[0], // bindings array for the first arg
-		bndCtx = {bd: bindings},
-		bndStack = {0: bndCtx},
-		paramIndex = 0, // list,
-		tmplLinks = tmpl ? tmpl.links : bindings && (bindings.links = bindings.links || {}),
-		// The following are used for tracking path parsing including nested paths, such as "a.b(c^d + (e))^f", and chained computed paths such as
-		// "a.b().c^d().e.f().g" - which has four chained paths, "a.b()", "^c.d()", ".e.f()" and ".g"
-		parenDepth = 0,
-		fnCall = {}, // We are in a function call
-		pathStart = {}, // tracks the start of the current path such as c^d() in the above example
-		result = (params + (tmpl ? " " : "")).replace(rParams, parseTokens);
-
-	return !parenDepth && result || syntaxError(params); // Syntax error if unbalanced parens in params expression
-}
-
-function buildCode(ast, tmpl, isLinkExpr) {
-	// Build the template function code from the AST nodes, and set as property on the passed-in template object
-	// Used for compiling templates, and also by JsViews to build functions for data link expressions
-	var i, node, tagName, converter, tagCtx, hasTag, hasEncoder, getsVal, hasCnvt, useCnvt, tmplBindings, pathBindings, params, boundOnErrStart, boundOnErrEnd,
-		tagRender, nestedTmpls, tmplName, nestedTmpl, tagAndElses, content, markup, nextIsElse, oldCode, isElse, isGetVal, tagCtxFn, onError, tagStart, trigger,
-		tmplBindingKey = 0,
-		useViews = $viewsSettings.useViews || tmpl.useViews || tmpl.tags || tmpl.templates || tmpl.helpers || tmpl.converters,
-		code = "",
-		tmplOptions = {},
-		l = ast.length;
-
-	if ("" + tmpl === tmpl) {
-		tmplName = isLinkExpr ? 'data-link="' + tmpl.replace(rNewLine, " ").slice(1, -1) + '"' : tmpl;
-		tmpl = 0;
-	} else {
-		tmplName = tmpl.tmplName || "unnamed";
-		if (tmpl.allowCode) {
-			tmplOptions.allowCode = true;
-		}
-		if (tmpl.debug) {
-			tmplOptions.debug = true;
-		}
-		tmplBindings = tmpl.bnds;
-		nestedTmpls = tmpl.tmpls;
-	}
-	for (i = 0; i < l; i++) {
-		// AST nodes: [0: tagName, 1: converter, 2: content, 3: params, 4: code, 5: onError, 6: trigger, 7:pathBindings, 8: contentMarkup]
-		node = ast[i];
-
-		// Add newline for each callout to t() c() etc. and each markup string
-		if ("" + node === node) {
-			// a markup string to be inserted
-			code += '\n+"' + node + '"';
-		} else {
-			// a compiled tag expression to be inserted
-			tagName = node[0];
-			if (tagName === "*") {
-				// Code tag: {{* }}
-				code += ";\n" + node[1] + "\nret=ret";
-			} else {
-				converter = node[1];
-				content = !isLinkExpr && node[2];
-				tagCtx = paramStructure(node[3], 'params') + '},' + paramStructure(params = node[4]);
-				onError = node[5];
-				trigger = node[6];
-				markup = node[8] && node[8].replace(rUnescapeQuotes, "$1");
-				if (isElse = tagName === "else") {
-					if (pathBindings) {
-						pathBindings.push(node[7]);
-					}
-				} else {
-					tmplBindingKey = 0;
-					if (tmplBindings && (pathBindings = node[7])) { // Array of paths, or false if not data-bound
-						pathBindings = [pathBindings];
-						tmplBindingKey = tmplBindings.push(1); // Add placeholder in tmplBindings for compiled function
-					}
-				}
-				useViews = useViews || params[1] || params[2] || pathBindings || /view.(?!index)/.test(params[0]);
-				// useViews is for perf optimization. For render() we only use views if necessary - for the more advanced scenarios.
-				// We use views if there are props, contextual properties or args with #... (other than #index) - but you can force
-				// using the full view infrastructure, (and pay a perf price) by opting in: Set useViews: true on the template, manually...
-				if (isGetVal = tagName === ":") {
-					if (converter) {
-						tagName = converter === HTML ? ">" : converter + tagName;
-					}
-				} else {
-					if (content) { // TODO optimize - if content.length === 0 or if there is a tmpl="..." specified - set content to null / don't run this compilation code - since content won't get used!!
-						// Create template object for nested template
-						nestedTmpl = tmplObject(markup, tmplOptions);
-						nestedTmpl.tmplName = tmplName + "/" + tagName;
-						// Compile to AST and then to compiled function
-						nestedTmpl.useViews = nestedTmpl.useViews || useViews;
-						buildCode(content, nestedTmpl);
-						useViews = nestedTmpl.useViews;
-						nestedTmpls.push(nestedTmpl);
-					}
-
-					if (!isElse) {
-						// This is not an else tag.
-						tagAndElses = tagName;
-						useViews = useViews || tagName && (!$tags[tagName] || !$tags[tagName].flow);
-						// Switch to a new code string for this bound tag (and its elses, if it has any) - for returning the tagCtxs array
-						oldCode = code;
-						code = "";
-					}
-					nextIsElse = ast[i + 1];
-					nextIsElse = nextIsElse && nextIsElse[0] === "else";
-				}
-				tagStart = onError ? ";\ntry{\nret+=" : "\n+";
-				boundOnErrStart = "";
-				boundOnErrEnd = "";
-
-				if (isGetVal && (pathBindings || trigger || converter && converter !== HTML)) {
-					// For convertVal we need a compiled function to return the new tagCtx(s)
-					tagCtxFn = "return {" + tagCtx + "};";
-					tagRender = 'c("' + converter + '",view,';
-					tagCtxFn = new Function("data,view,j,u", " // " + tmplName + " " + tmplBindingKey + " " + tagName
-										+ "\n" + tagCtxFn);
-					tagCtxFn._er = onError;
-
-					boundOnErrStart = tagRender + tmplBindingKey + ",";
-					boundOnErrEnd = ")";
-
-					tagCtxFn._tag = tagName;
-					if (isLinkExpr) {
-						return tagCtxFn;
-					}
-					setPaths(tagCtxFn, pathBindings);
-					useCnvt = true;
-				}
-				code += (isGetVal
-					? (isLinkExpr ? (onError ? "\ntry{\n" : "") + "return " : tagStart) + (useCnvt // Call _cnvt if there is a converter: {{cnvt: ... }} or {^{cnvt: ... }}
-						? (useCnvt = undefined, useViews = hasCnvt = true, tagRender + (pathBindings
-							? ((tmplBindings[tmplBindingKey - 1] = tagCtxFn), tmplBindingKey) // Store the compiled tagCtxFn in tmpl.bnds, and pass the key to convertVal()
-							: "{" + tagCtx + "}") + ")")
-						: tagName === ">"
-							? (hasEncoder = true, "h(" + params[0] + ')')
-							: (getsVal = true, "((v=" + (params[0] || 'data') + ')!=null?v:"")') // Strict equality just for data-link="title{:expr}" so expr=null will remove title attribute
-					)
-					: (hasTag = true, "\n{view:view,tmpl:" // Add this tagCtx to the compiled code for the tagCtxs to be passed to renderTag()
-						+ (content ? nestedTmpls.length : "0") + "," // For block tags, pass in the key (nestedTmpls.length) to the nested content template
-						+ tagCtx + "},"));
-
-				if (tagAndElses && !nextIsElse) {
-					// This is a data-link expression or an inline tag without any elses, or the last {{else}} of an inline tag
-					// We complete the code for returning the tagCtxs array
-					code = "[" + code.slice(0, -1) + "]";
-					tagRender = 't("' + tagAndElses + '",view,this,';
-					if (isLinkExpr || pathBindings) {
-						// This is a bound tag (data-link expression or inline bound tag {^{tag ...}}) so we store a compiled tagCtxs function in tmp.bnds
-						code = new Function("data,view,j,u", " // " + tmplName + " " + tmplBindingKey + " " + tagAndElses + "\nreturn " + code + ";");
-						code._er = onError;
-						code._tag = tagAndElses;
-						if (pathBindings) {
-							setPaths(tmplBindings[tmplBindingKey - 1] = code, pathBindings);
-						}
-						if (isLinkExpr) {
-							return code; // For a data-link expression we return the compiled tagCtxs function
-						}
-						boundOnErrStart = tagRender + tmplBindingKey + ",undefined,";
-						boundOnErrEnd = ")";
-					}
-
-					// This is the last {{else}} for an inline tag.
-					// For a bound tag, pass the tagCtxs fn lookup key to renderTag.
-					// For an unbound tag, include the code directly for evaluating tagCtxs array
-					code = oldCode + tagStart + tagRender + (tmplBindingKey || code) + ")";
-					pathBindings = 0;
-					tagAndElses = 0;
-				}
-				if (onError) {
-					useViews = true;
-					code += ';\n}catch(e){ret' + (isLinkExpr ? "urn " : "+=") + boundOnErrStart + 'j._err(e,view,' + onError + ')' + boundOnErrEnd + ';}\n' + (isLinkExpr ? "" : 'ret=ret');
-				}
-			}
-		}
-	}
-	// Include only the var references that are needed in the code
-	code = "// " + tmplName
-
-		+ "\nvar v"
-		+ (hasTag ? ",t=j._tag" : "")                // has tag
-		+ (hasCnvt ? ",c=j._cnvt" : "")              // converter
-		+ (hasEncoder ? ",h=j.converters.html" : "") // html converter
-		+ (isLinkExpr ? ";\n" : ',ret=""\n')
-		+ (tmplOptions.debug ? "debugger;" : "")
-		+ code
-		+ (isLinkExpr ? "\n" : ";\nreturn ret;");
-
-	if ($viewsSettings._dbgMode) {
-		code = "try {\n" + code + "\n}catch(e){\nreturn j._err(e, view);\n}";
-	}
-
-	try {
-		code = new Function("data,view,j,u", code);
-	} catch (e) {
-		syntaxError("Compiled template code:\n\n" + code + '\n: "' + e.message + '"');
-	}
-	if (tmpl) {
-		tmpl.fn = code;
-		tmpl.useViews = !!useViews;
-	}
-	return code;
-}
-
-//==========
-// Utilities
-//==========
-
-// Merge objects, in particular contexts which inherit from parent contexts
-function extendCtx(context, parentContext) {
-	// Return copy of parentContext, unless context is defined and is different, in which case return a new merged context
-	// If neither context nor parentContext are defined, return undefined
-	return context && context !== parentContext
-		? (parentContext
-			? $extend($extend({}, parentContext), context)
-			: context)
-		: parentContext && $extend({}, parentContext);
-}
-
-// Get character entity for HTML and Attribute encoding
-function getCharEntity(ch) {
-	return charEntities[ch] || (charEntities[ch] = "&#" + ch.charCodeAt(0) + ";");
-}
-
-function getTargetProps(source) {
-	// this pointer is theMap - which has tagCtx.props too
-	// arguments: tagCtx.args.
-	var key, prop,
-		props = [];
-
-	if (typeof source === OBJECT) {
-		for (key in source) {
-			prop = source[key];
-			if (!prop || !prop.toJSON || prop.toJSON()) {
-				if (!$isFunction(prop)) {
-					props.push({ key: key, prop: prop });
-				}
-			}
-		}
-	}
-	return props;
-}
-
-function $fnRender(data, context, noIteration) {
-	var tmplElem = this.jquery && (this[0] || error('Unknown template: "' + this.selector + '"')),
-		tmpl = tmplElem.getAttribute(tmplAttr);
-
-	return renderContent.call(tmpl ? $.data(tmplElem)[jsvTmpl] : $templates(tmplElem), data, context, noIteration);
-}
-
-//========================== Register converters ==========================
-
-function htmlEncode(text) {
-	// HTML encode: Replace < > & ' and " by corresponding entities.
-	return text != undefined ? rIsHtml.test(text) && ("" + text).replace(rHtmlEncode, getCharEntity) || text : "";
-}
-
-//========================== Initialize ==========================
-
-if (!(jsr || $ && $.render)) {
-	// JsRender not already loaded, or loaded without jQuery, and we are now moving from jsrender namespace to jQuery namepace
-	for (jsvStoreName in jsvStores) {
-		registerStore(jsvStoreName, jsvStores[jsvStoreName]);
-	}
-
-	$templates = $views.templates;
-	$converters = $views.converters;
-	$helpers = $views.helpers;
-	$tags = $views.tags;
-	$sub = $views.sub;
-	$viewsSettings = $views.settings;
-
-	$sub._tg.prototype = {
-		baseApply: baseApply,
-		cvtArgs: convertArgs
-	};
-
-	topView = $sub.topView = new View();
-
-	//BROWSER-SPECIFIC CODE
-	if ($) {
-
-		////////////////////////////////////////////////////////////////////////////////////////////////
-		// jQuery (= $) is loaded
-
-		$.fn.render = $fnRender;
-
-		if ($.observable) {
-			$extend($sub, $.views.sub); // jquery.observable.js was loaded before jsrender.js
-			$views.map = $.views.map;
-		}
-
-	} else {
-		////////////////////////////////////////////////////////////////////////////////////////////////
-		// jQuery is not loaded.
-
-		$ = {};
-
-		if (setGlobals) {
-			global.jsrender = $; // We are loading jsrender.js from a script element, not AMD or CommonJS, so set global
-		}
-
-		// Error warning if jsrender.js is used as template engine on Node.js (e.g. Express or Hapi...)
-		// Use jsrender-node.js instead...
-		$.renderFile = $.__express = $.compile = function() { throw "Node.js: use npm jsrender, or jsrender-node.js"; };
-
-		//END BROWSER-SPECIFIC CODE
-		$.isFunction = function(ob) {
-			return typeof ob === "function";
-		};
-
-		$.isArray = Array.isArray || function(obj) {
-			return ({}.toString).call(obj) === "[object Array]";
-		};
-
-		$sub._jq = function(jq) { // private method to move from JsRender APIs from jsrender namespace to jQuery namespace
-			if (jq !== $) {
-				$extend(jq, $); // map over from jsrender namespace to jQuery namespace
-				$ = jq;
-				$.fn.render = $fnRender;
-				delete $.jsrender;
-			}
-		};
-
-		$.jsrender = versionNumber;
-	}
-
-	$isFunction = $.isFunction;
-	$isArray = $.isArray;
-	$.render = $render;
-	$.views = $views;
-	$.templates = $templates = $views.templates;
-
-	$viewsSettings({
-		debugMode: dbgMode,
-		delimiters: $viewsDelimiters,
-		onError: function(e, view, fallback) {
-			// Can override using $.views.settings({onError: function(...) {...}});
-			if (view) {
-				// For render errors, e is an exception thrown in compiled template, and view is the current view. For other errors, e is an error string.
-				e = fallback === undefined
-					? "{Error: " + (e.message || e) + "}"
-					: $isFunction(fallback)
-						? fallback(e, view) : fallback;
-			}
-			return e == undefined ? "" : e;
-		},
-		_dbgMode: false
-	});
-
-	//========================== Register tags ==========================
-
-	$tags({
-		"if": {
-			render: function(val) {
-				// This function is called once for {{if}} and once for each {{else}}.
-				// We will use the tag.rendering object for carrying rendering state across the calls.
-				// If not done (a previous block has not been rendered), look at expression for this block and render the block if expression is truthy
-				// Otherwise return ""
-				var self = this,
-					tagCtx = self.tagCtx,
-					ret = (self.rendering.done || !val && (arguments.length || !tagCtx.index))
-						? ""
-						: (self.rendering.done = true, self.selected = tagCtx.index,
-							// Test is satisfied, so render content on current context. We call tagCtx.render() rather than return undefined
-							// (which would also render the tmpl/content on the current context but would iterate if it is an array)
-							tagCtx.render(tagCtx.view, true)); // no arg, so renders against parentView.data
-				return ret;
-			},
-			flow: true
-		},
-		"for": {
-			render: function(val) {
-				// This function is called once for {{for}} and once for each {{else}}.
-				// We will use the tag.rendering object for carrying rendering state across the calls.
-				var finalElse = !arguments.length,
-					value,
-					self = this,
-					tagCtx = self.tagCtx,
-					result = "",
-					done = 0;
-
-				if (!self.rendering.done) {
-					value = finalElse ? tagCtx.view.data : val; // For the final else, defaults to current data without iteration.
-					if (value !== undefined ) {
-						result += tagCtx.render(value, finalElse); // Iterates except on final else, if data is an array. (Use {{include}} to compose templates without array iteration)
-						done += $isArray(value) ? value.length : 1;
-					}
-					if (self.rendering.done = done) {
-						self.selected = tagCtx.index;
-					}
-					// If nothing was rendered we will look at the next {{else}}. Otherwise, we are done.
-				}
-				return result;
-			},
-			flow: true
-		},
-		props: {
-			baseTag: "for",
-			dataMap: dataMap(getTargetProps),
-			flow: true
-		},
-		include: {
-			flow: true
-		},
-		"*": {
-			// {{* code... }} - Ignored if template.allowCode and $.views.settings.allowCode are false. Otherwise include code in compiled template
-			render: retVal,
-			flow: true
-		},
-		":*": {
-			// {{:* returnedExpression }} - Ignored if template.allowCode and $.views.settings.allowCode are false. Otherwise include code in compiled template
-			render: retVal,
-			flow: true
-		},
-		dbg: $helpers.dbg = $converters.dbg = dbgBreak // Register {{dbg/}}, {{dbg:...}} and ~dbg() to throw and catch, as breakpoints for debugging.
-	});
-
-	$converters({
-		html: htmlEncode,
-		attr: htmlEncode, // Includes > encoding since rConvertMarkers in JsViews does not skip > characters in attribute strings
-		url: function(text) {
-			// URL encoding helper.
-			return text != undefined ? encodeURI("" + text) : text === null ? text : ""; // null returns null, e.g. to remove attribute. undefined returns ""
-		}
-	});
-
-	//========================== Define default delimiters ==========================
-	$viewsDelimiters();
-}
-
-if (jsrToJq) { // Moving from jsrender namespace to jQuery namepace - copy over the stored items (templates, converters, helpers...)
-	jsr.views.sub._jq($);
-}
-return $ || jsr;
-}));
 ;/**
  * jQuery CSS Customizable Scrollbar
  *
@@ -20503,7 +26055,7 @@ else
             return text;
         }
 
-        function _DoLists(text, isInsideParagraphlessListItem) {
+        function _DoLists(text) {
             //
             // Form HTML ordered (numbered) and unordered (bulleted) lists.
             //
@@ -20543,7 +26095,7 @@ else
                     var list = m1;
                     var list_type = (m2.search(/[*+-]/g) > -1) ? "ul" : "ol";
 
-                    var result = _ProcessListItems(list, list_type, isInsideParagraphlessListItem);
+                    var result = _ProcessListItems(list, list_type);
 
                     // Trim any trailing whitespace, to put the closing `</$list_type>`
                     // up on the preceding line, to get it past the current stupid
@@ -20574,7 +26126,7 @@ else
 
         var _listItemMarkers = { ol: "\\d+[.]", ul: "[*+-]" };
 
-        function _ProcessListItems(list_str, list_type, isInsideParagraphlessListItem) {
+        function _ProcessListItems(list_str, list_type) {
             //
             //  Process the contents of a single ordered or unordered list, splitting it
             //  into individual list items.
@@ -20650,10 +26202,9 @@ else
                     }
                     else {
                         // Recursion for sub-lists:
-                        item = _DoLists(_Outdent(item), /* isInsideParagraphlessListItem= */ true);
+                        item = _DoLists(_Outdent(item));
                         item = item.replace(/\n$/, ""); // chomp(item)
-                        if (!isInsideParagraphlessListItem) // only the outer-most item should run this, otherwise it's run multiple times for the inner ones
-                            item = _RunSpanGamut(item);
+                        item = _RunSpanGamut(item);
                     }
                     last_item_had_a_double_newline = ends_with_double_newline;
                     return "<li>" + item + "</li>\n";
@@ -20688,7 +26239,7 @@ else
             // attacklab: sentinel workarounds for lack of \A and \Z, safari\khtml bug
             text += "~0";
 
-            text = text.replace(/(?:\n\n|^\n?)((?:(?:[ ]{4}|\t).*\n+)+)(\n*[ ]{0,3}[^ \t\n]|(?=~0))/g,
+            text = text.replace(/(?:\n\n|^)((?:(?:[ ]{4}|\t).*\n+)+)(\n*[ ]{0,3}[^ \t\n]|(?=~0))/g,
                 function (wholeMatch, m1, m2) {
                     var codeblock = m1;
                     var nextChar = m2;
@@ -20944,12 +26495,7 @@ else
             text = text.replace(/\\([`*_{}\[\]()>#+-.!])/g, escapeCharacters_callback);
             return text;
         }
-
-        var charInsideUrl = "[-A-Z0-9+&@#/%?=~_|[\\]()!:,.;]",
-            charEndingUrl = "[-A-Z0-9+&@#/%=~_|[\\])]",
-            autoLinkRegex = new RegExp("(=\"|<)?\\b(https?|ftp)(://" + charInsideUrl + "*" + charEndingUrl + ")(?=$|\\W)", "gi"),
-            endCharRegex = new RegExp(charEndingUrl, "i");
-
+        
         function handleTrailingParens(wholeMatch, lookbehind, protocol, link) {
             if (lookbehind)
                 return wholeMatch;
@@ -20976,16 +26522,10 @@ else
                     return "";
                 });
             }
-            if (tail) {
-                var lastChar = link.charAt(link.length - 1);
-                if (!endCharRegex.test(lastChar)) {
-                    tail = lastChar + tail;
-                    link = link.substr(0, link.length - 1);
-                }
-            }
+            
             return "<" + protocol + link + ">" + tail;
         }
-        
+
         function _DoAutoLinks(text) {
 
             // note that at this point, all other URL in the text are already hyperlinked as <a href=""></a>
@@ -20995,7 +26535,7 @@ else
             // must be preceded by a non-word character (and not by =" or <) and followed by non-word/EOF character
             // simulating the lookbehind in a consuming way is okay here, since a URL can neither and with a " nor
             // with a <, so there is no risk of overlapping matches.
-            text = text.replace(autoLinkRegex, handleTrailingParens);
+            text = text.replace(/(="|<)?\b(https?|ftp)(:\/\/[-A-Z0-9+&@#\/%?=~_|\[\]\(\)!:,\.;]*[-A-Z0-9+&@#\/%=~_|\[\])])(?=$|\W)/gi, handleTrailingParens);
 
             //  autolink anything like <http://example.com>
             
@@ -21125,9 +26665,9 @@ else
 })();
 ;(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.XRegExp = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 /*!
- * XRegExp.build 3.1.1
+ * XRegExp.build 3.2.0
  * <xregexp.com>
- * Steven Levithan (c) 2012-2016 MIT License
+ * Steven Levithan (c) 2012-2017 MIT License
  * Inspired by Lea Verou's RegExp.create <lea.verou.me>
  */
 
@@ -21135,20 +26675,23 @@ module.exports = function(XRegExp) {
     'use strict';
 
     var REGEX_DATA = 'xregexp';
-    var subParts = /(\()(?!\?)|\\([1-9]\d*)|\\[\s\S]|\[(?:[^\\\]]|\\[\s\S])*]/g;
-    var parts = XRegExp.union([/\({{([\w$]+)}}\)|{{([\w$]+)}}/, subParts], 'g');
+    var subParts = /(\()(?!\?)|\\([1-9]\d*)|\\[\s\S]|\[(?:[^\\\]]|\\[\s\S])*\]/g;
+    var parts = XRegExp.union([/\({{([\w$]+)}}\)|{{([\w$]+)}}/, subParts], 'g', {
+        conjunction: 'or'
+    });
 
     /**
      * Strips a leading `^` and trailing unescaped `$`, if both are present.
      *
+     * @private
      * @param {String} pattern Pattern to process.
      * @returns {String} Pattern with edge anchors removed.
      */
     function deanchor(pattern) {
         // Allow any number of empty noncapturing groups before/after anchors, because regexes
         // built/generated by XRegExp sometimes include them
-        var leadingAnchor = /^(?:\(\?:\))*\^/,
-            trailingAnchor = /\$(?:\(\?:\))*$/;
+        var leadingAnchor = /^(?:\(\?:\))*\^/;
+        var trailingAnchor = /\$(?:\(\?:\))*$/;
 
         if (
             leadingAnchor.test(pattern) &&
@@ -21165,19 +26708,23 @@ module.exports = function(XRegExp) {
     /**
      * Converts the provided value to an XRegExp. Native RegExp flags are not preserved.
      *
+     * @private
      * @param {String|RegExp} value Value to convert.
+     * @param {Boolean} [addFlagX] Whether to apply the `x` flag in cases when `value` is not
+     *   already a regex generated by XRegExp
      * @returns {RegExp} XRegExp object with XRegExp syntax applied.
      */
-    function asXRegExp(value) {
+    function asXRegExp(value, addFlagX) {
+        var flags = addFlagX ? 'x' : '';
         return XRegExp.isRegExp(value) ?
             (value[REGEX_DATA] && value[REGEX_DATA].captureNames ?
                 // Don't recompile, to preserve capture names
                 value :
                 // Recompile as XRegExp
-                XRegExp(value.source)
+                XRegExp(value.source, flags)
             ) :
             // Compile string as XRegExp
-            XRegExp(value);
+            XRegExp(value, flags);
     }
 
     /**
@@ -21185,6 +26732,7 @@ module.exports = function(XRegExp) {
      * the outer pattern and provided subpatterns are automatically renumbered to work correctly.
      * Native flags used by provided subpatterns are ignored in favor of the `flags` argument.
      *
+     * @memberOf XRegExp
      * @param {String} pattern XRegExp pattern using `{{name}}` for embedded subpatterns. Allows
      *   `({{name}})` as shorthand for `(?<name>{{name}})`. Patterns cannot be embedded within
      *   character classes.
@@ -21205,35 +26753,28 @@ module.exports = function(XRegExp) {
      * XRegExp.exec('10:59', time).minutes; // -> '59'
      */
     XRegExp.build = function(pattern, subs, flags) {
-        var inlineFlags = /^\(\?([\w$]+)\)/.exec(pattern),
-            data = {},
-            numCaps = 0, // 'Caps' is short for captures
-            numPriorCaps,
-            numOuterCaps = 0,
-            outerCapsMap = [0],
-            outerCapNames,
-            sub,
-            p;
-
+        flags = flags || '';
+        // Used with `asXRegExp` calls for `pattern` and subpatterns in `subs`, to work around how
+        // some browsers convert `RegExp('\n')` to a regex that contains the literal characters `\`
+        // and `n`. See more details at <https://github.com/slevithan/xregexp/pull/163>.
+        var addFlagX = flags.indexOf('x') > -1;
+        var inlineFlags = /^\(\?([\w$]+)\)/.exec(pattern);
         // Add flags within a leading mode modifier to the overall pattern's flags
         if (inlineFlags) {
-            flags = flags || '';
-            inlineFlags[1].replace(/./g, function(flag) {
-                // Don't add duplicates
-                flags += (flags.indexOf(flag) > -1 ? '' : flag);
-            });
+            flags = XRegExp._clipDuplicates(flags + inlineFlags[1]);
         }
 
-        for (p in subs) {
+        var data = {};
+        for (var p in subs) {
             if (subs.hasOwnProperty(p)) {
                 // Passing to XRegExp enables extended syntax and ensures independent validity,
                 // lest an unescaped `(`, `)`, `[`, or trailing `\` breaks the `(?:)` wrapper. For
                 // subpatterns provided as native regexes, it dies on octals and adds the property
-                // used to hold extended regex instance data, for simplicity
-                sub = asXRegExp(subs[p]);
+                // used to hold extended regex instance data, for simplicity.
+                var sub = asXRegExp(subs[p], addFlagX);
                 data[p] = {
                     // Deanchoring allows embedding independently useful anchored regexes. If you
-                    // really need to keep your anchors, double them (i.e., `^^...$$`)
+                    // really need to keep your anchors, double them (i.e., `^^...$$`).
                     pattern: deanchor(sub.source),
                     names: sub[REGEX_DATA].captureNames || []
                 };
@@ -21241,14 +26782,20 @@ module.exports = function(XRegExp) {
         }
 
         // Passing to XRegExp dies on octals and ensures the outer pattern is independently valid;
-        // helps keep this simple. Named captures will be put back
-        pattern = asXRegExp(pattern);
-        outerCapNames = pattern[REGEX_DATA].captureNames || [];
-        pattern = pattern.source.replace(parts, function($0, $1, $2, $3, $4) {
-            var subName = $1 || $2,
-                capName,
-                intro,
-                localCapIndex;
+        // helps keep this simple. Named captures will be put back.
+        var patternAsRegex = asXRegExp(pattern, addFlagX);
+
+        // 'Caps' is short for 'captures'
+        var numCaps = 0;
+        var numPriorCaps;
+        var numOuterCaps = 0;
+        var outerCapsMap = [0];
+        var outerCapNames = patternAsRegex[REGEX_DATA].captureNames || [];
+        var output = patternAsRegex.source.replace(parts, function($0, $1, $2, $3, $4) {
+            var subName = $1 || $2;
+            var capName;
+            var intro;
+            var localCapIndex;
             // Named subpattern
             if (subName) {
                 if (!data.hasOwnProperty(subName)) {
@@ -21306,16 +26853,16 @@ module.exports = function(XRegExp) {
             return $0;
         });
 
-        return XRegExp(pattern, flags);
+        return XRegExp(output, flags);
     };
 
 };
 
 },{}],2:[function(require,module,exports){
 /*!
- * XRegExp.matchRecursive 3.1.1
+ * XRegExp.matchRecursive 3.2.0
  * <xregexp.com>
- * Steven Levithan (c) 2009-2016 MIT License
+ * Steven Levithan (c) 2009-2017 MIT License
  */
 
 module.exports = function(XRegExp) {
@@ -21323,6 +26870,8 @@ module.exports = function(XRegExp) {
 
     /**
      * Returns a match detail object composed of the provided values.
+     *
+     * @private
      */
     function row(name, value, start, end) {
         return {
@@ -21338,6 +26887,7 @@ module.exports = function(XRegExp) {
      * objects with detailed match parts and position data. An error is thrown if delimiters are
      * unbalanced within the data.
      *
+     * @memberOf XRegExp
      * @param {String} str String to search.
      * @param {String} left Left delimiter as an XRegExp pattern.
      * @param {String} right Right delimiter as an XRegExp pattern.
@@ -21385,22 +26935,22 @@ module.exports = function(XRegExp) {
     XRegExp.matchRecursive = function(str, left, right, flags, options) {
         flags = flags || '';
         options = options || {};
-        var global = flags.indexOf('g') > -1,
-            sticky = flags.indexOf('y') > -1,
-            // Flag `y` is controlled internally
-            basicFlags = flags.replace(/y/g, ''),
-            escapeChar = options.escapeChar,
-            vN = options.valueNames,
-            output = [],
-            openTokens = 0,
-            delimStart = 0,
-            delimEnd = 0,
-            lastOuterEnd = 0,
-            outerStart,
-            innerStart,
-            leftMatch,
-            rightMatch,
-            esc;
+        var global = flags.indexOf('g') > -1;
+        var sticky = flags.indexOf('y') > -1;
+        // Flag `y` is controlled internally
+        var basicFlags = flags.replace(/y/g, '');
+        var escapeChar = options.escapeChar;
+        var vN = options.valueNames;
+        var output = [];
+        var openTokens = 0;
+        var delimStart = 0;
+        var delimEnd = 0;
+        var lastOuterEnd = 0;
+        var outerStart;
+        var innerStart;
+        var leftMatch;
+        var rightMatch;
+        var esc;
         left = XRegExp(left, basicFlags);
         right = XRegExp(right, basicFlags);
 
@@ -21409,10 +26959,18 @@ module.exports = function(XRegExp) {
                 throw new Error('Cannot use more than one escape character');
             }
             escapeChar = XRegExp.escape(escapeChar);
-            // Using `XRegExp.union` safely rewrites backreferences in `left` and `right`
+            // Example of concatenated `esc` regex:
+            // `escapeChar`: '%'
+            // `left`: '<'
+            // `right`: '>'
+            // Regex is: /(?:%[\S\s]|(?:(?!<|>)[^%])+)+/
             esc = new RegExp(
                 '(?:' + escapeChar + '[\\S\\s]|(?:(?!' +
-                    XRegExp.union([left, right]).source +
+                    // Using `XRegExp.union` safely rewrites backreferences in `left` and `right`.
+                    // Intentionally not passing `basicFlags` to `XRegExp.union` since any syntax
+                    // transformation resulting from those flags was already applied to `left` and
+                    // `right` when they were passed through the XRegExp constructor above.
+                    XRegExp.union([left, right], '', {conjunction: 'or'}).source +
                     ')[^' + escapeChar + '])+)+',
                 // Flags `gy` not needed here
                 flags.replace(/[^imu]+/g, '')
@@ -21503,9 +27061,9 @@ module.exports = function(XRegExp) {
 
 },{}],3:[function(require,module,exports){
 /*!
- * XRegExp Unicode Base 3.1.1
+ * XRegExp Unicode Base 3.2.0
  * <xregexp.com>
- * Steven Levithan (c) 2008-2016 MIT License
+ * Steven Levithan (c) 2008-2017 MIT License
  */
 
 module.exports = function(XRegExp) {
@@ -21554,6 +27112,7 @@ module.exports = function(XRegExp) {
     function invertBmp(range) {
         var output = '';
         var lastEnd = -1;
+
         XRegExp.forEach(
             range,
             /(\\x..|\\u....|\\?[\s\S])(?:-(\\x..|\\u....|\\?[\s\S]))?/,
@@ -21568,27 +27127,31 @@ module.exports = function(XRegExp) {
                 lastEnd = charCode(m[2] || m[1]);
             }
         );
+
         if (lastEnd < 0xFFFF) {
             output += '\\u' + pad4(hex(lastEnd + 1));
             if (lastEnd < 0xFFFE) {
                 output += '-\\uFFFF';
             }
         }
+
         return output;
     }
 
     // Generates an inverted BMP range on first use
     function cacheInvertedBmp(slug) {
         var prop = 'b!';
-        return unicode[slug][prop] || (
-            unicode[slug][prop] = invertBmp(unicode[slug].bmp)
+        return (
+            unicode[slug][prop] ||
+            (unicode[slug][prop] = invertBmp(unicode[slug].bmp))
         );
     }
 
     // Combines and optionally negates BMP and astral data
     function buildAstral(slug, isNegated) {
-        var item = unicode[slug],
-            combined = '';
+        var item = unicode[slug];
+        var combined = '';
+
         if (item.bmp && !item.isBmpLast) {
             combined = '[' + item.bmp + ']' + (item.astral ? '|' : '');
         }
@@ -21598,6 +27161,7 @@ module.exports = function(XRegExp) {
         if (item.isBmpLast && item.bmp) {
             combined += (item.astral ? '|' : '') + '[' + item.bmp + ']';
         }
+
         // Astral Unicode tokens always match a code point, never a code unit
         return isNegated ?
             '(?:(?!' + combined + ')(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[\0-\uFFFF]))' :
@@ -21607,8 +27171,9 @@ module.exports = function(XRegExp) {
     // Builds a complete astral pattern on first use
     function cacheAstral(slug, isNegated) {
         var prop = isNegated ? 'a!' : 'a=';
-        return unicode[slug][prop] || (
-            unicode[slug][prop] = buildAstral(slug, isNegated)
+        return (
+            unicode[slug][prop] ||
+            (unicode[slug][prop] = buildAstral(slug, isNegated))
         );
     }
 
@@ -21617,25 +27182,25 @@ module.exports = function(XRegExp) {
     // ==--------------------------==
 
     /*
-     * Add Unicode token syntax: \p{..}, \P{..}, \p{^..}. Also add astral mode (flag A).
+     * Add astral mode (flag A) and Unicode token syntax: `\p{..}`, `\P{..}`, `\p{^..}`, `\pC`.
      */
     XRegExp.addToken(
         // Use `*` instead of `+` to avoid capturing `^` as the token name in `\p{^}`
         /\\([pP])(?:{(\^?)([^}]*)}|([A-Za-z]))/,
         function(match, scope, flags) {
-            var ERR_DOUBLE_NEG = 'Invalid double negation ',
-                ERR_UNKNOWN_NAME = 'Unknown Unicode token ',
-                ERR_UNKNOWN_REF = 'Unicode token missing data ',
-                ERR_ASTRAL_ONLY = 'Astral mode required for Unicode token ',
-                ERR_ASTRAL_IN_CLASS = 'Astral mode does not support Unicode tokens within character classes',
-                // Negated via \P{..} or \p{^..}
-                isNegated = match[1] === 'P' || !!match[2],
-                // Switch from BMP (0-FFFF) to astral (0-10FFFF) mode via flag A
-                isAstralMode = flags.indexOf('A') > -1,
-                // Token lookup name. Check `[4]` first to avoid passing `undefined` via `\p{}`
-                slug = normalize(match[4] || match[3]),
-                // Token data object
-                item = unicode[slug];
+            var ERR_DOUBLE_NEG = 'Invalid double negation ';
+            var ERR_UNKNOWN_NAME = 'Unknown Unicode token ';
+            var ERR_UNKNOWN_REF = 'Unicode token missing data ';
+            var ERR_ASTRAL_ONLY = 'Astral mode required for Unicode token ';
+            var ERR_ASTRAL_IN_CLASS = 'Astral mode does not support Unicode tokens within character classes';
+            // Negated via \P{..} or \p{^..}
+            var isNegated = match[1] === 'P' || !!match[2];
+            // Switch from BMP (0-FFFF) to astral (0-10FFFF) mode via flag A
+            var isAstralMode = flags.indexOf('A') > -1;
+            // Token lookup name. Check `[4]` first to avoid passing `undefined` via `\p{}`
+            var slug = normalize(match[4] || match[3]);
+            // Token data object
+            var item = unicode[slug];
 
             if (match[1] === 'P' && match[2]) {
                 throw new SyntaxError(ERR_DOUBLE_NEG + match[0]);
@@ -21679,6 +27244,7 @@ module.exports = function(XRegExp) {
     /**
      * Adds to the list of Unicode tokens that XRegExp regexes can match via `\p` or `\P`.
      *
+     * @memberOf XRegExp
      * @param {Array} data Objects with named character ranges. Each object may have properties
      *   `name`, `alias`, `isBmpLast`, `inverseOf`, `bmp`, and `astral`. All but `name` are
      *   optional, although one of `bmp` or `astral` is required (unless `inverseOf` is set). If
@@ -21704,12 +27270,11 @@ module.exports = function(XRegExp) {
      * XRegExp('\\p{XDigit}:\\p{Hexadecimal}+').test('0:3D'); // -> true
      */
     XRegExp.addUnicodeData = function(data) {
-        var ERR_NO_NAME = 'Unicode token requires name',
-            ERR_NO_DATA = 'Unicode token has no character data ',
-            item,
-            i;
+        var ERR_NO_NAME = 'Unicode token requires name';
+        var ERR_NO_DATA = 'Unicode token has no character data ';
+        var item;
 
-        for (i = 0; i < data.length; ++i) {
+        for (var i = 0; i < data.length; ++i) {
             item = data[i];
             if (!item.name) {
                 throw new Error(ERR_NO_NAME);
@@ -21728,13 +27293,39 @@ module.exports = function(XRegExp) {
         XRegExp.cache.flush('patterns');
     };
 
+    /**
+     * @ignore
+     *
+     * Return a reference to the internal Unicode definition structure for the given Unicode
+     * Property if the given name is a legal Unicode Property for use in XRegExp `\p` or `\P` regex
+     * constructs.
+     *
+     * @memberOf XRegExp
+     * @param {String} name Name by which the Unicode Property may be recognized (case-insensitive),
+     *   e.g. `'N'` or `'Number'`. The given name is matched against all registered Unicode
+     *   Properties and Property Aliases.
+     * @returns {Object} Reference to definition structure when the name matches a Unicode Property.
+     *
+     * @note
+     * For more info on Unicode Properties, see also http://unicode.org/reports/tr18/#Categories.
+     *
+     * @note
+     * This method is *not* part of the officially documented API and may change or be removed in
+     * the future. It is meant for userland code that wishes to reuse the (large) internal Unicode
+     * structures set up by XRegExp.
+     */
+    XRegExp._getUnicodeProperty = function(name) {
+        var slug = normalize(name);
+        return unicode[slug];
+    };
+
 };
 
 },{}],4:[function(require,module,exports){
 /*!
- * XRegExp Unicode Blocks 3.1.1
+ * XRegExp Unicode Blocks 3.2.0
  * <xregexp.com>
- * Steven Levithan (c) 2010-2016 MIT License
+ * Steven Levithan (c) 2010-2017 MIT License
  * Unicode data by Mathias Bynens <mathiasbynens.be>
  */
 
@@ -21746,7 +27337,7 @@ module.exports = function(XRegExp) {
      * `\p{InBasicLatin}`. Token names are case insensitive, and any spaces, hyphens, and
      * underscores are ignored.
      *
-     * Uses Unicode 8.0.0.
+     * Uses Unicode 9.0.0.
      *
      * @requires XRegExp, Unicode Base
      */
@@ -21756,6 +27347,10 @@ module.exports = function(XRegExp) {
     }
 
     XRegExp.addUnicodeData([
+        {
+            name: 'InAdlam',
+            astral: '\uD83A[\uDD00-\uDD5F]'
+        },
         {
             name: 'InAegean_Numbers',
             astral: '\uD800[\uDD00-\uDD3F]'
@@ -21853,6 +27448,10 @@ module.exports = function(XRegExp) {
             bmp: '\u0980-\u09FF'
         },
         {
+            name: 'InBhaiksuki',
+            astral: '\uD807[\uDC00-\uDC6F]'
+        },
+        {
             name: 'InBlock_Elements',
             bmp: '\u2580-\u259F'
         },
@@ -21930,7 +27529,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'InCJK_Unified_Ideographs_Extension_C',
-            astral: '\uD86D[\uDC00-\uDF3F]|[\uD86A-\uD86C][\uDC00-\uDFFF]|\uD869[\uDF00-\uDFFF]'
+            astral: '\uD869[\uDF00-\uDFFF]|[\uD86A-\uD86C][\uDC00-\uDFFF]|\uD86D[\uDC00-\uDF3F]'
         },
         {
             name: 'InCJK_Unified_Ideographs_Extension_D',
@@ -21938,7 +27537,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'InCJK_Unified_Ideographs_Extension_E',
-            astral: '[\uD86F-\uD872][\uDC00-\uDFFF]|\uD873[\uDC00-\uDEAF]|\uD86E[\uDC20-\uDFFF]'
+            astral: '\uD86E[\uDC20-\uDFFF]|[\uD86F-\uD872][\uDC00-\uDFFF]|\uD873[\uDC00-\uDEAF]'
         },
         {
             name: 'InCarian',
@@ -22031,6 +27630,10 @@ module.exports = function(XRegExp) {
         {
             name: 'InCyrillic_Extended_B',
             bmp: '\uA640-\uA69F'
+        },
+        {
+            name: 'InCyrillic_Extended_C',
+            bmp: '\u1C80-\u1C8F'
         },
         {
             name: 'InCyrillic_Supplement',
@@ -22133,6 +27736,10 @@ module.exports = function(XRegExp) {
             bmp: '\u2C00-\u2C5F'
         },
         {
+            name: 'InGlagolitic_Supplement',
+            astral: '\uD838[\uDC00-\uDC2F]'
+        },
+        {
             name: 'InGothic',
             astral: '\uD800[\uDF30-\uDF4F]'
         },
@@ -22211,6 +27818,10 @@ module.exports = function(XRegExp) {
         {
             name: 'InIdeographic_Description_Characters',
             bmp: '\u2FF0-\u2FFF'
+        },
+        {
+            name: 'InIdeographic_Symbols_and_Punctuation',
+            astral: '\uD81B[\uDFE0-\uDFFF]'
         },
         {
             name: 'InImperial_Aramaic',
@@ -22373,6 +27984,10 @@ module.exports = function(XRegExp) {
             astral: '\uD802[\uDEC0-\uDEFF]'
         },
         {
+            name: 'InMarchen',
+            astral: '\uD807[\uDC70-\uDCBF]'
+        },
+        {
             name: 'InMathematical_Alphanumeric_Symbols',
             astral: '\uD835[\uDC00-\uDFFF]'
         },
@@ -22422,7 +28037,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'InMiscellaneous_Symbols_and_Pictographs',
-            astral: '\uD83D[\uDC00-\uDDFF]|\uD83C[\uDF00-\uDFFF]'
+            astral: '\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDDFF]'
         },
         {
             name: 'InMiscellaneous_Technical',
@@ -22439,6 +28054,10 @@ module.exports = function(XRegExp) {
         {
             name: 'InMongolian',
             bmp: '\u1800-\u18AF'
+        },
+        {
+            name: 'InMongolian_Supplement',
+            astral: '\uD805[\uDE60-\uDE7F]'
         },
         {
             name: 'InMro',
@@ -22475,6 +28094,10 @@ module.exports = function(XRegExp) {
         {
             name: 'InNew_Tai_Lue',
             bmp: '\u1980-\u19DF'
+        },
+        {
+            name: 'InNewa',
+            astral: '\uD805[\uDC00-\uDC7F]'
         },
         {
             name: 'InNumber_Forms',
@@ -22527,6 +28150,10 @@ module.exports = function(XRegExp) {
         {
             name: 'InOrnamental_Dingbats',
             astral: '\uD83D[\uDE50-\uDE7F]'
+        },
+        {
+            name: 'InOsage',
+            astral: '\uD801[\uDCB0-\uDCFF]'
         },
         {
             name: 'InOsmanya',
@@ -22729,6 +28356,14 @@ module.exports = function(XRegExp) {
             bmp: '\u0B80-\u0BFF'
         },
         {
+            name: 'InTangut',
+            astral: '[\uD81C-\uD821][\uDC00-\uDFFF]'
+        },
+        {
+            name: 'InTangut_Components',
+            astral: '\uD822[\uDC00-\uDEFF]'
+        },
+        {
             name: 'InTelugu',
             bmp: '\u0C00-\u0C7F'
         },
@@ -22810,9 +28445,9 @@ module.exports = function(XRegExp) {
 
 },{}],5:[function(require,module,exports){
 /*!
- * XRegExp Unicode Categories 3.1.1
+ * XRegExp Unicode Categories 3.2.0
  * <xregexp.com>
- * Steven Levithan (c) 2010-2016 MIT License
+ * Steven Levithan (c) 2010-2017 MIT License
  * Unicode data by Mathias Bynens <mathiasbynens.be>
  */
 
@@ -22824,7 +28459,7 @@ module.exports = function(XRegExp) {
      * category descriptions in UAX #44 <http://unicode.org/reports/tr44/#GC_Values_Table>. Token
      * names are case insensitive, and any spaces, hyphens, and underscores are ignored.
      *
-     * Uses Unicode 8.0.0.
+     * Uses Unicode 9.0.0.
      *
      * @requires XRegExp, Unicode Base
      */
@@ -22838,8 +28473,8 @@ module.exports = function(XRegExp) {
             name: 'C',
             alias: 'Other',
             isBmpLast: true,
-            bmp: '\0-\x1F\x7F-\x9F\xAD\u0378\u0379\u0380-\u0383\u038B\u038D\u03A2\u0530\u0557\u0558\u0560\u0588\u058B\u058C\u0590\u05C8-\u05CF\u05EB-\u05EF\u05F5-\u0605\u061C\u061D\u06DD\u070E\u070F\u074B\u074C\u07B2-\u07BF\u07FB-\u07FF\u082E\u082F\u083F\u085C\u085D\u085F-\u089F\u08B5-\u08E2\u0984\u098D\u098E\u0991\u0992\u09A9\u09B1\u09B3-\u09B5\u09BA\u09BB\u09C5\u09C6\u09C9\u09CA\u09CF-\u09D6\u09D8-\u09DB\u09DE\u09E4\u09E5\u09FC-\u0A00\u0A04\u0A0B-\u0A0E\u0A11\u0A12\u0A29\u0A31\u0A34\u0A37\u0A3A\u0A3B\u0A3D\u0A43-\u0A46\u0A49\u0A4A\u0A4E-\u0A50\u0A52-\u0A58\u0A5D\u0A5F-\u0A65\u0A76-\u0A80\u0A84\u0A8E\u0A92\u0AA9\u0AB1\u0AB4\u0ABA\u0ABB\u0AC6\u0ACA\u0ACE\u0ACF\u0AD1-\u0ADF\u0AE4\u0AE5\u0AF2-\u0AF8\u0AFA-\u0B00\u0B04\u0B0D\u0B0E\u0B11\u0B12\u0B29\u0B31\u0B34\u0B3A\u0B3B\u0B45\u0B46\u0B49\u0B4A\u0B4E-\u0B55\u0B58-\u0B5B\u0B5E\u0B64\u0B65\u0B78-\u0B81\u0B84\u0B8B-\u0B8D\u0B91\u0B96-\u0B98\u0B9B\u0B9D\u0BA0-\u0BA2\u0BA5-\u0BA7\u0BAB-\u0BAD\u0BBA-\u0BBD\u0BC3-\u0BC5\u0BC9\u0BCE\u0BCF\u0BD1-\u0BD6\u0BD8-\u0BE5\u0BFB-\u0BFF\u0C04\u0C0D\u0C11\u0C29\u0C3A-\u0C3C\u0C45\u0C49\u0C4E-\u0C54\u0C57\u0C5B-\u0C5F\u0C64\u0C65\u0C70-\u0C77\u0C80\u0C84\u0C8D\u0C91\u0CA9\u0CB4\u0CBA\u0CBB\u0CC5\u0CC9\u0CCE-\u0CD4\u0CD7-\u0CDD\u0CDF\u0CE4\u0CE5\u0CF0\u0CF3-\u0D00\u0D04\u0D0D\u0D11\u0D3B\u0D3C\u0D45\u0D49\u0D4F-\u0D56\u0D58-\u0D5E\u0D64\u0D65\u0D76-\u0D78\u0D80\u0D81\u0D84\u0D97-\u0D99\u0DB2\u0DBC\u0DBE\u0DBF\u0DC7-\u0DC9\u0DCB-\u0DCE\u0DD5\u0DD7\u0DE0-\u0DE5\u0DF0\u0DF1\u0DF5-\u0E00\u0E3B-\u0E3E\u0E5C-\u0E80\u0E83\u0E85\u0E86\u0E89\u0E8B\u0E8C\u0E8E-\u0E93\u0E98\u0EA0\u0EA4\u0EA6\u0EA8\u0EA9\u0EAC\u0EBA\u0EBE\u0EBF\u0EC5\u0EC7\u0ECE\u0ECF\u0EDA\u0EDB\u0EE0-\u0EFF\u0F48\u0F6D-\u0F70\u0F98\u0FBD\u0FCD\u0FDB-\u0FFF\u10C6\u10C8-\u10CC\u10CE\u10CF\u1249\u124E\u124F\u1257\u1259\u125E\u125F\u1289\u128E\u128F\u12B1\u12B6\u12B7\u12BF\u12C1\u12C6\u12C7\u12D7\u1311\u1316\u1317\u135B\u135C\u137D-\u137F\u139A-\u139F\u13F6\u13F7\u13FE\u13FF\u169D-\u169F\u16F9-\u16FF\u170D\u1715-\u171F\u1737-\u173F\u1754-\u175F\u176D\u1771\u1774-\u177F\u17DE\u17DF\u17EA-\u17EF\u17FA-\u17FF\u180E\u180F\u181A-\u181F\u1878-\u187F\u18AB-\u18AF\u18F6-\u18FF\u191F\u192C-\u192F\u193C-\u193F\u1941-\u1943\u196E\u196F\u1975-\u197F\u19AC-\u19AF\u19CA-\u19CF\u19DB-\u19DD\u1A1C\u1A1D\u1A5F\u1A7D\u1A7E\u1A8A-\u1A8F\u1A9A-\u1A9F\u1AAE\u1AAF\u1ABF-\u1AFF\u1B4C-\u1B4F\u1B7D-\u1B7F\u1BF4-\u1BFB\u1C38-\u1C3A\u1C4A-\u1C4C\u1C80-\u1CBF\u1CC8-\u1CCF\u1CF7\u1CFA-\u1CFF\u1DF6-\u1DFB\u1F16\u1F17\u1F1E\u1F1F\u1F46\u1F47\u1F4E\u1F4F\u1F58\u1F5A\u1F5C\u1F5E\u1F7E\u1F7F\u1FB5\u1FC5\u1FD4\u1FD5\u1FDC\u1FF0\u1FF1\u1FF5\u1FFF\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2072\u2073\u208F\u209D-\u209F\u20BF-\u20CF\u20F1-\u20FF\u218C-\u218F\u23FB-\u23FF\u2427-\u243F\u244B-\u245F\u2B74\u2B75\u2B96\u2B97\u2BBA-\u2BBC\u2BC9\u2BD2-\u2BEB\u2BF0-\u2BFF\u2C2F\u2C5F\u2CF4-\u2CF8\u2D26\u2D28-\u2D2C\u2D2E\u2D2F\u2D68-\u2D6E\u2D71-\u2D7E\u2D97-\u2D9F\u2DA7\u2DAF\u2DB7\u2DBF\u2DC7\u2DCF\u2DD7\u2DDF\u2E43-\u2E7F\u2E9A\u2EF4-\u2EFF\u2FD6-\u2FEF\u2FFC-\u2FFF\u3040\u3097\u3098\u3100-\u3104\u312E-\u3130\u318F\u31BB-\u31BF\u31E4-\u31EF\u321F\u32FF\u4DB6-\u4DBF\u9FD6-\u9FFF\uA48D-\uA48F\uA4C7-\uA4CF\uA62C-\uA63F\uA6F8-\uA6FF\uA7AE\uA7AF\uA7B8-\uA7F6\uA82C-\uA82F\uA83A-\uA83F\uA878-\uA87F\uA8C5-\uA8CD\uA8DA-\uA8DF\uA8FE\uA8FF\uA954-\uA95E\uA97D-\uA97F\uA9CE\uA9DA-\uA9DD\uA9FF\uAA37-\uAA3F\uAA4E\uAA4F\uAA5A\uAA5B\uAAC3-\uAADA\uAAF7-\uAB00\uAB07\uAB08\uAB0F\uAB10\uAB17-\uAB1F\uAB27\uAB2F\uAB66-\uAB6F\uABEE\uABEF\uABFA-\uABFF\uD7A4-\uD7AF\uD7C7-\uD7CA\uD7FC-\uF8FF\uFA6E\uFA6F\uFADA-\uFAFF\uFB07-\uFB12\uFB18-\uFB1C\uFB37\uFB3D\uFB3F\uFB42\uFB45\uFBC2-\uFBD2\uFD40-\uFD4F\uFD90\uFD91\uFDC8-\uFDEF\uFDFE\uFDFF\uFE1A-\uFE1F\uFE53\uFE67\uFE6C-\uFE6F\uFE75\uFEFD-\uFF00\uFFBF-\uFFC1\uFFC8\uFFC9\uFFD0\uFFD1\uFFD8\uFFD9\uFFDD-\uFFDF\uFFE7\uFFEF-\uFFFB\uFFFE\uFFFF',
-            astral: '\uD834[\uDCF6-\uDCFF\uDD27\uDD28\uDD73-\uDD7A\uDDE9-\uDDFF\uDE46-\uDEFF\uDF57-\uDF5F\uDF72-\uDFFF]|\uD836[\uDE8C-\uDE9A\uDEA0\uDEB0-\uDFFF]|\uD83C[\uDC2C-\uDC2F\uDC94-\uDC9F\uDCAF\uDCB0\uDCC0\uDCD0\uDCF6-\uDCFF\uDD0D-\uDD0F\uDD2F\uDD6C-\uDD6F\uDD9B-\uDDE5\uDE03-\uDE0F\uDE3B-\uDE3F\uDE49-\uDE4F\uDE52-\uDEFF]|\uD81A[\uDE39-\uDE3F\uDE5F\uDE6A-\uDE6D\uDE70-\uDECF\uDEEE\uDEEF\uDEF6-\uDEFF\uDF46-\uDF4F\uDF5A\uDF62\uDF78-\uDF7C\uDF90-\uDFFF]|\uD809[\uDC6F\uDC75-\uDC7F\uDD44-\uDFFF]|\uD81B[\uDC00-\uDEFF\uDF45-\uDF4F\uDF7F-\uDF8E\uDFA0-\uDFFF]|\uD86E[\uDC1E\uDC1F]|\uD83D[\uDD7A\uDDA4\uDED1-\uDEDF\uDEED-\uDEEF\uDEF4-\uDEFF\uDF74-\uDF7F\uDFD5-\uDFFF]|\uD801[\uDC9E\uDC9F\uDCAA-\uDCFF\uDD28-\uDD2F\uDD64-\uDD6E\uDD70-\uDDFF\uDF37-\uDF3F\uDF56-\uDF5F\uDF68-\uDFFF]|\uD800[\uDC0C\uDC27\uDC3B\uDC3E\uDC4E\uDC4F\uDC5E-\uDC7F\uDCFB-\uDCFF\uDD03-\uDD06\uDD34-\uDD36\uDD8D-\uDD8F\uDD9C-\uDD9F\uDDA1-\uDDCF\uDDFE-\uDE7F\uDE9D-\uDE9F\uDED1-\uDEDF\uDEFC-\uDEFF\uDF24-\uDF2F\uDF4B-\uDF4F\uDF7B-\uDF7F\uDF9E\uDFC4-\uDFC7\uDFD6-\uDFFF]|\uD869[\uDED7-\uDEFF]|\uD83B[\uDC00-\uDDFF\uDE04\uDE20\uDE23\uDE25\uDE26\uDE28\uDE33\uDE38\uDE3A\uDE3C-\uDE41\uDE43-\uDE46\uDE48\uDE4A\uDE4C\uDE50\uDE53\uDE55\uDE56\uDE58\uDE5A\uDE5C\uDE5E\uDE60\uDE63\uDE65\uDE66\uDE6B\uDE73\uDE78\uDE7D\uDE7F\uDE8A\uDE9C-\uDEA0\uDEA4\uDEAA\uDEBC-\uDEEF\uDEF2-\uDFFF]|\uD87E[\uDE1E-\uDFFF]|\uDB40[\uDC00-\uDCFF\uDDF0-\uDFFF]|\uD804[\uDC4E-\uDC51\uDC70-\uDC7E\uDCBD\uDCC2-\uDCCF\uDCE9-\uDCEF\uDCFA-\uDCFF\uDD35\uDD44-\uDD4F\uDD77-\uDD7F\uDDCE\uDDCF\uDDE0\uDDF5-\uDDFF\uDE12\uDE3E-\uDE7F\uDE87\uDE89\uDE8E\uDE9E\uDEAA-\uDEAF\uDEEB-\uDEEF\uDEFA-\uDEFF\uDF04\uDF0D\uDF0E\uDF11\uDF12\uDF29\uDF31\uDF34\uDF3A\uDF3B\uDF45\uDF46\uDF49\uDF4A\uDF4E\uDF4F\uDF51-\uDF56\uDF58-\uDF5C\uDF64\uDF65\uDF6D-\uDF6F\uDF75-\uDFFF]|\uD83A[\uDCC5\uDCC6\uDCD7-\uDFFF]|\uD80D[\uDC2F-\uDFFF]|\uD86D[\uDF35-\uDF3F]|[\uD807\uD80A\uD80B\uD80E-\uD810\uD812-\uD819\uD81C-\uD82B\uD82D\uD82E\uD830-\uD833\uD837-\uD839\uD83F\uD874-\uD87D\uD87F-\uDB3F\uDB41-\uDBFF][\uDC00-\uDFFF]|\uD806[\uDC00-\uDC9F\uDCF3-\uDCFE\uDD00-\uDEBF\uDEF9-\uDFFF]|\uD803[\uDC49-\uDC7F\uDCB3-\uDCBF\uDCF3-\uDCF9\uDD00-\uDE5F\uDE7F-\uDFFF]|\uD835[\uDC55\uDC9D\uDCA0\uDCA1\uDCA3\uDCA4\uDCA7\uDCA8\uDCAD\uDCBA\uDCBC\uDCC4\uDD06\uDD0B\uDD0C\uDD15\uDD1D\uDD3A\uDD3F\uDD45\uDD47-\uDD49\uDD51\uDEA6\uDEA7\uDFCC\uDFCD]|\uD805[\uDC00-\uDC7F\uDCC8-\uDCCF\uDCDA-\uDD7F\uDDB6\uDDB7\uDDDE-\uDDFF\uDE45-\uDE4F\uDE5A-\uDE7F\uDEB8-\uDEBF\uDECA-\uDEFF\uDF1A-\uDF1C\uDF2C-\uDF2F\uDF40-\uDFFF]|\uD802[\uDC06\uDC07\uDC09\uDC36\uDC39-\uDC3B\uDC3D\uDC3E\uDC56\uDC9F-\uDCA6\uDCB0-\uDCDF\uDCF3\uDCF6-\uDCFA\uDD1C-\uDD1E\uDD3A-\uDD3E\uDD40-\uDD7F\uDDB8-\uDDBB\uDDD0\uDDD1\uDE04\uDE07-\uDE0B\uDE14\uDE18\uDE34-\uDE37\uDE3B-\uDE3E\uDE48-\uDE4F\uDE59-\uDE5F\uDEA0-\uDEBF\uDEE7-\uDEEA\uDEF7-\uDEFF\uDF36-\uDF38\uDF56\uDF57\uDF73-\uDF77\uDF92-\uDF98\uDF9D-\uDFA8\uDFB0-\uDFFF]|\uD808[\uDF9A-\uDFFF]|\uD82F[\uDC6B-\uDC6F\uDC7D-\uDC7F\uDC89-\uDC8F\uDC9A\uDC9B\uDCA0-\uDFFF]|\uD82C[\uDC02-\uDFFF]|\uD811[\uDE47-\uDFFF]|\uD83E[\uDC0C-\uDC0F\uDC48-\uDC4F\uDC5A-\uDC5F\uDC88-\uDC8F\uDCAE-\uDD0F\uDD19-\uDD7F\uDD85-\uDDBF\uDDC1-\uDFFF]|\uD873[\uDEA2-\uDFFF]'
+            bmp: '\0-\x1F\x7F-\x9F\xAD\u0378\u0379\u0380-\u0383\u038B\u038D\u03A2\u0530\u0557\u0558\u0560\u0588\u058B\u058C\u0590\u05C8-\u05CF\u05EB-\u05EF\u05F5-\u0605\u061C\u061D\u06DD\u070E\u070F\u074B\u074C\u07B2-\u07BF\u07FB-\u07FF\u082E\u082F\u083F\u085C\u085D\u085F-\u089F\u08B5\u08BE-\u08D3\u08E2\u0984\u098D\u098E\u0991\u0992\u09A9\u09B1\u09B3-\u09B5\u09BA\u09BB\u09C5\u09C6\u09C9\u09CA\u09CF-\u09D6\u09D8-\u09DB\u09DE\u09E4\u09E5\u09FC-\u0A00\u0A04\u0A0B-\u0A0E\u0A11\u0A12\u0A29\u0A31\u0A34\u0A37\u0A3A\u0A3B\u0A3D\u0A43-\u0A46\u0A49\u0A4A\u0A4E-\u0A50\u0A52-\u0A58\u0A5D\u0A5F-\u0A65\u0A76-\u0A80\u0A84\u0A8E\u0A92\u0AA9\u0AB1\u0AB4\u0ABA\u0ABB\u0AC6\u0ACA\u0ACE\u0ACF\u0AD1-\u0ADF\u0AE4\u0AE5\u0AF2-\u0AF8\u0AFA-\u0B00\u0B04\u0B0D\u0B0E\u0B11\u0B12\u0B29\u0B31\u0B34\u0B3A\u0B3B\u0B45\u0B46\u0B49\u0B4A\u0B4E-\u0B55\u0B58-\u0B5B\u0B5E\u0B64\u0B65\u0B78-\u0B81\u0B84\u0B8B-\u0B8D\u0B91\u0B96-\u0B98\u0B9B\u0B9D\u0BA0-\u0BA2\u0BA5-\u0BA7\u0BAB-\u0BAD\u0BBA-\u0BBD\u0BC3-\u0BC5\u0BC9\u0BCE\u0BCF\u0BD1-\u0BD6\u0BD8-\u0BE5\u0BFB-\u0BFF\u0C04\u0C0D\u0C11\u0C29\u0C3A-\u0C3C\u0C45\u0C49\u0C4E-\u0C54\u0C57\u0C5B-\u0C5F\u0C64\u0C65\u0C70-\u0C77\u0C84\u0C8D\u0C91\u0CA9\u0CB4\u0CBA\u0CBB\u0CC5\u0CC9\u0CCE-\u0CD4\u0CD7-\u0CDD\u0CDF\u0CE4\u0CE5\u0CF0\u0CF3-\u0D00\u0D04\u0D0D\u0D11\u0D3B\u0D3C\u0D45\u0D49\u0D50-\u0D53\u0D64\u0D65\u0D80\u0D81\u0D84\u0D97-\u0D99\u0DB2\u0DBC\u0DBE\u0DBF\u0DC7-\u0DC9\u0DCB-\u0DCE\u0DD5\u0DD7\u0DE0-\u0DE5\u0DF0\u0DF1\u0DF5-\u0E00\u0E3B-\u0E3E\u0E5C-\u0E80\u0E83\u0E85\u0E86\u0E89\u0E8B\u0E8C\u0E8E-\u0E93\u0E98\u0EA0\u0EA4\u0EA6\u0EA8\u0EA9\u0EAC\u0EBA\u0EBE\u0EBF\u0EC5\u0EC7\u0ECE\u0ECF\u0EDA\u0EDB\u0EE0-\u0EFF\u0F48\u0F6D-\u0F70\u0F98\u0FBD\u0FCD\u0FDB-\u0FFF\u10C6\u10C8-\u10CC\u10CE\u10CF\u1249\u124E\u124F\u1257\u1259\u125E\u125F\u1289\u128E\u128F\u12B1\u12B6\u12B7\u12BF\u12C1\u12C6\u12C7\u12D7\u1311\u1316\u1317\u135B\u135C\u137D-\u137F\u139A-\u139F\u13F6\u13F7\u13FE\u13FF\u169D-\u169F\u16F9-\u16FF\u170D\u1715-\u171F\u1737-\u173F\u1754-\u175F\u176D\u1771\u1774-\u177F\u17DE\u17DF\u17EA-\u17EF\u17FA-\u17FF\u180E\u180F\u181A-\u181F\u1878-\u187F\u18AB-\u18AF\u18F6-\u18FF\u191F\u192C-\u192F\u193C-\u193F\u1941-\u1943\u196E\u196F\u1975-\u197F\u19AC-\u19AF\u19CA-\u19CF\u19DB-\u19DD\u1A1C\u1A1D\u1A5F\u1A7D\u1A7E\u1A8A-\u1A8F\u1A9A-\u1A9F\u1AAE\u1AAF\u1ABF-\u1AFF\u1B4C-\u1B4F\u1B7D-\u1B7F\u1BF4-\u1BFB\u1C38-\u1C3A\u1C4A-\u1C4C\u1C89-\u1CBF\u1CC8-\u1CCF\u1CF7\u1CFA-\u1CFF\u1DF6-\u1DFA\u1F16\u1F17\u1F1E\u1F1F\u1F46\u1F47\u1F4E\u1F4F\u1F58\u1F5A\u1F5C\u1F5E\u1F7E\u1F7F\u1FB5\u1FC5\u1FD4\u1FD5\u1FDC\u1FF0\u1FF1\u1FF5\u1FFF\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2072\u2073\u208F\u209D-\u209F\u20BF-\u20CF\u20F1-\u20FF\u218C-\u218F\u23FF\u2427-\u243F\u244B-\u245F\u2B74\u2B75\u2B96\u2B97\u2BBA-\u2BBC\u2BC9\u2BD2-\u2BEB\u2BF0-\u2BFF\u2C2F\u2C5F\u2CF4-\u2CF8\u2D26\u2D28-\u2D2C\u2D2E\u2D2F\u2D68-\u2D6E\u2D71-\u2D7E\u2D97-\u2D9F\u2DA7\u2DAF\u2DB7\u2DBF\u2DC7\u2DCF\u2DD7\u2DDF\u2E45-\u2E7F\u2E9A\u2EF4-\u2EFF\u2FD6-\u2FEF\u2FFC-\u2FFF\u3040\u3097\u3098\u3100-\u3104\u312E-\u3130\u318F\u31BB-\u31BF\u31E4-\u31EF\u321F\u32FF\u4DB6-\u4DBF\u9FD6-\u9FFF\uA48D-\uA48F\uA4C7-\uA4CF\uA62C-\uA63F\uA6F8-\uA6FF\uA7AF\uA7B8-\uA7F6\uA82C-\uA82F\uA83A-\uA83F\uA878-\uA87F\uA8C6-\uA8CD\uA8DA-\uA8DF\uA8FE\uA8FF\uA954-\uA95E\uA97D-\uA97F\uA9CE\uA9DA-\uA9DD\uA9FF\uAA37-\uAA3F\uAA4E\uAA4F\uAA5A\uAA5B\uAAC3-\uAADA\uAAF7-\uAB00\uAB07\uAB08\uAB0F\uAB10\uAB17-\uAB1F\uAB27\uAB2F\uAB66-\uAB6F\uABEE\uABEF\uABFA-\uABFF\uD7A4-\uD7AF\uD7C7-\uD7CA\uD7FC-\uF8FF\uFA6E\uFA6F\uFADA-\uFAFF\uFB07-\uFB12\uFB18-\uFB1C\uFB37\uFB3D\uFB3F\uFB42\uFB45\uFBC2-\uFBD2\uFD40-\uFD4F\uFD90\uFD91\uFDC8-\uFDEF\uFDFE\uFDFF\uFE1A-\uFE1F\uFE53\uFE67\uFE6C-\uFE6F\uFE75\uFEFD-\uFF00\uFFBF-\uFFC1\uFFC8\uFFC9\uFFD0\uFFD1\uFFD8\uFFD9\uFFDD-\uFFDF\uFFE7\uFFEF-\uFFFB\uFFFE\uFFFF',
+            astral: '\uD800[\uDC0C\uDC27\uDC3B\uDC3E\uDC4E\uDC4F\uDC5E-\uDC7F\uDCFB-\uDCFF\uDD03-\uDD06\uDD34-\uDD36\uDD8F\uDD9C-\uDD9F\uDDA1-\uDDCF\uDDFE-\uDE7F\uDE9D-\uDE9F\uDED1-\uDEDF\uDEFC-\uDEFF\uDF24-\uDF2F\uDF4B-\uDF4F\uDF7B-\uDF7F\uDF9E\uDFC4-\uDFC7\uDFD6-\uDFFF]|\uD801[\uDC9E\uDC9F\uDCAA-\uDCAF\uDCD4-\uDCD7\uDCFC-\uDCFF\uDD28-\uDD2F\uDD64-\uDD6E\uDD70-\uDDFF\uDF37-\uDF3F\uDF56-\uDF5F\uDF68-\uDFFF]|\uD802[\uDC06\uDC07\uDC09\uDC36\uDC39-\uDC3B\uDC3D\uDC3E\uDC56\uDC9F-\uDCA6\uDCB0-\uDCDF\uDCF3\uDCF6-\uDCFA\uDD1C-\uDD1E\uDD3A-\uDD3E\uDD40-\uDD7F\uDDB8-\uDDBB\uDDD0\uDDD1\uDE04\uDE07-\uDE0B\uDE14\uDE18\uDE34-\uDE37\uDE3B-\uDE3E\uDE48-\uDE4F\uDE59-\uDE5F\uDEA0-\uDEBF\uDEE7-\uDEEA\uDEF7-\uDEFF\uDF36-\uDF38\uDF56\uDF57\uDF73-\uDF77\uDF92-\uDF98\uDF9D-\uDFA8\uDFB0-\uDFFF]|\uD803[\uDC49-\uDC7F\uDCB3-\uDCBF\uDCF3-\uDCF9\uDD00-\uDE5F\uDE7F-\uDFFF]|\uD804[\uDC4E-\uDC51\uDC70-\uDC7E\uDCBD\uDCC2-\uDCCF\uDCE9-\uDCEF\uDCFA-\uDCFF\uDD35\uDD44-\uDD4F\uDD77-\uDD7F\uDDCE\uDDCF\uDDE0\uDDF5-\uDDFF\uDE12\uDE3F-\uDE7F\uDE87\uDE89\uDE8E\uDE9E\uDEAA-\uDEAF\uDEEB-\uDEEF\uDEFA-\uDEFF\uDF04\uDF0D\uDF0E\uDF11\uDF12\uDF29\uDF31\uDF34\uDF3A\uDF3B\uDF45\uDF46\uDF49\uDF4A\uDF4E\uDF4F\uDF51-\uDF56\uDF58-\uDF5C\uDF64\uDF65\uDF6D-\uDF6F\uDF75-\uDFFF]|\uD805[\uDC5A\uDC5C\uDC5E-\uDC7F\uDCC8-\uDCCF\uDCDA-\uDD7F\uDDB6\uDDB7\uDDDE-\uDDFF\uDE45-\uDE4F\uDE5A-\uDE5F\uDE6D-\uDE7F\uDEB8-\uDEBF\uDECA-\uDEFF\uDF1A-\uDF1C\uDF2C-\uDF2F\uDF40-\uDFFF]|\uD806[\uDC00-\uDC9F\uDCF3-\uDCFE\uDD00-\uDEBF\uDEF9-\uDFFF]|\uD807[\uDC09\uDC37\uDC46-\uDC4F\uDC6D-\uDC6F\uDC90\uDC91\uDCA8\uDCB7-\uDFFF]|\uD808[\uDF9A-\uDFFF]|\uD809[\uDC6F\uDC75-\uDC7F\uDD44-\uDFFF]|[\uD80A\uD80B\uD80E-\uD810\uD812-\uD819\uD823-\uD82B\uD82D\uD82E\uD830-\uD833\uD837\uD839\uD83F\uD874-\uD87D\uD87F-\uDB3F\uDB41-\uDBFF][\uDC00-\uDFFF]|\uD80D[\uDC2F-\uDFFF]|\uD811[\uDE47-\uDFFF]|\uD81A[\uDE39-\uDE3F\uDE5F\uDE6A-\uDE6D\uDE70-\uDECF\uDEEE\uDEEF\uDEF6-\uDEFF\uDF46-\uDF4F\uDF5A\uDF62\uDF78-\uDF7C\uDF90-\uDFFF]|\uD81B[\uDC00-\uDEFF\uDF45-\uDF4F\uDF7F-\uDF8E\uDFA0-\uDFDF\uDFE1-\uDFFF]|\uD821[\uDFED-\uDFFF]|\uD822[\uDEF3-\uDFFF]|\uD82C[\uDC02-\uDFFF]|\uD82F[\uDC6B-\uDC6F\uDC7D-\uDC7F\uDC89-\uDC8F\uDC9A\uDC9B\uDCA0-\uDFFF]|\uD834[\uDCF6-\uDCFF\uDD27\uDD28\uDD73-\uDD7A\uDDE9-\uDDFF\uDE46-\uDEFF\uDF57-\uDF5F\uDF72-\uDFFF]|\uD835[\uDC55\uDC9D\uDCA0\uDCA1\uDCA3\uDCA4\uDCA7\uDCA8\uDCAD\uDCBA\uDCBC\uDCC4\uDD06\uDD0B\uDD0C\uDD15\uDD1D\uDD3A\uDD3F\uDD45\uDD47-\uDD49\uDD51\uDEA6\uDEA7\uDFCC\uDFCD]|\uD836[\uDE8C-\uDE9A\uDEA0\uDEB0-\uDFFF]|\uD838[\uDC07\uDC19\uDC1A\uDC22\uDC25\uDC2B-\uDFFF]|\uD83A[\uDCC5\uDCC6\uDCD7-\uDCFF\uDD4B-\uDD4F\uDD5A-\uDD5D\uDD60-\uDFFF]|\uD83B[\uDC00-\uDDFF\uDE04\uDE20\uDE23\uDE25\uDE26\uDE28\uDE33\uDE38\uDE3A\uDE3C-\uDE41\uDE43-\uDE46\uDE48\uDE4A\uDE4C\uDE50\uDE53\uDE55\uDE56\uDE58\uDE5A\uDE5C\uDE5E\uDE60\uDE63\uDE65\uDE66\uDE6B\uDE73\uDE78\uDE7D\uDE7F\uDE8A\uDE9C-\uDEA0\uDEA4\uDEAA\uDEBC-\uDEEF\uDEF2-\uDFFF]|\uD83C[\uDC2C-\uDC2F\uDC94-\uDC9F\uDCAF\uDCB0\uDCC0\uDCD0\uDCF6-\uDCFF\uDD0D-\uDD0F\uDD2F\uDD6C-\uDD6F\uDDAD-\uDDE5\uDE03-\uDE0F\uDE3C-\uDE3F\uDE49-\uDE4F\uDE52-\uDEFF]|\uD83D[\uDED3-\uDEDF\uDEED-\uDEEF\uDEF7-\uDEFF\uDF74-\uDF7F\uDFD5-\uDFFF]|\uD83E[\uDC0C-\uDC0F\uDC48-\uDC4F\uDC5A-\uDC5F\uDC88-\uDC8F\uDCAE-\uDD0F\uDD1F\uDD28-\uDD2F\uDD31\uDD32\uDD3F\uDD4C-\uDD4F\uDD5F-\uDD7F\uDD92-\uDDBF\uDDC1-\uDFFF]|\uD869[\uDED7-\uDEFF]|\uD86D[\uDF35-\uDF3F]|\uD86E[\uDC1E\uDC1F]|\uD873[\uDEA2-\uDFFF]|\uD87E[\uDE1E-\uDFFF]|\uDB40[\uDC00-\uDCFF\uDDF0-\uDFFF]'
         },
         {
             name: 'Cc',
@@ -22849,14 +28484,14 @@ module.exports = function(XRegExp) {
         {
             name: 'Cf',
             alias: 'Format',
-            bmp: '\xAD\u0600-\u0605\u061C\u06DD\u070F\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB',
-            astral: '\uDB40[\uDC01\uDC20-\uDC7F]|\uD82F[\uDCA0-\uDCA3]|\uD834[\uDD73-\uDD7A]|\uD804\uDCBD'
+            bmp: '\xAD\u0600-\u0605\u061C\u06DD\u070F\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB',
+            astral: '\uD804\uDCBD|\uD82F[\uDCA0-\uDCA3]|\uD834[\uDD73-\uDD7A]|\uDB40[\uDC01\uDC20-\uDC7F]'
         },
         {
             name: 'Cn',
             alias: 'Unassigned',
-            bmp: '\u0378\u0379\u0380-\u0383\u038B\u038D\u03A2\u0530\u0557\u0558\u0560\u0588\u058B\u058C\u0590\u05C8-\u05CF\u05EB-\u05EF\u05F5-\u05FF\u061D\u070E\u074B\u074C\u07B2-\u07BF\u07FB-\u07FF\u082E\u082F\u083F\u085C\u085D\u085F-\u089F\u08B5-\u08E2\u0984\u098D\u098E\u0991\u0992\u09A9\u09B1\u09B3-\u09B5\u09BA\u09BB\u09C5\u09C6\u09C9\u09CA\u09CF-\u09D6\u09D8-\u09DB\u09DE\u09E4\u09E5\u09FC-\u0A00\u0A04\u0A0B-\u0A0E\u0A11\u0A12\u0A29\u0A31\u0A34\u0A37\u0A3A\u0A3B\u0A3D\u0A43-\u0A46\u0A49\u0A4A\u0A4E-\u0A50\u0A52-\u0A58\u0A5D\u0A5F-\u0A65\u0A76-\u0A80\u0A84\u0A8E\u0A92\u0AA9\u0AB1\u0AB4\u0ABA\u0ABB\u0AC6\u0ACA\u0ACE\u0ACF\u0AD1-\u0ADF\u0AE4\u0AE5\u0AF2-\u0AF8\u0AFA-\u0B00\u0B04\u0B0D\u0B0E\u0B11\u0B12\u0B29\u0B31\u0B34\u0B3A\u0B3B\u0B45\u0B46\u0B49\u0B4A\u0B4E-\u0B55\u0B58-\u0B5B\u0B5E\u0B64\u0B65\u0B78-\u0B81\u0B84\u0B8B-\u0B8D\u0B91\u0B96-\u0B98\u0B9B\u0B9D\u0BA0-\u0BA2\u0BA5-\u0BA7\u0BAB-\u0BAD\u0BBA-\u0BBD\u0BC3-\u0BC5\u0BC9\u0BCE\u0BCF\u0BD1-\u0BD6\u0BD8-\u0BE5\u0BFB-\u0BFF\u0C04\u0C0D\u0C11\u0C29\u0C3A-\u0C3C\u0C45\u0C49\u0C4E-\u0C54\u0C57\u0C5B-\u0C5F\u0C64\u0C65\u0C70-\u0C77\u0C80\u0C84\u0C8D\u0C91\u0CA9\u0CB4\u0CBA\u0CBB\u0CC5\u0CC9\u0CCE-\u0CD4\u0CD7-\u0CDD\u0CDF\u0CE4\u0CE5\u0CF0\u0CF3-\u0D00\u0D04\u0D0D\u0D11\u0D3B\u0D3C\u0D45\u0D49\u0D4F-\u0D56\u0D58-\u0D5E\u0D64\u0D65\u0D76-\u0D78\u0D80\u0D81\u0D84\u0D97-\u0D99\u0DB2\u0DBC\u0DBE\u0DBF\u0DC7-\u0DC9\u0DCB-\u0DCE\u0DD5\u0DD7\u0DE0-\u0DE5\u0DF0\u0DF1\u0DF5-\u0E00\u0E3B-\u0E3E\u0E5C-\u0E80\u0E83\u0E85\u0E86\u0E89\u0E8B\u0E8C\u0E8E-\u0E93\u0E98\u0EA0\u0EA4\u0EA6\u0EA8\u0EA9\u0EAC\u0EBA\u0EBE\u0EBF\u0EC5\u0EC7\u0ECE\u0ECF\u0EDA\u0EDB\u0EE0-\u0EFF\u0F48\u0F6D-\u0F70\u0F98\u0FBD\u0FCD\u0FDB-\u0FFF\u10C6\u10C8-\u10CC\u10CE\u10CF\u1249\u124E\u124F\u1257\u1259\u125E\u125F\u1289\u128E\u128F\u12B1\u12B6\u12B7\u12BF\u12C1\u12C6\u12C7\u12D7\u1311\u1316\u1317\u135B\u135C\u137D-\u137F\u139A-\u139F\u13F6\u13F7\u13FE\u13FF\u169D-\u169F\u16F9-\u16FF\u170D\u1715-\u171F\u1737-\u173F\u1754-\u175F\u176D\u1771\u1774-\u177F\u17DE\u17DF\u17EA-\u17EF\u17FA-\u17FF\u180F\u181A-\u181F\u1878-\u187F\u18AB-\u18AF\u18F6-\u18FF\u191F\u192C-\u192F\u193C-\u193F\u1941-\u1943\u196E\u196F\u1975-\u197F\u19AC-\u19AF\u19CA-\u19CF\u19DB-\u19DD\u1A1C\u1A1D\u1A5F\u1A7D\u1A7E\u1A8A-\u1A8F\u1A9A-\u1A9F\u1AAE\u1AAF\u1ABF-\u1AFF\u1B4C-\u1B4F\u1B7D-\u1B7F\u1BF4-\u1BFB\u1C38-\u1C3A\u1C4A-\u1C4C\u1C80-\u1CBF\u1CC8-\u1CCF\u1CF7\u1CFA-\u1CFF\u1DF6-\u1DFB\u1F16\u1F17\u1F1E\u1F1F\u1F46\u1F47\u1F4E\u1F4F\u1F58\u1F5A\u1F5C\u1F5E\u1F7E\u1F7F\u1FB5\u1FC5\u1FD4\u1FD5\u1FDC\u1FF0\u1FF1\u1FF5\u1FFF\u2065\u2072\u2073\u208F\u209D-\u209F\u20BF-\u20CF\u20F1-\u20FF\u218C-\u218F\u23FB-\u23FF\u2427-\u243F\u244B-\u245F\u2B74\u2B75\u2B96\u2B97\u2BBA-\u2BBC\u2BC9\u2BD2-\u2BEB\u2BF0-\u2BFF\u2C2F\u2C5F\u2CF4-\u2CF8\u2D26\u2D28-\u2D2C\u2D2E\u2D2F\u2D68-\u2D6E\u2D71-\u2D7E\u2D97-\u2D9F\u2DA7\u2DAF\u2DB7\u2DBF\u2DC7\u2DCF\u2DD7\u2DDF\u2E43-\u2E7F\u2E9A\u2EF4-\u2EFF\u2FD6-\u2FEF\u2FFC-\u2FFF\u3040\u3097\u3098\u3100-\u3104\u312E-\u3130\u318F\u31BB-\u31BF\u31E4-\u31EF\u321F\u32FF\u4DB6-\u4DBF\u9FD6-\u9FFF\uA48D-\uA48F\uA4C7-\uA4CF\uA62C-\uA63F\uA6F8-\uA6FF\uA7AE\uA7AF\uA7B8-\uA7F6\uA82C-\uA82F\uA83A-\uA83F\uA878-\uA87F\uA8C5-\uA8CD\uA8DA-\uA8DF\uA8FE\uA8FF\uA954-\uA95E\uA97D-\uA97F\uA9CE\uA9DA-\uA9DD\uA9FF\uAA37-\uAA3F\uAA4E\uAA4F\uAA5A\uAA5B\uAAC3-\uAADA\uAAF7-\uAB00\uAB07\uAB08\uAB0F\uAB10\uAB17-\uAB1F\uAB27\uAB2F\uAB66-\uAB6F\uABEE\uABEF\uABFA-\uABFF\uD7A4-\uD7AF\uD7C7-\uD7CA\uD7FC-\uD7FF\uFA6E\uFA6F\uFADA-\uFAFF\uFB07-\uFB12\uFB18-\uFB1C\uFB37\uFB3D\uFB3F\uFB42\uFB45\uFBC2-\uFBD2\uFD40-\uFD4F\uFD90\uFD91\uFDC8-\uFDEF\uFDFE\uFDFF\uFE1A-\uFE1F\uFE53\uFE67\uFE6C-\uFE6F\uFE75\uFEFD\uFEFE\uFF00\uFFBF-\uFFC1\uFFC8\uFFC9\uFFD0\uFFD1\uFFD8\uFFD9\uFFDD-\uFFDF\uFFE7\uFFEF-\uFFF8\uFFFE\uFFFF',
-            astral: '\uDB40[\uDC00\uDC02-\uDC1F\uDC80-\uDCFF\uDDF0-\uDFFF]|\uD834[\uDCF6-\uDCFF\uDD27\uDD28\uDDE9-\uDDFF\uDE46-\uDEFF\uDF57-\uDF5F\uDF72-\uDFFF]|\uD83C[\uDC2C-\uDC2F\uDC94-\uDC9F\uDCAF\uDCB0\uDCC0\uDCD0\uDCF6-\uDCFF\uDD0D-\uDD0F\uDD2F\uDD6C-\uDD6F\uDD9B-\uDDE5\uDE03-\uDE0F\uDE3B-\uDE3F\uDE49-\uDE4F\uDE52-\uDEFF]|\uD81A[\uDE39-\uDE3F\uDE5F\uDE6A-\uDE6D\uDE70-\uDECF\uDEEE\uDEEF\uDEF6-\uDEFF\uDF46-\uDF4F\uDF5A\uDF62\uDF78-\uDF7C\uDF90-\uDFFF]|\uD809[\uDC6F\uDC75-\uDC7F\uDD44-\uDFFF]|\uD81B[\uDC00-\uDEFF\uDF45-\uDF4F\uDF7F-\uDF8E\uDFA0-\uDFFF]|\uD86E[\uDC1E\uDC1F]|\uD83D[\uDD7A\uDDA4\uDED1-\uDEDF\uDEED-\uDEEF\uDEF4-\uDEFF\uDF74-\uDF7F\uDFD5-\uDFFF]|\uD801[\uDC9E\uDC9F\uDCAA-\uDCFF\uDD28-\uDD2F\uDD64-\uDD6E\uDD70-\uDDFF\uDF37-\uDF3F\uDF56-\uDF5F\uDF68-\uDFFF]|\uD800[\uDC0C\uDC27\uDC3B\uDC3E\uDC4E\uDC4F\uDC5E-\uDC7F\uDCFB-\uDCFF\uDD03-\uDD06\uDD34-\uDD36\uDD8D-\uDD8F\uDD9C-\uDD9F\uDDA1-\uDDCF\uDDFE-\uDE7F\uDE9D-\uDE9F\uDED1-\uDEDF\uDEFC-\uDEFF\uDF24-\uDF2F\uDF4B-\uDF4F\uDF7B-\uDF7F\uDF9E\uDFC4-\uDFC7\uDFD6-\uDFFF]|\uD869[\uDED7-\uDEFF]|\uD83B[\uDC00-\uDDFF\uDE04\uDE20\uDE23\uDE25\uDE26\uDE28\uDE33\uDE38\uDE3A\uDE3C-\uDE41\uDE43-\uDE46\uDE48\uDE4A\uDE4C\uDE50\uDE53\uDE55\uDE56\uDE58\uDE5A\uDE5C\uDE5E\uDE60\uDE63\uDE65\uDE66\uDE6B\uDE73\uDE78\uDE7D\uDE7F\uDE8A\uDE9C-\uDEA0\uDEA4\uDEAA\uDEBC-\uDEEF\uDEF2-\uDFFF]|[\uDBBF\uDBFF][\uDFFE\uDFFF]|\uD87E[\uDE1E-\uDFFF]|\uD82F[\uDC6B-\uDC6F\uDC7D-\uDC7F\uDC89-\uDC8F\uDC9A\uDC9B\uDCA4-\uDFFF]|\uD83A[\uDCC5\uDCC6\uDCD7-\uDFFF]|\uD80D[\uDC2F-\uDFFF]|\uD86D[\uDF35-\uDF3F]|[\uD807\uD80A\uD80B\uD80E-\uD810\uD812-\uD819\uD81C-\uD82B\uD82D\uD82E\uD830-\uD833\uD837-\uD839\uD83F\uD874-\uD87D\uD87F-\uDB3F\uDB41-\uDB7F][\uDC00-\uDFFF]|\uD806[\uDC00-\uDC9F\uDCF3-\uDCFE\uDD00-\uDEBF\uDEF9-\uDFFF]|\uD803[\uDC49-\uDC7F\uDCB3-\uDCBF\uDCF3-\uDCF9\uDD00-\uDE5F\uDE7F-\uDFFF]|\uD835[\uDC55\uDC9D\uDCA0\uDCA1\uDCA3\uDCA4\uDCA7\uDCA8\uDCAD\uDCBA\uDCBC\uDCC4\uDD06\uDD0B\uDD0C\uDD15\uDD1D\uDD3A\uDD3F\uDD45\uDD47-\uDD49\uDD51\uDEA6\uDEA7\uDFCC\uDFCD]|\uD836[\uDE8C-\uDE9A\uDEA0\uDEB0-\uDFFF]|\uD805[\uDC00-\uDC7F\uDCC8-\uDCCF\uDCDA-\uDD7F\uDDB6\uDDB7\uDDDE-\uDDFF\uDE45-\uDE4F\uDE5A-\uDE7F\uDEB8-\uDEBF\uDECA-\uDEFF\uDF1A-\uDF1C\uDF2C-\uDF2F\uDF40-\uDFFF]|\uD802[\uDC06\uDC07\uDC09\uDC36\uDC39-\uDC3B\uDC3D\uDC3E\uDC56\uDC9F-\uDCA6\uDCB0-\uDCDF\uDCF3\uDCF6-\uDCFA\uDD1C-\uDD1E\uDD3A-\uDD3E\uDD40-\uDD7F\uDDB8-\uDDBB\uDDD0\uDDD1\uDE04\uDE07-\uDE0B\uDE14\uDE18\uDE34-\uDE37\uDE3B-\uDE3E\uDE48-\uDE4F\uDE59-\uDE5F\uDEA0-\uDEBF\uDEE7-\uDEEA\uDEF7-\uDEFF\uDF36-\uDF38\uDF56\uDF57\uDF73-\uDF77\uDF92-\uDF98\uDF9D-\uDFA8\uDFB0-\uDFFF]|\uD808[\uDF9A-\uDFFF]|\uD804[\uDC4E-\uDC51\uDC70-\uDC7E\uDCC2-\uDCCF\uDCE9-\uDCEF\uDCFA-\uDCFF\uDD35\uDD44-\uDD4F\uDD77-\uDD7F\uDDCE\uDDCF\uDDE0\uDDF5-\uDDFF\uDE12\uDE3E-\uDE7F\uDE87\uDE89\uDE8E\uDE9E\uDEAA-\uDEAF\uDEEB-\uDEEF\uDEFA-\uDEFF\uDF04\uDF0D\uDF0E\uDF11\uDF12\uDF29\uDF31\uDF34\uDF3A\uDF3B\uDF45\uDF46\uDF49\uDF4A\uDF4E\uDF4F\uDF51-\uDF56\uDF58-\uDF5C\uDF64\uDF65\uDF6D-\uDF6F\uDF75-\uDFFF]|\uD82C[\uDC02-\uDFFF]|\uD811[\uDE47-\uDFFF]|\uD83E[\uDC0C-\uDC0F\uDC48-\uDC4F\uDC5A-\uDC5F\uDC88-\uDC8F\uDCAE-\uDD0F\uDD19-\uDD7F\uDD85-\uDDBF\uDDC1-\uDFFF]|\uD873[\uDEA2-\uDFFF]'
+            bmp: '\u0378\u0379\u0380-\u0383\u038B\u038D\u03A2\u0530\u0557\u0558\u0560\u0588\u058B\u058C\u0590\u05C8-\u05CF\u05EB-\u05EF\u05F5-\u05FF\u061D\u070E\u074B\u074C\u07B2-\u07BF\u07FB-\u07FF\u082E\u082F\u083F\u085C\u085D\u085F-\u089F\u08B5\u08BE-\u08D3\u0984\u098D\u098E\u0991\u0992\u09A9\u09B1\u09B3-\u09B5\u09BA\u09BB\u09C5\u09C6\u09C9\u09CA\u09CF-\u09D6\u09D8-\u09DB\u09DE\u09E4\u09E5\u09FC-\u0A00\u0A04\u0A0B-\u0A0E\u0A11\u0A12\u0A29\u0A31\u0A34\u0A37\u0A3A\u0A3B\u0A3D\u0A43-\u0A46\u0A49\u0A4A\u0A4E-\u0A50\u0A52-\u0A58\u0A5D\u0A5F-\u0A65\u0A76-\u0A80\u0A84\u0A8E\u0A92\u0AA9\u0AB1\u0AB4\u0ABA\u0ABB\u0AC6\u0ACA\u0ACE\u0ACF\u0AD1-\u0ADF\u0AE4\u0AE5\u0AF2-\u0AF8\u0AFA-\u0B00\u0B04\u0B0D\u0B0E\u0B11\u0B12\u0B29\u0B31\u0B34\u0B3A\u0B3B\u0B45\u0B46\u0B49\u0B4A\u0B4E-\u0B55\u0B58-\u0B5B\u0B5E\u0B64\u0B65\u0B78-\u0B81\u0B84\u0B8B-\u0B8D\u0B91\u0B96-\u0B98\u0B9B\u0B9D\u0BA0-\u0BA2\u0BA5-\u0BA7\u0BAB-\u0BAD\u0BBA-\u0BBD\u0BC3-\u0BC5\u0BC9\u0BCE\u0BCF\u0BD1-\u0BD6\u0BD8-\u0BE5\u0BFB-\u0BFF\u0C04\u0C0D\u0C11\u0C29\u0C3A-\u0C3C\u0C45\u0C49\u0C4E-\u0C54\u0C57\u0C5B-\u0C5F\u0C64\u0C65\u0C70-\u0C77\u0C84\u0C8D\u0C91\u0CA9\u0CB4\u0CBA\u0CBB\u0CC5\u0CC9\u0CCE-\u0CD4\u0CD7-\u0CDD\u0CDF\u0CE4\u0CE5\u0CF0\u0CF3-\u0D00\u0D04\u0D0D\u0D11\u0D3B\u0D3C\u0D45\u0D49\u0D50-\u0D53\u0D64\u0D65\u0D80\u0D81\u0D84\u0D97-\u0D99\u0DB2\u0DBC\u0DBE\u0DBF\u0DC7-\u0DC9\u0DCB-\u0DCE\u0DD5\u0DD7\u0DE0-\u0DE5\u0DF0\u0DF1\u0DF5-\u0E00\u0E3B-\u0E3E\u0E5C-\u0E80\u0E83\u0E85\u0E86\u0E89\u0E8B\u0E8C\u0E8E-\u0E93\u0E98\u0EA0\u0EA4\u0EA6\u0EA8\u0EA9\u0EAC\u0EBA\u0EBE\u0EBF\u0EC5\u0EC7\u0ECE\u0ECF\u0EDA\u0EDB\u0EE0-\u0EFF\u0F48\u0F6D-\u0F70\u0F98\u0FBD\u0FCD\u0FDB-\u0FFF\u10C6\u10C8-\u10CC\u10CE\u10CF\u1249\u124E\u124F\u1257\u1259\u125E\u125F\u1289\u128E\u128F\u12B1\u12B6\u12B7\u12BF\u12C1\u12C6\u12C7\u12D7\u1311\u1316\u1317\u135B\u135C\u137D-\u137F\u139A-\u139F\u13F6\u13F7\u13FE\u13FF\u169D-\u169F\u16F9-\u16FF\u170D\u1715-\u171F\u1737-\u173F\u1754-\u175F\u176D\u1771\u1774-\u177F\u17DE\u17DF\u17EA-\u17EF\u17FA-\u17FF\u180F\u181A-\u181F\u1878-\u187F\u18AB-\u18AF\u18F6-\u18FF\u191F\u192C-\u192F\u193C-\u193F\u1941-\u1943\u196E\u196F\u1975-\u197F\u19AC-\u19AF\u19CA-\u19CF\u19DB-\u19DD\u1A1C\u1A1D\u1A5F\u1A7D\u1A7E\u1A8A-\u1A8F\u1A9A-\u1A9F\u1AAE\u1AAF\u1ABF-\u1AFF\u1B4C-\u1B4F\u1B7D-\u1B7F\u1BF4-\u1BFB\u1C38-\u1C3A\u1C4A-\u1C4C\u1C89-\u1CBF\u1CC8-\u1CCF\u1CF7\u1CFA-\u1CFF\u1DF6-\u1DFA\u1F16\u1F17\u1F1E\u1F1F\u1F46\u1F47\u1F4E\u1F4F\u1F58\u1F5A\u1F5C\u1F5E\u1F7E\u1F7F\u1FB5\u1FC5\u1FD4\u1FD5\u1FDC\u1FF0\u1FF1\u1FF5\u1FFF\u2065\u2072\u2073\u208F\u209D-\u209F\u20BF-\u20CF\u20F1-\u20FF\u218C-\u218F\u23FF\u2427-\u243F\u244B-\u245F\u2B74\u2B75\u2B96\u2B97\u2BBA-\u2BBC\u2BC9\u2BD2-\u2BEB\u2BF0-\u2BFF\u2C2F\u2C5F\u2CF4-\u2CF8\u2D26\u2D28-\u2D2C\u2D2E\u2D2F\u2D68-\u2D6E\u2D71-\u2D7E\u2D97-\u2D9F\u2DA7\u2DAF\u2DB7\u2DBF\u2DC7\u2DCF\u2DD7\u2DDF\u2E45-\u2E7F\u2E9A\u2EF4-\u2EFF\u2FD6-\u2FEF\u2FFC-\u2FFF\u3040\u3097\u3098\u3100-\u3104\u312E-\u3130\u318F\u31BB-\u31BF\u31E4-\u31EF\u321F\u32FF\u4DB6-\u4DBF\u9FD6-\u9FFF\uA48D-\uA48F\uA4C7-\uA4CF\uA62C-\uA63F\uA6F8-\uA6FF\uA7AF\uA7B8-\uA7F6\uA82C-\uA82F\uA83A-\uA83F\uA878-\uA87F\uA8C6-\uA8CD\uA8DA-\uA8DF\uA8FE\uA8FF\uA954-\uA95E\uA97D-\uA97F\uA9CE\uA9DA-\uA9DD\uA9FF\uAA37-\uAA3F\uAA4E\uAA4F\uAA5A\uAA5B\uAAC3-\uAADA\uAAF7-\uAB00\uAB07\uAB08\uAB0F\uAB10\uAB17-\uAB1F\uAB27\uAB2F\uAB66-\uAB6F\uABEE\uABEF\uABFA-\uABFF\uD7A4-\uD7AF\uD7C7-\uD7CA\uD7FC-\uD7FF\uFA6E\uFA6F\uFADA-\uFAFF\uFB07-\uFB12\uFB18-\uFB1C\uFB37\uFB3D\uFB3F\uFB42\uFB45\uFBC2-\uFBD2\uFD40-\uFD4F\uFD90\uFD91\uFDC8-\uFDEF\uFDFE\uFDFF\uFE1A-\uFE1F\uFE53\uFE67\uFE6C-\uFE6F\uFE75\uFEFD\uFEFE\uFF00\uFFBF-\uFFC1\uFFC8\uFFC9\uFFD0\uFFD1\uFFD8\uFFD9\uFFDD-\uFFDF\uFFE7\uFFEF-\uFFF8\uFFFE\uFFFF',
+            astral: '\uD800[\uDC0C\uDC27\uDC3B\uDC3E\uDC4E\uDC4F\uDC5E-\uDC7F\uDCFB-\uDCFF\uDD03-\uDD06\uDD34-\uDD36\uDD8F\uDD9C-\uDD9F\uDDA1-\uDDCF\uDDFE-\uDE7F\uDE9D-\uDE9F\uDED1-\uDEDF\uDEFC-\uDEFF\uDF24-\uDF2F\uDF4B-\uDF4F\uDF7B-\uDF7F\uDF9E\uDFC4-\uDFC7\uDFD6-\uDFFF]|\uD801[\uDC9E\uDC9F\uDCAA-\uDCAF\uDCD4-\uDCD7\uDCFC-\uDCFF\uDD28-\uDD2F\uDD64-\uDD6E\uDD70-\uDDFF\uDF37-\uDF3F\uDF56-\uDF5F\uDF68-\uDFFF]|\uD802[\uDC06\uDC07\uDC09\uDC36\uDC39-\uDC3B\uDC3D\uDC3E\uDC56\uDC9F-\uDCA6\uDCB0-\uDCDF\uDCF3\uDCF6-\uDCFA\uDD1C-\uDD1E\uDD3A-\uDD3E\uDD40-\uDD7F\uDDB8-\uDDBB\uDDD0\uDDD1\uDE04\uDE07-\uDE0B\uDE14\uDE18\uDE34-\uDE37\uDE3B-\uDE3E\uDE48-\uDE4F\uDE59-\uDE5F\uDEA0-\uDEBF\uDEE7-\uDEEA\uDEF7-\uDEFF\uDF36-\uDF38\uDF56\uDF57\uDF73-\uDF77\uDF92-\uDF98\uDF9D-\uDFA8\uDFB0-\uDFFF]|\uD803[\uDC49-\uDC7F\uDCB3-\uDCBF\uDCF3-\uDCF9\uDD00-\uDE5F\uDE7F-\uDFFF]|\uD804[\uDC4E-\uDC51\uDC70-\uDC7E\uDCC2-\uDCCF\uDCE9-\uDCEF\uDCFA-\uDCFF\uDD35\uDD44-\uDD4F\uDD77-\uDD7F\uDDCE\uDDCF\uDDE0\uDDF5-\uDDFF\uDE12\uDE3F-\uDE7F\uDE87\uDE89\uDE8E\uDE9E\uDEAA-\uDEAF\uDEEB-\uDEEF\uDEFA-\uDEFF\uDF04\uDF0D\uDF0E\uDF11\uDF12\uDF29\uDF31\uDF34\uDF3A\uDF3B\uDF45\uDF46\uDF49\uDF4A\uDF4E\uDF4F\uDF51-\uDF56\uDF58-\uDF5C\uDF64\uDF65\uDF6D-\uDF6F\uDF75-\uDFFF]|\uD805[\uDC5A\uDC5C\uDC5E-\uDC7F\uDCC8-\uDCCF\uDCDA-\uDD7F\uDDB6\uDDB7\uDDDE-\uDDFF\uDE45-\uDE4F\uDE5A-\uDE5F\uDE6D-\uDE7F\uDEB8-\uDEBF\uDECA-\uDEFF\uDF1A-\uDF1C\uDF2C-\uDF2F\uDF40-\uDFFF]|\uD806[\uDC00-\uDC9F\uDCF3-\uDCFE\uDD00-\uDEBF\uDEF9-\uDFFF]|\uD807[\uDC09\uDC37\uDC46-\uDC4F\uDC6D-\uDC6F\uDC90\uDC91\uDCA8\uDCB7-\uDFFF]|\uD808[\uDF9A-\uDFFF]|\uD809[\uDC6F\uDC75-\uDC7F\uDD44-\uDFFF]|[\uD80A\uD80B\uD80E-\uD810\uD812-\uD819\uD823-\uD82B\uD82D\uD82E\uD830-\uD833\uD837\uD839\uD83F\uD874-\uD87D\uD87F-\uDB3F\uDB41-\uDB7F][\uDC00-\uDFFF]|\uD80D[\uDC2F-\uDFFF]|\uD811[\uDE47-\uDFFF]|\uD81A[\uDE39-\uDE3F\uDE5F\uDE6A-\uDE6D\uDE70-\uDECF\uDEEE\uDEEF\uDEF6-\uDEFF\uDF46-\uDF4F\uDF5A\uDF62\uDF78-\uDF7C\uDF90-\uDFFF]|\uD81B[\uDC00-\uDEFF\uDF45-\uDF4F\uDF7F-\uDF8E\uDFA0-\uDFDF\uDFE1-\uDFFF]|\uD821[\uDFED-\uDFFF]|\uD822[\uDEF3-\uDFFF]|\uD82C[\uDC02-\uDFFF]|\uD82F[\uDC6B-\uDC6F\uDC7D-\uDC7F\uDC89-\uDC8F\uDC9A\uDC9B\uDCA4-\uDFFF]|\uD834[\uDCF6-\uDCFF\uDD27\uDD28\uDDE9-\uDDFF\uDE46-\uDEFF\uDF57-\uDF5F\uDF72-\uDFFF]|\uD835[\uDC55\uDC9D\uDCA0\uDCA1\uDCA3\uDCA4\uDCA7\uDCA8\uDCAD\uDCBA\uDCBC\uDCC4\uDD06\uDD0B\uDD0C\uDD15\uDD1D\uDD3A\uDD3F\uDD45\uDD47-\uDD49\uDD51\uDEA6\uDEA7\uDFCC\uDFCD]|\uD836[\uDE8C-\uDE9A\uDEA0\uDEB0-\uDFFF]|\uD838[\uDC07\uDC19\uDC1A\uDC22\uDC25\uDC2B-\uDFFF]|\uD83A[\uDCC5\uDCC6\uDCD7-\uDCFF\uDD4B-\uDD4F\uDD5A-\uDD5D\uDD60-\uDFFF]|\uD83B[\uDC00-\uDDFF\uDE04\uDE20\uDE23\uDE25\uDE26\uDE28\uDE33\uDE38\uDE3A\uDE3C-\uDE41\uDE43-\uDE46\uDE48\uDE4A\uDE4C\uDE50\uDE53\uDE55\uDE56\uDE58\uDE5A\uDE5C\uDE5E\uDE60\uDE63\uDE65\uDE66\uDE6B\uDE73\uDE78\uDE7D\uDE7F\uDE8A\uDE9C-\uDEA0\uDEA4\uDEAA\uDEBC-\uDEEF\uDEF2-\uDFFF]|\uD83C[\uDC2C-\uDC2F\uDC94-\uDC9F\uDCAF\uDCB0\uDCC0\uDCD0\uDCF6-\uDCFF\uDD0D-\uDD0F\uDD2F\uDD6C-\uDD6F\uDDAD-\uDDE5\uDE03-\uDE0F\uDE3C-\uDE3F\uDE49-\uDE4F\uDE52-\uDEFF]|\uD83D[\uDED3-\uDEDF\uDEED-\uDEEF\uDEF7-\uDEFF\uDF74-\uDF7F\uDFD5-\uDFFF]|\uD83E[\uDC0C-\uDC0F\uDC48-\uDC4F\uDC5A-\uDC5F\uDC88-\uDC8F\uDCAE-\uDD0F\uDD1F\uDD28-\uDD2F\uDD31\uDD32\uDD3F\uDD4C-\uDD4F\uDD5F-\uDD7F\uDD92-\uDDBF\uDDC1-\uDFFF]|\uD869[\uDED7-\uDEFF]|\uD86D[\uDF35-\uDF3F]|\uD86E[\uDC1E\uDC1F]|\uD873[\uDEA2-\uDFFF]|\uD87E[\uDE1E-\uDFFF]|\uDB40[\uDC00\uDC02-\uDC1F\uDC80-\uDCFF\uDDF0-\uDFFF]|[\uDBBF\uDBFF][\uDFFE\uDFFF]'
         },
         {
             name: 'Co',
@@ -22872,26 +28507,26 @@ module.exports = function(XRegExp) {
         {
             name: 'L',
             alias: 'Letter',
-            bmp: 'A-Za-z\xAA\xB5\xBA\xC0-\xD6\xD8-\xF6\xF8-\u02C1\u02C6-\u02D1\u02E0-\u02E4\u02EC\u02EE\u0370-\u0374\u0376\u0377\u037A-\u037D\u037F\u0386\u0388-\u038A\u038C\u038E-\u03A1\u03A3-\u03F5\u03F7-\u0481\u048A-\u052F\u0531-\u0556\u0559\u0561-\u0587\u05D0-\u05EA\u05F0-\u05F2\u0620-\u064A\u066E\u066F\u0671-\u06D3\u06D5\u06E5\u06E6\u06EE\u06EF\u06FA-\u06FC\u06FF\u0710\u0712-\u072F\u074D-\u07A5\u07B1\u07CA-\u07EA\u07F4\u07F5\u07FA\u0800-\u0815\u081A\u0824\u0828\u0840-\u0858\u08A0-\u08B4\u0904-\u0939\u093D\u0950\u0958-\u0961\u0971-\u0980\u0985-\u098C\u098F\u0990\u0993-\u09A8\u09AA-\u09B0\u09B2\u09B6-\u09B9\u09BD\u09CE\u09DC\u09DD\u09DF-\u09E1\u09F0\u09F1\u0A05-\u0A0A\u0A0F\u0A10\u0A13-\u0A28\u0A2A-\u0A30\u0A32\u0A33\u0A35\u0A36\u0A38\u0A39\u0A59-\u0A5C\u0A5E\u0A72-\u0A74\u0A85-\u0A8D\u0A8F-\u0A91\u0A93-\u0AA8\u0AAA-\u0AB0\u0AB2\u0AB3\u0AB5-\u0AB9\u0ABD\u0AD0\u0AE0\u0AE1\u0AF9\u0B05-\u0B0C\u0B0F\u0B10\u0B13-\u0B28\u0B2A-\u0B30\u0B32\u0B33\u0B35-\u0B39\u0B3D\u0B5C\u0B5D\u0B5F-\u0B61\u0B71\u0B83\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A\u0B9C\u0B9E\u0B9F\u0BA3\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9\u0BD0\u0C05-\u0C0C\u0C0E-\u0C10\u0C12-\u0C28\u0C2A-\u0C39\u0C3D\u0C58-\u0C5A\u0C60\u0C61\u0C85-\u0C8C\u0C8E-\u0C90\u0C92-\u0CA8\u0CAA-\u0CB3\u0CB5-\u0CB9\u0CBD\u0CDE\u0CE0\u0CE1\u0CF1\u0CF2\u0D05-\u0D0C\u0D0E-\u0D10\u0D12-\u0D3A\u0D3D\u0D4E\u0D5F-\u0D61\u0D7A-\u0D7F\u0D85-\u0D96\u0D9A-\u0DB1\u0DB3-\u0DBB\u0DBD\u0DC0-\u0DC6\u0E01-\u0E30\u0E32\u0E33\u0E40-\u0E46\u0E81\u0E82\u0E84\u0E87\u0E88\u0E8A\u0E8D\u0E94-\u0E97\u0E99-\u0E9F\u0EA1-\u0EA3\u0EA5\u0EA7\u0EAA\u0EAB\u0EAD-\u0EB0\u0EB2\u0EB3\u0EBD\u0EC0-\u0EC4\u0EC6\u0EDC-\u0EDF\u0F00\u0F40-\u0F47\u0F49-\u0F6C\u0F88-\u0F8C\u1000-\u102A\u103F\u1050-\u1055\u105A-\u105D\u1061\u1065\u1066\u106E-\u1070\u1075-\u1081\u108E\u10A0-\u10C5\u10C7\u10CD\u10D0-\u10FA\u10FC-\u1248\u124A-\u124D\u1250-\u1256\u1258\u125A-\u125D\u1260-\u1288\u128A-\u128D\u1290-\u12B0\u12B2-\u12B5\u12B8-\u12BE\u12C0\u12C2-\u12C5\u12C8-\u12D6\u12D8-\u1310\u1312-\u1315\u1318-\u135A\u1380-\u138F\u13A0-\u13F5\u13F8-\u13FD\u1401-\u166C\u166F-\u167F\u1681-\u169A\u16A0-\u16EA\u16F1-\u16F8\u1700-\u170C\u170E-\u1711\u1720-\u1731\u1740-\u1751\u1760-\u176C\u176E-\u1770\u1780-\u17B3\u17D7\u17DC\u1820-\u1877\u1880-\u18A8\u18AA\u18B0-\u18F5\u1900-\u191E\u1950-\u196D\u1970-\u1974\u1980-\u19AB\u19B0-\u19C9\u1A00-\u1A16\u1A20-\u1A54\u1AA7\u1B05-\u1B33\u1B45-\u1B4B\u1B83-\u1BA0\u1BAE\u1BAF\u1BBA-\u1BE5\u1C00-\u1C23\u1C4D-\u1C4F\u1C5A-\u1C7D\u1CE9-\u1CEC\u1CEE-\u1CF1\u1CF5\u1CF6\u1D00-\u1DBF\u1E00-\u1F15\u1F18-\u1F1D\u1F20-\u1F45\u1F48-\u1F4D\u1F50-\u1F57\u1F59\u1F5B\u1F5D\u1F5F-\u1F7D\u1F80-\u1FB4\u1FB6-\u1FBC\u1FBE\u1FC2-\u1FC4\u1FC6-\u1FCC\u1FD0-\u1FD3\u1FD6-\u1FDB\u1FE0-\u1FEC\u1FF2-\u1FF4\u1FF6-\u1FFC\u2071\u207F\u2090-\u209C\u2102\u2107\u210A-\u2113\u2115\u2119-\u211D\u2124\u2126\u2128\u212A-\u212D\u212F-\u2139\u213C-\u213F\u2145-\u2149\u214E\u2183\u2184\u2C00-\u2C2E\u2C30-\u2C5E\u2C60-\u2CE4\u2CEB-\u2CEE\u2CF2\u2CF3\u2D00-\u2D25\u2D27\u2D2D\u2D30-\u2D67\u2D6F\u2D80-\u2D96\u2DA0-\u2DA6\u2DA8-\u2DAE\u2DB0-\u2DB6\u2DB8-\u2DBE\u2DC0-\u2DC6\u2DC8-\u2DCE\u2DD0-\u2DD6\u2DD8-\u2DDE\u2E2F\u3005\u3006\u3031-\u3035\u303B\u303C\u3041-\u3096\u309D-\u309F\u30A1-\u30FA\u30FC-\u30FF\u3105-\u312D\u3131-\u318E\u31A0-\u31BA\u31F0-\u31FF\u3400-\u4DB5\u4E00-\u9FD5\uA000-\uA48C\uA4D0-\uA4FD\uA500-\uA60C\uA610-\uA61F\uA62A\uA62B\uA640-\uA66E\uA67F-\uA69D\uA6A0-\uA6E5\uA717-\uA71F\uA722-\uA788\uA78B-\uA7AD\uA7B0-\uA7B7\uA7F7-\uA801\uA803-\uA805\uA807-\uA80A\uA80C-\uA822\uA840-\uA873\uA882-\uA8B3\uA8F2-\uA8F7\uA8FB\uA8FD\uA90A-\uA925\uA930-\uA946\uA960-\uA97C\uA984-\uA9B2\uA9CF\uA9E0-\uA9E4\uA9E6-\uA9EF\uA9FA-\uA9FE\uAA00-\uAA28\uAA40-\uAA42\uAA44-\uAA4B\uAA60-\uAA76\uAA7A\uAA7E-\uAAAF\uAAB1\uAAB5\uAAB6\uAAB9-\uAABD\uAAC0\uAAC2\uAADB-\uAADD\uAAE0-\uAAEA\uAAF2-\uAAF4\uAB01-\uAB06\uAB09-\uAB0E\uAB11-\uAB16\uAB20-\uAB26\uAB28-\uAB2E\uAB30-\uAB5A\uAB5C-\uAB65\uAB70-\uABE2\uAC00-\uD7A3\uD7B0-\uD7C6\uD7CB-\uD7FB\uF900-\uFA6D\uFA70-\uFAD9\uFB00-\uFB06\uFB13-\uFB17\uFB1D\uFB1F-\uFB28\uFB2A-\uFB36\uFB38-\uFB3C\uFB3E\uFB40\uFB41\uFB43\uFB44\uFB46-\uFBB1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFB\uFE70-\uFE74\uFE76-\uFEFC\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFFBE\uFFC2-\uFFC7\uFFCA-\uFFCF\uFFD2-\uFFD7\uFFDA-\uFFDC',
-            astral: '\uD86E[\uDC00-\uDC1D\uDC20-\uDFFF]|\uD86D[\uDC00-\uDF34\uDF40-\uDFFF]|\uD869[\uDC00-\uDED6\uDF00-\uDFFF]|\uD803[\uDC00-\uDC48\uDC80-\uDCB2\uDCC0-\uDCF2]|\uD83A[\uDC00-\uDCC4]|\uD801[\uDC00-\uDC9D\uDD00-\uDD27\uDD30-\uDD63\uDE00-\uDF36\uDF40-\uDF55\uDF60-\uDF67]|\uD800[\uDC00-\uDC0B\uDC0D-\uDC26\uDC28-\uDC3A\uDC3C\uDC3D\uDC3F-\uDC4D\uDC50-\uDC5D\uDC80-\uDCFA\uDE80-\uDE9C\uDEA0-\uDED0\uDF00-\uDF1F\uDF30-\uDF40\uDF42-\uDF49\uDF50-\uDF75\uDF80-\uDF9D\uDFA0-\uDFC3\uDFC8-\uDFCF]|\uD80D[\uDC00-\uDC2E]|\uD87E[\uDC00-\uDE1D]|\uD81B[\uDF00-\uDF44\uDF50\uDF93-\uDF9F]|[\uD80C\uD840-\uD868\uD86A-\uD86C\uD86F-\uD872][\uDC00-\uDFFF]|\uD805[\uDC80-\uDCAF\uDCC4\uDCC5\uDCC7\uDD80-\uDDAE\uDDD8-\uDDDB\uDE00-\uDE2F\uDE44\uDE80-\uDEAA\uDF00-\uDF19]|\uD81A[\uDC00-\uDE38\uDE40-\uDE5E\uDED0-\uDEED\uDF00-\uDF2F\uDF40-\uDF43\uDF63-\uDF77\uDF7D-\uDF8F]|\uD809[\uDC80-\uDD43]|\uD802[\uDC00-\uDC05\uDC08\uDC0A-\uDC35\uDC37\uDC38\uDC3C\uDC3F-\uDC55\uDC60-\uDC76\uDC80-\uDC9E\uDCE0-\uDCF2\uDCF4\uDCF5\uDD00-\uDD15\uDD20-\uDD39\uDD80-\uDDB7\uDDBE\uDDBF\uDE00\uDE10-\uDE13\uDE15-\uDE17\uDE19-\uDE33\uDE60-\uDE7C\uDE80-\uDE9C\uDEC0-\uDEC7\uDEC9-\uDEE4\uDF00-\uDF35\uDF40-\uDF55\uDF60-\uDF72\uDF80-\uDF91]|\uD835[\uDC00-\uDC54\uDC56-\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD1E-\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD52-\uDEA5\uDEA8-\uDEC0\uDEC2-\uDEDA\uDEDC-\uDEFA\uDEFC-\uDF14\uDF16-\uDF34\uDF36-\uDF4E\uDF50-\uDF6E\uDF70-\uDF88\uDF8A-\uDFA8\uDFAA-\uDFC2\uDFC4-\uDFCB]|\uD804[\uDC03-\uDC37\uDC83-\uDCAF\uDCD0-\uDCE8\uDD03-\uDD26\uDD50-\uDD72\uDD76\uDD83-\uDDB2\uDDC1-\uDDC4\uDDDA\uDDDC\uDE00-\uDE11\uDE13-\uDE2B\uDE80-\uDE86\uDE88\uDE8A-\uDE8D\uDE8F-\uDE9D\uDE9F-\uDEA8\uDEB0-\uDEDE\uDF05-\uDF0C\uDF0F\uDF10\uDF13-\uDF28\uDF2A-\uDF30\uDF32\uDF33\uDF35-\uDF39\uDF3D\uDF50\uDF5D-\uDF61]|\uD808[\uDC00-\uDF99]|\uD83B[\uDE00-\uDE03\uDE05-\uDE1F\uDE21\uDE22\uDE24\uDE27\uDE29-\uDE32\uDE34-\uDE37\uDE39\uDE3B\uDE42\uDE47\uDE49\uDE4B\uDE4D-\uDE4F\uDE51\uDE52\uDE54\uDE57\uDE59\uDE5B\uDE5D\uDE5F\uDE61\uDE62\uDE64\uDE67-\uDE6A\uDE6C-\uDE72\uDE74-\uDE77\uDE79-\uDE7C\uDE7E\uDE80-\uDE89\uDE8B-\uDE9B\uDEA1-\uDEA3\uDEA5-\uDEA9\uDEAB-\uDEBB]|\uD806[\uDCA0-\uDCDF\uDCFF\uDEC0-\uDEF8]|\uD811[\uDC00-\uDE46]|\uD82F[\uDC00-\uDC6A\uDC70-\uDC7C\uDC80-\uDC88\uDC90-\uDC99]|\uD82C[\uDC00\uDC01]|\uD873[\uDC00-\uDEA1]'
+            bmp: 'A-Za-z\xAA\xB5\xBA\xC0-\xD6\xD8-\xF6\xF8-\u02C1\u02C6-\u02D1\u02E0-\u02E4\u02EC\u02EE\u0370-\u0374\u0376\u0377\u037A-\u037D\u037F\u0386\u0388-\u038A\u038C\u038E-\u03A1\u03A3-\u03F5\u03F7-\u0481\u048A-\u052F\u0531-\u0556\u0559\u0561-\u0587\u05D0-\u05EA\u05F0-\u05F2\u0620-\u064A\u066E\u066F\u0671-\u06D3\u06D5\u06E5\u06E6\u06EE\u06EF\u06FA-\u06FC\u06FF\u0710\u0712-\u072F\u074D-\u07A5\u07B1\u07CA-\u07EA\u07F4\u07F5\u07FA\u0800-\u0815\u081A\u0824\u0828\u0840-\u0858\u08A0-\u08B4\u08B6-\u08BD\u0904-\u0939\u093D\u0950\u0958-\u0961\u0971-\u0980\u0985-\u098C\u098F\u0990\u0993-\u09A8\u09AA-\u09B0\u09B2\u09B6-\u09B9\u09BD\u09CE\u09DC\u09DD\u09DF-\u09E1\u09F0\u09F1\u0A05-\u0A0A\u0A0F\u0A10\u0A13-\u0A28\u0A2A-\u0A30\u0A32\u0A33\u0A35\u0A36\u0A38\u0A39\u0A59-\u0A5C\u0A5E\u0A72-\u0A74\u0A85-\u0A8D\u0A8F-\u0A91\u0A93-\u0AA8\u0AAA-\u0AB0\u0AB2\u0AB3\u0AB5-\u0AB9\u0ABD\u0AD0\u0AE0\u0AE1\u0AF9\u0B05-\u0B0C\u0B0F\u0B10\u0B13-\u0B28\u0B2A-\u0B30\u0B32\u0B33\u0B35-\u0B39\u0B3D\u0B5C\u0B5D\u0B5F-\u0B61\u0B71\u0B83\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A\u0B9C\u0B9E\u0B9F\u0BA3\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9\u0BD0\u0C05-\u0C0C\u0C0E-\u0C10\u0C12-\u0C28\u0C2A-\u0C39\u0C3D\u0C58-\u0C5A\u0C60\u0C61\u0C80\u0C85-\u0C8C\u0C8E-\u0C90\u0C92-\u0CA8\u0CAA-\u0CB3\u0CB5-\u0CB9\u0CBD\u0CDE\u0CE0\u0CE1\u0CF1\u0CF2\u0D05-\u0D0C\u0D0E-\u0D10\u0D12-\u0D3A\u0D3D\u0D4E\u0D54-\u0D56\u0D5F-\u0D61\u0D7A-\u0D7F\u0D85-\u0D96\u0D9A-\u0DB1\u0DB3-\u0DBB\u0DBD\u0DC0-\u0DC6\u0E01-\u0E30\u0E32\u0E33\u0E40-\u0E46\u0E81\u0E82\u0E84\u0E87\u0E88\u0E8A\u0E8D\u0E94-\u0E97\u0E99-\u0E9F\u0EA1-\u0EA3\u0EA5\u0EA7\u0EAA\u0EAB\u0EAD-\u0EB0\u0EB2\u0EB3\u0EBD\u0EC0-\u0EC4\u0EC6\u0EDC-\u0EDF\u0F00\u0F40-\u0F47\u0F49-\u0F6C\u0F88-\u0F8C\u1000-\u102A\u103F\u1050-\u1055\u105A-\u105D\u1061\u1065\u1066\u106E-\u1070\u1075-\u1081\u108E\u10A0-\u10C5\u10C7\u10CD\u10D0-\u10FA\u10FC-\u1248\u124A-\u124D\u1250-\u1256\u1258\u125A-\u125D\u1260-\u1288\u128A-\u128D\u1290-\u12B0\u12B2-\u12B5\u12B8-\u12BE\u12C0\u12C2-\u12C5\u12C8-\u12D6\u12D8-\u1310\u1312-\u1315\u1318-\u135A\u1380-\u138F\u13A0-\u13F5\u13F8-\u13FD\u1401-\u166C\u166F-\u167F\u1681-\u169A\u16A0-\u16EA\u16F1-\u16F8\u1700-\u170C\u170E-\u1711\u1720-\u1731\u1740-\u1751\u1760-\u176C\u176E-\u1770\u1780-\u17B3\u17D7\u17DC\u1820-\u1877\u1880-\u1884\u1887-\u18A8\u18AA\u18B0-\u18F5\u1900-\u191E\u1950-\u196D\u1970-\u1974\u1980-\u19AB\u19B0-\u19C9\u1A00-\u1A16\u1A20-\u1A54\u1AA7\u1B05-\u1B33\u1B45-\u1B4B\u1B83-\u1BA0\u1BAE\u1BAF\u1BBA-\u1BE5\u1C00-\u1C23\u1C4D-\u1C4F\u1C5A-\u1C7D\u1C80-\u1C88\u1CE9-\u1CEC\u1CEE-\u1CF1\u1CF5\u1CF6\u1D00-\u1DBF\u1E00-\u1F15\u1F18-\u1F1D\u1F20-\u1F45\u1F48-\u1F4D\u1F50-\u1F57\u1F59\u1F5B\u1F5D\u1F5F-\u1F7D\u1F80-\u1FB4\u1FB6-\u1FBC\u1FBE\u1FC2-\u1FC4\u1FC6-\u1FCC\u1FD0-\u1FD3\u1FD6-\u1FDB\u1FE0-\u1FEC\u1FF2-\u1FF4\u1FF6-\u1FFC\u2071\u207F\u2090-\u209C\u2102\u2107\u210A-\u2113\u2115\u2119-\u211D\u2124\u2126\u2128\u212A-\u212D\u212F-\u2139\u213C-\u213F\u2145-\u2149\u214E\u2183\u2184\u2C00-\u2C2E\u2C30-\u2C5E\u2C60-\u2CE4\u2CEB-\u2CEE\u2CF2\u2CF3\u2D00-\u2D25\u2D27\u2D2D\u2D30-\u2D67\u2D6F\u2D80-\u2D96\u2DA0-\u2DA6\u2DA8-\u2DAE\u2DB0-\u2DB6\u2DB8-\u2DBE\u2DC0-\u2DC6\u2DC8-\u2DCE\u2DD0-\u2DD6\u2DD8-\u2DDE\u2E2F\u3005\u3006\u3031-\u3035\u303B\u303C\u3041-\u3096\u309D-\u309F\u30A1-\u30FA\u30FC-\u30FF\u3105-\u312D\u3131-\u318E\u31A0-\u31BA\u31F0-\u31FF\u3400-\u4DB5\u4E00-\u9FD5\uA000-\uA48C\uA4D0-\uA4FD\uA500-\uA60C\uA610-\uA61F\uA62A\uA62B\uA640-\uA66E\uA67F-\uA69D\uA6A0-\uA6E5\uA717-\uA71F\uA722-\uA788\uA78B-\uA7AE\uA7B0-\uA7B7\uA7F7-\uA801\uA803-\uA805\uA807-\uA80A\uA80C-\uA822\uA840-\uA873\uA882-\uA8B3\uA8F2-\uA8F7\uA8FB\uA8FD\uA90A-\uA925\uA930-\uA946\uA960-\uA97C\uA984-\uA9B2\uA9CF\uA9E0-\uA9E4\uA9E6-\uA9EF\uA9FA-\uA9FE\uAA00-\uAA28\uAA40-\uAA42\uAA44-\uAA4B\uAA60-\uAA76\uAA7A\uAA7E-\uAAAF\uAAB1\uAAB5\uAAB6\uAAB9-\uAABD\uAAC0\uAAC2\uAADB-\uAADD\uAAE0-\uAAEA\uAAF2-\uAAF4\uAB01-\uAB06\uAB09-\uAB0E\uAB11-\uAB16\uAB20-\uAB26\uAB28-\uAB2E\uAB30-\uAB5A\uAB5C-\uAB65\uAB70-\uABE2\uAC00-\uD7A3\uD7B0-\uD7C6\uD7CB-\uD7FB\uF900-\uFA6D\uFA70-\uFAD9\uFB00-\uFB06\uFB13-\uFB17\uFB1D\uFB1F-\uFB28\uFB2A-\uFB36\uFB38-\uFB3C\uFB3E\uFB40\uFB41\uFB43\uFB44\uFB46-\uFBB1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFB\uFE70-\uFE74\uFE76-\uFEFC\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFFBE\uFFC2-\uFFC7\uFFCA-\uFFCF\uFFD2-\uFFD7\uFFDA-\uFFDC',
+            astral: '\uD800[\uDC00-\uDC0B\uDC0D-\uDC26\uDC28-\uDC3A\uDC3C\uDC3D\uDC3F-\uDC4D\uDC50-\uDC5D\uDC80-\uDCFA\uDE80-\uDE9C\uDEA0-\uDED0\uDF00-\uDF1F\uDF30-\uDF40\uDF42-\uDF49\uDF50-\uDF75\uDF80-\uDF9D\uDFA0-\uDFC3\uDFC8-\uDFCF]|\uD801[\uDC00-\uDC9D\uDCB0-\uDCD3\uDCD8-\uDCFB\uDD00-\uDD27\uDD30-\uDD63\uDE00-\uDF36\uDF40-\uDF55\uDF60-\uDF67]|\uD802[\uDC00-\uDC05\uDC08\uDC0A-\uDC35\uDC37\uDC38\uDC3C\uDC3F-\uDC55\uDC60-\uDC76\uDC80-\uDC9E\uDCE0-\uDCF2\uDCF4\uDCF5\uDD00-\uDD15\uDD20-\uDD39\uDD80-\uDDB7\uDDBE\uDDBF\uDE00\uDE10-\uDE13\uDE15-\uDE17\uDE19-\uDE33\uDE60-\uDE7C\uDE80-\uDE9C\uDEC0-\uDEC7\uDEC9-\uDEE4\uDF00-\uDF35\uDF40-\uDF55\uDF60-\uDF72\uDF80-\uDF91]|\uD803[\uDC00-\uDC48\uDC80-\uDCB2\uDCC0-\uDCF2]|\uD804[\uDC03-\uDC37\uDC83-\uDCAF\uDCD0-\uDCE8\uDD03-\uDD26\uDD50-\uDD72\uDD76\uDD83-\uDDB2\uDDC1-\uDDC4\uDDDA\uDDDC\uDE00-\uDE11\uDE13-\uDE2B\uDE80-\uDE86\uDE88\uDE8A-\uDE8D\uDE8F-\uDE9D\uDE9F-\uDEA8\uDEB0-\uDEDE\uDF05-\uDF0C\uDF0F\uDF10\uDF13-\uDF28\uDF2A-\uDF30\uDF32\uDF33\uDF35-\uDF39\uDF3D\uDF50\uDF5D-\uDF61]|\uD805[\uDC00-\uDC34\uDC47-\uDC4A\uDC80-\uDCAF\uDCC4\uDCC5\uDCC7\uDD80-\uDDAE\uDDD8-\uDDDB\uDE00-\uDE2F\uDE44\uDE80-\uDEAA\uDF00-\uDF19]|\uD806[\uDCA0-\uDCDF\uDCFF\uDEC0-\uDEF8]|\uD807[\uDC00-\uDC08\uDC0A-\uDC2E\uDC40\uDC72-\uDC8F]|\uD808[\uDC00-\uDF99]|\uD809[\uDC80-\uDD43]|[\uD80C\uD81C-\uD820\uD840-\uD868\uD86A-\uD86C\uD86F-\uD872][\uDC00-\uDFFF]|\uD80D[\uDC00-\uDC2E]|\uD811[\uDC00-\uDE46]|\uD81A[\uDC00-\uDE38\uDE40-\uDE5E\uDED0-\uDEED\uDF00-\uDF2F\uDF40-\uDF43\uDF63-\uDF77\uDF7D-\uDF8F]|\uD81B[\uDF00-\uDF44\uDF50\uDF93-\uDF9F\uDFE0]|\uD821[\uDC00-\uDFEC]|\uD822[\uDC00-\uDEF2]|\uD82C[\uDC00\uDC01]|\uD82F[\uDC00-\uDC6A\uDC70-\uDC7C\uDC80-\uDC88\uDC90-\uDC99]|\uD835[\uDC00-\uDC54\uDC56-\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD1E-\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD52-\uDEA5\uDEA8-\uDEC0\uDEC2-\uDEDA\uDEDC-\uDEFA\uDEFC-\uDF14\uDF16-\uDF34\uDF36-\uDF4E\uDF50-\uDF6E\uDF70-\uDF88\uDF8A-\uDFA8\uDFAA-\uDFC2\uDFC4-\uDFCB]|\uD83A[\uDC00-\uDCC4\uDD00-\uDD43]|\uD83B[\uDE00-\uDE03\uDE05-\uDE1F\uDE21\uDE22\uDE24\uDE27\uDE29-\uDE32\uDE34-\uDE37\uDE39\uDE3B\uDE42\uDE47\uDE49\uDE4B\uDE4D-\uDE4F\uDE51\uDE52\uDE54\uDE57\uDE59\uDE5B\uDE5D\uDE5F\uDE61\uDE62\uDE64\uDE67-\uDE6A\uDE6C-\uDE72\uDE74-\uDE77\uDE79-\uDE7C\uDE7E\uDE80-\uDE89\uDE8B-\uDE9B\uDEA1-\uDEA3\uDEA5-\uDEA9\uDEAB-\uDEBB]|\uD869[\uDC00-\uDED6\uDF00-\uDFFF]|\uD86D[\uDC00-\uDF34\uDF40-\uDFFF]|\uD86E[\uDC00-\uDC1D\uDC20-\uDFFF]|\uD873[\uDC00-\uDEA1]|\uD87E[\uDC00-\uDE1D]'
         },
         {
             name: 'Ll',
             alias: 'Lowercase_Letter',
-            bmp: 'a-z\xB5\xDF-\xF6\xF8-\xFF\u0101\u0103\u0105\u0107\u0109\u010B\u010D\u010F\u0111\u0113\u0115\u0117\u0119\u011B\u011D\u011F\u0121\u0123\u0125\u0127\u0129\u012B\u012D\u012F\u0131\u0133\u0135\u0137\u0138\u013A\u013C\u013E\u0140\u0142\u0144\u0146\u0148\u0149\u014B\u014D\u014F\u0151\u0153\u0155\u0157\u0159\u015B\u015D\u015F\u0161\u0163\u0165\u0167\u0169\u016B\u016D\u016F\u0171\u0173\u0175\u0177\u017A\u017C\u017E-\u0180\u0183\u0185\u0188\u018C\u018D\u0192\u0195\u0199-\u019B\u019E\u01A1\u01A3\u01A5\u01A8\u01AA\u01AB\u01AD\u01B0\u01B4\u01B6\u01B9\u01BA\u01BD-\u01BF\u01C6\u01C9\u01CC\u01CE\u01D0\u01D2\u01D4\u01D6\u01D8\u01DA\u01DC\u01DD\u01DF\u01E1\u01E3\u01E5\u01E7\u01E9\u01EB\u01ED\u01EF\u01F0\u01F3\u01F5\u01F9\u01FB\u01FD\u01FF\u0201\u0203\u0205\u0207\u0209\u020B\u020D\u020F\u0211\u0213\u0215\u0217\u0219\u021B\u021D\u021F\u0221\u0223\u0225\u0227\u0229\u022B\u022D\u022F\u0231\u0233-\u0239\u023C\u023F\u0240\u0242\u0247\u0249\u024B\u024D\u024F-\u0293\u0295-\u02AF\u0371\u0373\u0377\u037B-\u037D\u0390\u03AC-\u03CE\u03D0\u03D1\u03D5-\u03D7\u03D9\u03DB\u03DD\u03DF\u03E1\u03E3\u03E5\u03E7\u03E9\u03EB\u03ED\u03EF-\u03F3\u03F5\u03F8\u03FB\u03FC\u0430-\u045F\u0461\u0463\u0465\u0467\u0469\u046B\u046D\u046F\u0471\u0473\u0475\u0477\u0479\u047B\u047D\u047F\u0481\u048B\u048D\u048F\u0491\u0493\u0495\u0497\u0499\u049B\u049D\u049F\u04A1\u04A3\u04A5\u04A7\u04A9\u04AB\u04AD\u04AF\u04B1\u04B3\u04B5\u04B7\u04B9\u04BB\u04BD\u04BF\u04C2\u04C4\u04C6\u04C8\u04CA\u04CC\u04CE\u04CF\u04D1\u04D3\u04D5\u04D7\u04D9\u04DB\u04DD\u04DF\u04E1\u04E3\u04E5\u04E7\u04E9\u04EB\u04ED\u04EF\u04F1\u04F3\u04F5\u04F7\u04F9\u04FB\u04FD\u04FF\u0501\u0503\u0505\u0507\u0509\u050B\u050D\u050F\u0511\u0513\u0515\u0517\u0519\u051B\u051D\u051F\u0521\u0523\u0525\u0527\u0529\u052B\u052D\u052F\u0561-\u0587\u13F8-\u13FD\u1D00-\u1D2B\u1D6B-\u1D77\u1D79-\u1D9A\u1E01\u1E03\u1E05\u1E07\u1E09\u1E0B\u1E0D\u1E0F\u1E11\u1E13\u1E15\u1E17\u1E19\u1E1B\u1E1D\u1E1F\u1E21\u1E23\u1E25\u1E27\u1E29\u1E2B\u1E2D\u1E2F\u1E31\u1E33\u1E35\u1E37\u1E39\u1E3B\u1E3D\u1E3F\u1E41\u1E43\u1E45\u1E47\u1E49\u1E4B\u1E4D\u1E4F\u1E51\u1E53\u1E55\u1E57\u1E59\u1E5B\u1E5D\u1E5F\u1E61\u1E63\u1E65\u1E67\u1E69\u1E6B\u1E6D\u1E6F\u1E71\u1E73\u1E75\u1E77\u1E79\u1E7B\u1E7D\u1E7F\u1E81\u1E83\u1E85\u1E87\u1E89\u1E8B\u1E8D\u1E8F\u1E91\u1E93\u1E95-\u1E9D\u1E9F\u1EA1\u1EA3\u1EA5\u1EA7\u1EA9\u1EAB\u1EAD\u1EAF\u1EB1\u1EB3\u1EB5\u1EB7\u1EB9\u1EBB\u1EBD\u1EBF\u1EC1\u1EC3\u1EC5\u1EC7\u1EC9\u1ECB\u1ECD\u1ECF\u1ED1\u1ED3\u1ED5\u1ED7\u1ED9\u1EDB\u1EDD\u1EDF\u1EE1\u1EE3\u1EE5\u1EE7\u1EE9\u1EEB\u1EED\u1EEF\u1EF1\u1EF3\u1EF5\u1EF7\u1EF9\u1EFB\u1EFD\u1EFF-\u1F07\u1F10-\u1F15\u1F20-\u1F27\u1F30-\u1F37\u1F40-\u1F45\u1F50-\u1F57\u1F60-\u1F67\u1F70-\u1F7D\u1F80-\u1F87\u1F90-\u1F97\u1FA0-\u1FA7\u1FB0-\u1FB4\u1FB6\u1FB7\u1FBE\u1FC2-\u1FC4\u1FC6\u1FC7\u1FD0-\u1FD3\u1FD6\u1FD7\u1FE0-\u1FE7\u1FF2-\u1FF4\u1FF6\u1FF7\u210A\u210E\u210F\u2113\u212F\u2134\u2139\u213C\u213D\u2146-\u2149\u214E\u2184\u2C30-\u2C5E\u2C61\u2C65\u2C66\u2C68\u2C6A\u2C6C\u2C71\u2C73\u2C74\u2C76-\u2C7B\u2C81\u2C83\u2C85\u2C87\u2C89\u2C8B\u2C8D\u2C8F\u2C91\u2C93\u2C95\u2C97\u2C99\u2C9B\u2C9D\u2C9F\u2CA1\u2CA3\u2CA5\u2CA7\u2CA9\u2CAB\u2CAD\u2CAF\u2CB1\u2CB3\u2CB5\u2CB7\u2CB9\u2CBB\u2CBD\u2CBF\u2CC1\u2CC3\u2CC5\u2CC7\u2CC9\u2CCB\u2CCD\u2CCF\u2CD1\u2CD3\u2CD5\u2CD7\u2CD9\u2CDB\u2CDD\u2CDF\u2CE1\u2CE3\u2CE4\u2CEC\u2CEE\u2CF3\u2D00-\u2D25\u2D27\u2D2D\uA641\uA643\uA645\uA647\uA649\uA64B\uA64D\uA64F\uA651\uA653\uA655\uA657\uA659\uA65B\uA65D\uA65F\uA661\uA663\uA665\uA667\uA669\uA66B\uA66D\uA681\uA683\uA685\uA687\uA689\uA68B\uA68D\uA68F\uA691\uA693\uA695\uA697\uA699\uA69B\uA723\uA725\uA727\uA729\uA72B\uA72D\uA72F-\uA731\uA733\uA735\uA737\uA739\uA73B\uA73D\uA73F\uA741\uA743\uA745\uA747\uA749\uA74B\uA74D\uA74F\uA751\uA753\uA755\uA757\uA759\uA75B\uA75D\uA75F\uA761\uA763\uA765\uA767\uA769\uA76B\uA76D\uA76F\uA771-\uA778\uA77A\uA77C\uA77F\uA781\uA783\uA785\uA787\uA78C\uA78E\uA791\uA793-\uA795\uA797\uA799\uA79B\uA79D\uA79F\uA7A1\uA7A3\uA7A5\uA7A7\uA7A9\uA7B5\uA7B7\uA7FA\uAB30-\uAB5A\uAB60-\uAB65\uAB70-\uABBF\uFB00-\uFB06\uFB13-\uFB17\uFF41-\uFF5A',
-            astral: '\uD803[\uDCC0-\uDCF2]|\uD835[\uDC1A-\uDC33\uDC4E-\uDC54\uDC56-\uDC67\uDC82-\uDC9B\uDCB6-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDCCF\uDCEA-\uDD03\uDD1E-\uDD37\uDD52-\uDD6B\uDD86-\uDD9F\uDDBA-\uDDD3\uDDEE-\uDE07\uDE22-\uDE3B\uDE56-\uDE6F\uDE8A-\uDEA5\uDEC2-\uDEDA\uDEDC-\uDEE1\uDEFC-\uDF14\uDF16-\uDF1B\uDF36-\uDF4E\uDF50-\uDF55\uDF70-\uDF88\uDF8A-\uDF8F\uDFAA-\uDFC2\uDFC4-\uDFC9\uDFCB]|\uD801[\uDC28-\uDC4F]|\uD806[\uDCC0-\uDCDF]'
+            bmp: 'a-z\xB5\xDF-\xF6\xF8-\xFF\u0101\u0103\u0105\u0107\u0109\u010B\u010D\u010F\u0111\u0113\u0115\u0117\u0119\u011B\u011D\u011F\u0121\u0123\u0125\u0127\u0129\u012B\u012D\u012F\u0131\u0133\u0135\u0137\u0138\u013A\u013C\u013E\u0140\u0142\u0144\u0146\u0148\u0149\u014B\u014D\u014F\u0151\u0153\u0155\u0157\u0159\u015B\u015D\u015F\u0161\u0163\u0165\u0167\u0169\u016B\u016D\u016F\u0171\u0173\u0175\u0177\u017A\u017C\u017E-\u0180\u0183\u0185\u0188\u018C\u018D\u0192\u0195\u0199-\u019B\u019E\u01A1\u01A3\u01A5\u01A8\u01AA\u01AB\u01AD\u01B0\u01B4\u01B6\u01B9\u01BA\u01BD-\u01BF\u01C6\u01C9\u01CC\u01CE\u01D0\u01D2\u01D4\u01D6\u01D8\u01DA\u01DC\u01DD\u01DF\u01E1\u01E3\u01E5\u01E7\u01E9\u01EB\u01ED\u01EF\u01F0\u01F3\u01F5\u01F9\u01FB\u01FD\u01FF\u0201\u0203\u0205\u0207\u0209\u020B\u020D\u020F\u0211\u0213\u0215\u0217\u0219\u021B\u021D\u021F\u0221\u0223\u0225\u0227\u0229\u022B\u022D\u022F\u0231\u0233-\u0239\u023C\u023F\u0240\u0242\u0247\u0249\u024B\u024D\u024F-\u0293\u0295-\u02AF\u0371\u0373\u0377\u037B-\u037D\u0390\u03AC-\u03CE\u03D0\u03D1\u03D5-\u03D7\u03D9\u03DB\u03DD\u03DF\u03E1\u03E3\u03E5\u03E7\u03E9\u03EB\u03ED\u03EF-\u03F3\u03F5\u03F8\u03FB\u03FC\u0430-\u045F\u0461\u0463\u0465\u0467\u0469\u046B\u046D\u046F\u0471\u0473\u0475\u0477\u0479\u047B\u047D\u047F\u0481\u048B\u048D\u048F\u0491\u0493\u0495\u0497\u0499\u049B\u049D\u049F\u04A1\u04A3\u04A5\u04A7\u04A9\u04AB\u04AD\u04AF\u04B1\u04B3\u04B5\u04B7\u04B9\u04BB\u04BD\u04BF\u04C2\u04C4\u04C6\u04C8\u04CA\u04CC\u04CE\u04CF\u04D1\u04D3\u04D5\u04D7\u04D9\u04DB\u04DD\u04DF\u04E1\u04E3\u04E5\u04E7\u04E9\u04EB\u04ED\u04EF\u04F1\u04F3\u04F5\u04F7\u04F9\u04FB\u04FD\u04FF\u0501\u0503\u0505\u0507\u0509\u050B\u050D\u050F\u0511\u0513\u0515\u0517\u0519\u051B\u051D\u051F\u0521\u0523\u0525\u0527\u0529\u052B\u052D\u052F\u0561-\u0587\u13F8-\u13FD\u1C80-\u1C88\u1D00-\u1D2B\u1D6B-\u1D77\u1D79-\u1D9A\u1E01\u1E03\u1E05\u1E07\u1E09\u1E0B\u1E0D\u1E0F\u1E11\u1E13\u1E15\u1E17\u1E19\u1E1B\u1E1D\u1E1F\u1E21\u1E23\u1E25\u1E27\u1E29\u1E2B\u1E2D\u1E2F\u1E31\u1E33\u1E35\u1E37\u1E39\u1E3B\u1E3D\u1E3F\u1E41\u1E43\u1E45\u1E47\u1E49\u1E4B\u1E4D\u1E4F\u1E51\u1E53\u1E55\u1E57\u1E59\u1E5B\u1E5D\u1E5F\u1E61\u1E63\u1E65\u1E67\u1E69\u1E6B\u1E6D\u1E6F\u1E71\u1E73\u1E75\u1E77\u1E79\u1E7B\u1E7D\u1E7F\u1E81\u1E83\u1E85\u1E87\u1E89\u1E8B\u1E8D\u1E8F\u1E91\u1E93\u1E95-\u1E9D\u1E9F\u1EA1\u1EA3\u1EA5\u1EA7\u1EA9\u1EAB\u1EAD\u1EAF\u1EB1\u1EB3\u1EB5\u1EB7\u1EB9\u1EBB\u1EBD\u1EBF\u1EC1\u1EC3\u1EC5\u1EC7\u1EC9\u1ECB\u1ECD\u1ECF\u1ED1\u1ED3\u1ED5\u1ED7\u1ED9\u1EDB\u1EDD\u1EDF\u1EE1\u1EE3\u1EE5\u1EE7\u1EE9\u1EEB\u1EED\u1EEF\u1EF1\u1EF3\u1EF5\u1EF7\u1EF9\u1EFB\u1EFD\u1EFF-\u1F07\u1F10-\u1F15\u1F20-\u1F27\u1F30-\u1F37\u1F40-\u1F45\u1F50-\u1F57\u1F60-\u1F67\u1F70-\u1F7D\u1F80-\u1F87\u1F90-\u1F97\u1FA0-\u1FA7\u1FB0-\u1FB4\u1FB6\u1FB7\u1FBE\u1FC2-\u1FC4\u1FC6\u1FC7\u1FD0-\u1FD3\u1FD6\u1FD7\u1FE0-\u1FE7\u1FF2-\u1FF4\u1FF6\u1FF7\u210A\u210E\u210F\u2113\u212F\u2134\u2139\u213C\u213D\u2146-\u2149\u214E\u2184\u2C30-\u2C5E\u2C61\u2C65\u2C66\u2C68\u2C6A\u2C6C\u2C71\u2C73\u2C74\u2C76-\u2C7B\u2C81\u2C83\u2C85\u2C87\u2C89\u2C8B\u2C8D\u2C8F\u2C91\u2C93\u2C95\u2C97\u2C99\u2C9B\u2C9D\u2C9F\u2CA1\u2CA3\u2CA5\u2CA7\u2CA9\u2CAB\u2CAD\u2CAF\u2CB1\u2CB3\u2CB5\u2CB7\u2CB9\u2CBB\u2CBD\u2CBF\u2CC1\u2CC3\u2CC5\u2CC7\u2CC9\u2CCB\u2CCD\u2CCF\u2CD1\u2CD3\u2CD5\u2CD7\u2CD9\u2CDB\u2CDD\u2CDF\u2CE1\u2CE3\u2CE4\u2CEC\u2CEE\u2CF3\u2D00-\u2D25\u2D27\u2D2D\uA641\uA643\uA645\uA647\uA649\uA64B\uA64D\uA64F\uA651\uA653\uA655\uA657\uA659\uA65B\uA65D\uA65F\uA661\uA663\uA665\uA667\uA669\uA66B\uA66D\uA681\uA683\uA685\uA687\uA689\uA68B\uA68D\uA68F\uA691\uA693\uA695\uA697\uA699\uA69B\uA723\uA725\uA727\uA729\uA72B\uA72D\uA72F-\uA731\uA733\uA735\uA737\uA739\uA73B\uA73D\uA73F\uA741\uA743\uA745\uA747\uA749\uA74B\uA74D\uA74F\uA751\uA753\uA755\uA757\uA759\uA75B\uA75D\uA75F\uA761\uA763\uA765\uA767\uA769\uA76B\uA76D\uA76F\uA771-\uA778\uA77A\uA77C\uA77F\uA781\uA783\uA785\uA787\uA78C\uA78E\uA791\uA793-\uA795\uA797\uA799\uA79B\uA79D\uA79F\uA7A1\uA7A3\uA7A5\uA7A7\uA7A9\uA7B5\uA7B7\uA7FA\uAB30-\uAB5A\uAB60-\uAB65\uAB70-\uABBF\uFB00-\uFB06\uFB13-\uFB17\uFF41-\uFF5A',
+            astral: '\uD801[\uDC28-\uDC4F\uDCD8-\uDCFB]|\uD803[\uDCC0-\uDCF2]|\uD806[\uDCC0-\uDCDF]|\uD835[\uDC1A-\uDC33\uDC4E-\uDC54\uDC56-\uDC67\uDC82-\uDC9B\uDCB6-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDCCF\uDCEA-\uDD03\uDD1E-\uDD37\uDD52-\uDD6B\uDD86-\uDD9F\uDDBA-\uDDD3\uDDEE-\uDE07\uDE22-\uDE3B\uDE56-\uDE6F\uDE8A-\uDEA5\uDEC2-\uDEDA\uDEDC-\uDEE1\uDEFC-\uDF14\uDF16-\uDF1B\uDF36-\uDF4E\uDF50-\uDF55\uDF70-\uDF88\uDF8A-\uDF8F\uDFAA-\uDFC2\uDFC4-\uDFC9\uDFCB]|\uD83A[\uDD22-\uDD43]'
         },
         {
             name: 'Lm',
             alias: 'Modifier_Letter',
             bmp: '\u02B0-\u02C1\u02C6-\u02D1\u02E0-\u02E4\u02EC\u02EE\u0374\u037A\u0559\u0640\u06E5\u06E6\u07F4\u07F5\u07FA\u081A\u0824\u0828\u0971\u0E46\u0EC6\u10FC\u17D7\u1843\u1AA7\u1C78-\u1C7D\u1D2C-\u1D6A\u1D78\u1D9B-\u1DBF\u2071\u207F\u2090-\u209C\u2C7C\u2C7D\u2D6F\u2E2F\u3005\u3031-\u3035\u303B\u309D\u309E\u30FC-\u30FE\uA015\uA4F8-\uA4FD\uA60C\uA67F\uA69C\uA69D\uA717-\uA71F\uA770\uA788\uA7F8\uA7F9\uA9CF\uA9E6\uAA70\uAADD\uAAF3\uAAF4\uAB5C-\uAB5F\uFF70\uFF9E\uFF9F',
-            astral: '\uD81A[\uDF40-\uDF43]|\uD81B[\uDF93-\uDF9F]'
+            astral: '\uD81A[\uDF40-\uDF43]|\uD81B[\uDF93-\uDF9F\uDFE0]'
         },
         {
             name: 'Lo',
             alias: 'Other_Letter',
-            bmp: '\xAA\xBA\u01BB\u01C0-\u01C3\u0294\u05D0-\u05EA\u05F0-\u05F2\u0620-\u063F\u0641-\u064A\u066E\u066F\u0671-\u06D3\u06D5\u06EE\u06EF\u06FA-\u06FC\u06FF\u0710\u0712-\u072F\u074D-\u07A5\u07B1\u07CA-\u07EA\u0800-\u0815\u0840-\u0858\u08A0-\u08B4\u0904-\u0939\u093D\u0950\u0958-\u0961\u0972-\u0980\u0985-\u098C\u098F\u0990\u0993-\u09A8\u09AA-\u09B0\u09B2\u09B6-\u09B9\u09BD\u09CE\u09DC\u09DD\u09DF-\u09E1\u09F0\u09F1\u0A05-\u0A0A\u0A0F\u0A10\u0A13-\u0A28\u0A2A-\u0A30\u0A32\u0A33\u0A35\u0A36\u0A38\u0A39\u0A59-\u0A5C\u0A5E\u0A72-\u0A74\u0A85-\u0A8D\u0A8F-\u0A91\u0A93-\u0AA8\u0AAA-\u0AB0\u0AB2\u0AB3\u0AB5-\u0AB9\u0ABD\u0AD0\u0AE0\u0AE1\u0AF9\u0B05-\u0B0C\u0B0F\u0B10\u0B13-\u0B28\u0B2A-\u0B30\u0B32\u0B33\u0B35-\u0B39\u0B3D\u0B5C\u0B5D\u0B5F-\u0B61\u0B71\u0B83\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A\u0B9C\u0B9E\u0B9F\u0BA3\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9\u0BD0\u0C05-\u0C0C\u0C0E-\u0C10\u0C12-\u0C28\u0C2A-\u0C39\u0C3D\u0C58-\u0C5A\u0C60\u0C61\u0C85-\u0C8C\u0C8E-\u0C90\u0C92-\u0CA8\u0CAA-\u0CB3\u0CB5-\u0CB9\u0CBD\u0CDE\u0CE0\u0CE1\u0CF1\u0CF2\u0D05-\u0D0C\u0D0E-\u0D10\u0D12-\u0D3A\u0D3D\u0D4E\u0D5F-\u0D61\u0D7A-\u0D7F\u0D85-\u0D96\u0D9A-\u0DB1\u0DB3-\u0DBB\u0DBD\u0DC0-\u0DC6\u0E01-\u0E30\u0E32\u0E33\u0E40-\u0E45\u0E81\u0E82\u0E84\u0E87\u0E88\u0E8A\u0E8D\u0E94-\u0E97\u0E99-\u0E9F\u0EA1-\u0EA3\u0EA5\u0EA7\u0EAA\u0EAB\u0EAD-\u0EB0\u0EB2\u0EB3\u0EBD\u0EC0-\u0EC4\u0EDC-\u0EDF\u0F00\u0F40-\u0F47\u0F49-\u0F6C\u0F88-\u0F8C\u1000-\u102A\u103F\u1050-\u1055\u105A-\u105D\u1061\u1065\u1066\u106E-\u1070\u1075-\u1081\u108E\u10D0-\u10FA\u10FD-\u1248\u124A-\u124D\u1250-\u1256\u1258\u125A-\u125D\u1260-\u1288\u128A-\u128D\u1290-\u12B0\u12B2-\u12B5\u12B8-\u12BE\u12C0\u12C2-\u12C5\u12C8-\u12D6\u12D8-\u1310\u1312-\u1315\u1318-\u135A\u1380-\u138F\u1401-\u166C\u166F-\u167F\u1681-\u169A\u16A0-\u16EA\u16F1-\u16F8\u1700-\u170C\u170E-\u1711\u1720-\u1731\u1740-\u1751\u1760-\u176C\u176E-\u1770\u1780-\u17B3\u17DC\u1820-\u1842\u1844-\u1877\u1880-\u18A8\u18AA\u18B0-\u18F5\u1900-\u191E\u1950-\u196D\u1970-\u1974\u1980-\u19AB\u19B0-\u19C9\u1A00-\u1A16\u1A20-\u1A54\u1B05-\u1B33\u1B45-\u1B4B\u1B83-\u1BA0\u1BAE\u1BAF\u1BBA-\u1BE5\u1C00-\u1C23\u1C4D-\u1C4F\u1C5A-\u1C77\u1CE9-\u1CEC\u1CEE-\u1CF1\u1CF5\u1CF6\u2135-\u2138\u2D30-\u2D67\u2D80-\u2D96\u2DA0-\u2DA6\u2DA8-\u2DAE\u2DB0-\u2DB6\u2DB8-\u2DBE\u2DC0-\u2DC6\u2DC8-\u2DCE\u2DD0-\u2DD6\u2DD8-\u2DDE\u3006\u303C\u3041-\u3096\u309F\u30A1-\u30FA\u30FF\u3105-\u312D\u3131-\u318E\u31A0-\u31BA\u31F0-\u31FF\u3400-\u4DB5\u4E00-\u9FD5\uA000-\uA014\uA016-\uA48C\uA4D0-\uA4F7\uA500-\uA60B\uA610-\uA61F\uA62A\uA62B\uA66E\uA6A0-\uA6E5\uA78F\uA7F7\uA7FB-\uA801\uA803-\uA805\uA807-\uA80A\uA80C-\uA822\uA840-\uA873\uA882-\uA8B3\uA8F2-\uA8F7\uA8FB\uA8FD\uA90A-\uA925\uA930-\uA946\uA960-\uA97C\uA984-\uA9B2\uA9E0-\uA9E4\uA9E7-\uA9EF\uA9FA-\uA9FE\uAA00-\uAA28\uAA40-\uAA42\uAA44-\uAA4B\uAA60-\uAA6F\uAA71-\uAA76\uAA7A\uAA7E-\uAAAF\uAAB1\uAAB5\uAAB6\uAAB9-\uAABD\uAAC0\uAAC2\uAADB\uAADC\uAAE0-\uAAEA\uAAF2\uAB01-\uAB06\uAB09-\uAB0E\uAB11-\uAB16\uAB20-\uAB26\uAB28-\uAB2E\uABC0-\uABE2\uAC00-\uD7A3\uD7B0-\uD7C6\uD7CB-\uD7FB\uF900-\uFA6D\uFA70-\uFAD9\uFB1D\uFB1F-\uFB28\uFB2A-\uFB36\uFB38-\uFB3C\uFB3E\uFB40\uFB41\uFB43\uFB44\uFB46-\uFBB1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFB\uFE70-\uFE74\uFE76-\uFEFC\uFF66-\uFF6F\uFF71-\uFF9D\uFFA0-\uFFBE\uFFC2-\uFFC7\uFFCA-\uFFCF\uFFD2-\uFFD7\uFFDA-\uFFDC',
-            astral: '\uD86E[\uDC00-\uDC1D\uDC20-\uDFFF]|\uD86D[\uDC00-\uDF34\uDF40-\uDFFF]|\uD869[\uDC00-\uDED6\uDF00-\uDFFF]|\uD83A[\uDC00-\uDCC4]|\uD803[\uDC00-\uDC48]|\uD800[\uDC00-\uDC0B\uDC0D-\uDC26\uDC28-\uDC3A\uDC3C\uDC3D\uDC3F-\uDC4D\uDC50-\uDC5D\uDC80-\uDCFA\uDE80-\uDE9C\uDEA0-\uDED0\uDF00-\uDF1F\uDF30-\uDF40\uDF42-\uDF49\uDF50-\uDF75\uDF80-\uDF9D\uDFA0-\uDFC3\uDFC8-\uDFCF]|\uD80D[\uDC00-\uDC2E]|\uD87E[\uDC00-\uDE1D]|\uD81B[\uDF00-\uDF44\uDF50]|[\uD80C\uD840-\uD868\uD86A-\uD86C\uD86F-\uD872][\uDC00-\uDFFF]|\uD805[\uDC80-\uDCAF\uDCC4\uDCC5\uDCC7\uDD80-\uDDAE\uDDD8-\uDDDB\uDE00-\uDE2F\uDE44\uDE80-\uDEAA\uDF00-\uDF19]|\uD806[\uDCFF\uDEC0-\uDEF8]|\uD809[\uDC80-\uDD43]|\uD802[\uDC00-\uDC05\uDC08\uDC0A-\uDC35\uDC37\uDC38\uDC3C\uDC3F-\uDC55\uDC60-\uDC76\uDC80-\uDC9E\uDCE0-\uDCF2\uDCF4\uDCF5\uDD00-\uDD15\uDD20-\uDD39\uDD80-\uDDB7\uDDBE\uDDBF\uDE00\uDE10-\uDE13\uDE15-\uDE17\uDE19-\uDE33\uDE60-\uDE7C\uDE80-\uDE9C\uDEC0-\uDEC7\uDEC9-\uDEE4\uDF00-\uDF35\uDF40-\uDF55\uDF60-\uDF72\uDF80-\uDF91]|\uD804[\uDC03-\uDC37\uDC83-\uDCAF\uDCD0-\uDCE8\uDD03-\uDD26\uDD50-\uDD72\uDD76\uDD83-\uDDB2\uDDC1-\uDDC4\uDDDA\uDDDC\uDE00-\uDE11\uDE13-\uDE2B\uDE80-\uDE86\uDE88\uDE8A-\uDE8D\uDE8F-\uDE9D\uDE9F-\uDEA8\uDEB0-\uDEDE\uDF05-\uDF0C\uDF0F\uDF10\uDF13-\uDF28\uDF2A-\uDF30\uDF32\uDF33\uDF35-\uDF39\uDF3D\uDF50\uDF5D-\uDF61]|\uD808[\uDC00-\uDF99]|\uD83B[\uDE00-\uDE03\uDE05-\uDE1F\uDE21\uDE22\uDE24\uDE27\uDE29-\uDE32\uDE34-\uDE37\uDE39\uDE3B\uDE42\uDE47\uDE49\uDE4B\uDE4D-\uDE4F\uDE51\uDE52\uDE54\uDE57\uDE59\uDE5B\uDE5D\uDE5F\uDE61\uDE62\uDE64\uDE67-\uDE6A\uDE6C-\uDE72\uDE74-\uDE77\uDE79-\uDE7C\uDE7E\uDE80-\uDE89\uDE8B-\uDE9B\uDEA1-\uDEA3\uDEA5-\uDEA9\uDEAB-\uDEBB]|\uD81A[\uDC00-\uDE38\uDE40-\uDE5E\uDED0-\uDEED\uDF00-\uDF2F\uDF63-\uDF77\uDF7D-\uDF8F]|\uD801[\uDC50-\uDC9D\uDD00-\uDD27\uDD30-\uDD63\uDE00-\uDF36\uDF40-\uDF55\uDF60-\uDF67]|\uD811[\uDC00-\uDE46]|\uD82F[\uDC00-\uDC6A\uDC70-\uDC7C\uDC80-\uDC88\uDC90-\uDC99]|\uD82C[\uDC00\uDC01]|\uD873[\uDC00-\uDEA1]'
+            bmp: '\xAA\xBA\u01BB\u01C0-\u01C3\u0294\u05D0-\u05EA\u05F0-\u05F2\u0620-\u063F\u0641-\u064A\u066E\u066F\u0671-\u06D3\u06D5\u06EE\u06EF\u06FA-\u06FC\u06FF\u0710\u0712-\u072F\u074D-\u07A5\u07B1\u07CA-\u07EA\u0800-\u0815\u0840-\u0858\u08A0-\u08B4\u08B6-\u08BD\u0904-\u0939\u093D\u0950\u0958-\u0961\u0972-\u0980\u0985-\u098C\u098F\u0990\u0993-\u09A8\u09AA-\u09B0\u09B2\u09B6-\u09B9\u09BD\u09CE\u09DC\u09DD\u09DF-\u09E1\u09F0\u09F1\u0A05-\u0A0A\u0A0F\u0A10\u0A13-\u0A28\u0A2A-\u0A30\u0A32\u0A33\u0A35\u0A36\u0A38\u0A39\u0A59-\u0A5C\u0A5E\u0A72-\u0A74\u0A85-\u0A8D\u0A8F-\u0A91\u0A93-\u0AA8\u0AAA-\u0AB0\u0AB2\u0AB3\u0AB5-\u0AB9\u0ABD\u0AD0\u0AE0\u0AE1\u0AF9\u0B05-\u0B0C\u0B0F\u0B10\u0B13-\u0B28\u0B2A-\u0B30\u0B32\u0B33\u0B35-\u0B39\u0B3D\u0B5C\u0B5D\u0B5F-\u0B61\u0B71\u0B83\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A\u0B9C\u0B9E\u0B9F\u0BA3\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9\u0BD0\u0C05-\u0C0C\u0C0E-\u0C10\u0C12-\u0C28\u0C2A-\u0C39\u0C3D\u0C58-\u0C5A\u0C60\u0C61\u0C80\u0C85-\u0C8C\u0C8E-\u0C90\u0C92-\u0CA8\u0CAA-\u0CB3\u0CB5-\u0CB9\u0CBD\u0CDE\u0CE0\u0CE1\u0CF1\u0CF2\u0D05-\u0D0C\u0D0E-\u0D10\u0D12-\u0D3A\u0D3D\u0D4E\u0D54-\u0D56\u0D5F-\u0D61\u0D7A-\u0D7F\u0D85-\u0D96\u0D9A-\u0DB1\u0DB3-\u0DBB\u0DBD\u0DC0-\u0DC6\u0E01-\u0E30\u0E32\u0E33\u0E40-\u0E45\u0E81\u0E82\u0E84\u0E87\u0E88\u0E8A\u0E8D\u0E94-\u0E97\u0E99-\u0E9F\u0EA1-\u0EA3\u0EA5\u0EA7\u0EAA\u0EAB\u0EAD-\u0EB0\u0EB2\u0EB3\u0EBD\u0EC0-\u0EC4\u0EDC-\u0EDF\u0F00\u0F40-\u0F47\u0F49-\u0F6C\u0F88-\u0F8C\u1000-\u102A\u103F\u1050-\u1055\u105A-\u105D\u1061\u1065\u1066\u106E-\u1070\u1075-\u1081\u108E\u10D0-\u10FA\u10FD-\u1248\u124A-\u124D\u1250-\u1256\u1258\u125A-\u125D\u1260-\u1288\u128A-\u128D\u1290-\u12B0\u12B2-\u12B5\u12B8-\u12BE\u12C0\u12C2-\u12C5\u12C8-\u12D6\u12D8-\u1310\u1312-\u1315\u1318-\u135A\u1380-\u138F\u1401-\u166C\u166F-\u167F\u1681-\u169A\u16A0-\u16EA\u16F1-\u16F8\u1700-\u170C\u170E-\u1711\u1720-\u1731\u1740-\u1751\u1760-\u176C\u176E-\u1770\u1780-\u17B3\u17DC\u1820-\u1842\u1844-\u1877\u1880-\u1884\u1887-\u18A8\u18AA\u18B0-\u18F5\u1900-\u191E\u1950-\u196D\u1970-\u1974\u1980-\u19AB\u19B0-\u19C9\u1A00-\u1A16\u1A20-\u1A54\u1B05-\u1B33\u1B45-\u1B4B\u1B83-\u1BA0\u1BAE\u1BAF\u1BBA-\u1BE5\u1C00-\u1C23\u1C4D-\u1C4F\u1C5A-\u1C77\u1CE9-\u1CEC\u1CEE-\u1CF1\u1CF5\u1CF6\u2135-\u2138\u2D30-\u2D67\u2D80-\u2D96\u2DA0-\u2DA6\u2DA8-\u2DAE\u2DB0-\u2DB6\u2DB8-\u2DBE\u2DC0-\u2DC6\u2DC8-\u2DCE\u2DD0-\u2DD6\u2DD8-\u2DDE\u3006\u303C\u3041-\u3096\u309F\u30A1-\u30FA\u30FF\u3105-\u312D\u3131-\u318E\u31A0-\u31BA\u31F0-\u31FF\u3400-\u4DB5\u4E00-\u9FD5\uA000-\uA014\uA016-\uA48C\uA4D0-\uA4F7\uA500-\uA60B\uA610-\uA61F\uA62A\uA62B\uA66E\uA6A0-\uA6E5\uA78F\uA7F7\uA7FB-\uA801\uA803-\uA805\uA807-\uA80A\uA80C-\uA822\uA840-\uA873\uA882-\uA8B3\uA8F2-\uA8F7\uA8FB\uA8FD\uA90A-\uA925\uA930-\uA946\uA960-\uA97C\uA984-\uA9B2\uA9E0-\uA9E4\uA9E7-\uA9EF\uA9FA-\uA9FE\uAA00-\uAA28\uAA40-\uAA42\uAA44-\uAA4B\uAA60-\uAA6F\uAA71-\uAA76\uAA7A\uAA7E-\uAAAF\uAAB1\uAAB5\uAAB6\uAAB9-\uAABD\uAAC0\uAAC2\uAADB\uAADC\uAAE0-\uAAEA\uAAF2\uAB01-\uAB06\uAB09-\uAB0E\uAB11-\uAB16\uAB20-\uAB26\uAB28-\uAB2E\uABC0-\uABE2\uAC00-\uD7A3\uD7B0-\uD7C6\uD7CB-\uD7FB\uF900-\uFA6D\uFA70-\uFAD9\uFB1D\uFB1F-\uFB28\uFB2A-\uFB36\uFB38-\uFB3C\uFB3E\uFB40\uFB41\uFB43\uFB44\uFB46-\uFBB1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFB\uFE70-\uFE74\uFE76-\uFEFC\uFF66-\uFF6F\uFF71-\uFF9D\uFFA0-\uFFBE\uFFC2-\uFFC7\uFFCA-\uFFCF\uFFD2-\uFFD7\uFFDA-\uFFDC',
+            astral: '\uD800[\uDC00-\uDC0B\uDC0D-\uDC26\uDC28-\uDC3A\uDC3C\uDC3D\uDC3F-\uDC4D\uDC50-\uDC5D\uDC80-\uDCFA\uDE80-\uDE9C\uDEA0-\uDED0\uDF00-\uDF1F\uDF30-\uDF40\uDF42-\uDF49\uDF50-\uDF75\uDF80-\uDF9D\uDFA0-\uDFC3\uDFC8-\uDFCF]|\uD801[\uDC50-\uDC9D\uDD00-\uDD27\uDD30-\uDD63\uDE00-\uDF36\uDF40-\uDF55\uDF60-\uDF67]|\uD802[\uDC00-\uDC05\uDC08\uDC0A-\uDC35\uDC37\uDC38\uDC3C\uDC3F-\uDC55\uDC60-\uDC76\uDC80-\uDC9E\uDCE0-\uDCF2\uDCF4\uDCF5\uDD00-\uDD15\uDD20-\uDD39\uDD80-\uDDB7\uDDBE\uDDBF\uDE00\uDE10-\uDE13\uDE15-\uDE17\uDE19-\uDE33\uDE60-\uDE7C\uDE80-\uDE9C\uDEC0-\uDEC7\uDEC9-\uDEE4\uDF00-\uDF35\uDF40-\uDF55\uDF60-\uDF72\uDF80-\uDF91]|\uD803[\uDC00-\uDC48]|\uD804[\uDC03-\uDC37\uDC83-\uDCAF\uDCD0-\uDCE8\uDD03-\uDD26\uDD50-\uDD72\uDD76\uDD83-\uDDB2\uDDC1-\uDDC4\uDDDA\uDDDC\uDE00-\uDE11\uDE13-\uDE2B\uDE80-\uDE86\uDE88\uDE8A-\uDE8D\uDE8F-\uDE9D\uDE9F-\uDEA8\uDEB0-\uDEDE\uDF05-\uDF0C\uDF0F\uDF10\uDF13-\uDF28\uDF2A-\uDF30\uDF32\uDF33\uDF35-\uDF39\uDF3D\uDF50\uDF5D-\uDF61]|\uD805[\uDC00-\uDC34\uDC47-\uDC4A\uDC80-\uDCAF\uDCC4\uDCC5\uDCC7\uDD80-\uDDAE\uDDD8-\uDDDB\uDE00-\uDE2F\uDE44\uDE80-\uDEAA\uDF00-\uDF19]|\uD806[\uDCFF\uDEC0-\uDEF8]|\uD807[\uDC00-\uDC08\uDC0A-\uDC2E\uDC40\uDC72-\uDC8F]|\uD808[\uDC00-\uDF99]|\uD809[\uDC80-\uDD43]|[\uD80C\uD81C-\uD820\uD840-\uD868\uD86A-\uD86C\uD86F-\uD872][\uDC00-\uDFFF]|\uD80D[\uDC00-\uDC2E]|\uD811[\uDC00-\uDE46]|\uD81A[\uDC00-\uDE38\uDE40-\uDE5E\uDED0-\uDEED\uDF00-\uDF2F\uDF63-\uDF77\uDF7D-\uDF8F]|\uD81B[\uDF00-\uDF44\uDF50]|\uD821[\uDC00-\uDFEC]|\uD822[\uDC00-\uDEF2]|\uD82C[\uDC00\uDC01]|\uD82F[\uDC00-\uDC6A\uDC70-\uDC7C\uDC80-\uDC88\uDC90-\uDC99]|\uD83A[\uDC00-\uDCC4]|\uD83B[\uDE00-\uDE03\uDE05-\uDE1F\uDE21\uDE22\uDE24\uDE27\uDE29-\uDE32\uDE34-\uDE37\uDE39\uDE3B\uDE42\uDE47\uDE49\uDE4B\uDE4D-\uDE4F\uDE51\uDE52\uDE54\uDE57\uDE59\uDE5B\uDE5D\uDE5F\uDE61\uDE62\uDE64\uDE67-\uDE6A\uDE6C-\uDE72\uDE74-\uDE77\uDE79-\uDE7C\uDE7E\uDE80-\uDE89\uDE8B-\uDE9B\uDEA1-\uDEA3\uDEA5-\uDEA9\uDEAB-\uDEBB]|\uD869[\uDC00-\uDED6\uDF00-\uDFFF]|\uD86D[\uDC00-\uDF34\uDF40-\uDFFF]|\uD86E[\uDC00-\uDC1D\uDC20-\uDFFF]|\uD873[\uDC00-\uDEA1]|\uD87E[\uDC00-\uDE1D]'
         },
         {
             name: 'Lt',
@@ -22901,20 +28536,20 @@ module.exports = function(XRegExp) {
         {
             name: 'Lu',
             alias: 'Uppercase_Letter',
-            bmp: 'A-Z\xC0-\xD6\xD8-\xDE\u0100\u0102\u0104\u0106\u0108\u010A\u010C\u010E\u0110\u0112\u0114\u0116\u0118\u011A\u011C\u011E\u0120\u0122\u0124\u0126\u0128\u012A\u012C\u012E\u0130\u0132\u0134\u0136\u0139\u013B\u013D\u013F\u0141\u0143\u0145\u0147\u014A\u014C\u014E\u0150\u0152\u0154\u0156\u0158\u015A\u015C\u015E\u0160\u0162\u0164\u0166\u0168\u016A\u016C\u016E\u0170\u0172\u0174\u0176\u0178\u0179\u017B\u017D\u0181\u0182\u0184\u0186\u0187\u0189-\u018B\u018E-\u0191\u0193\u0194\u0196-\u0198\u019C\u019D\u019F\u01A0\u01A2\u01A4\u01A6\u01A7\u01A9\u01AC\u01AE\u01AF\u01B1-\u01B3\u01B5\u01B7\u01B8\u01BC\u01C4\u01C7\u01CA\u01CD\u01CF\u01D1\u01D3\u01D5\u01D7\u01D9\u01DB\u01DE\u01E0\u01E2\u01E4\u01E6\u01E8\u01EA\u01EC\u01EE\u01F1\u01F4\u01F6-\u01F8\u01FA\u01FC\u01FE\u0200\u0202\u0204\u0206\u0208\u020A\u020C\u020E\u0210\u0212\u0214\u0216\u0218\u021A\u021C\u021E\u0220\u0222\u0224\u0226\u0228\u022A\u022C\u022E\u0230\u0232\u023A\u023B\u023D\u023E\u0241\u0243-\u0246\u0248\u024A\u024C\u024E\u0370\u0372\u0376\u037F\u0386\u0388-\u038A\u038C\u038E\u038F\u0391-\u03A1\u03A3-\u03AB\u03CF\u03D2-\u03D4\u03D8\u03DA\u03DC\u03DE\u03E0\u03E2\u03E4\u03E6\u03E8\u03EA\u03EC\u03EE\u03F4\u03F7\u03F9\u03FA\u03FD-\u042F\u0460\u0462\u0464\u0466\u0468\u046A\u046C\u046E\u0470\u0472\u0474\u0476\u0478\u047A\u047C\u047E\u0480\u048A\u048C\u048E\u0490\u0492\u0494\u0496\u0498\u049A\u049C\u049E\u04A0\u04A2\u04A4\u04A6\u04A8\u04AA\u04AC\u04AE\u04B0\u04B2\u04B4\u04B6\u04B8\u04BA\u04BC\u04BE\u04C0\u04C1\u04C3\u04C5\u04C7\u04C9\u04CB\u04CD\u04D0\u04D2\u04D4\u04D6\u04D8\u04DA\u04DC\u04DE\u04E0\u04E2\u04E4\u04E6\u04E8\u04EA\u04EC\u04EE\u04F0\u04F2\u04F4\u04F6\u04F8\u04FA\u04FC\u04FE\u0500\u0502\u0504\u0506\u0508\u050A\u050C\u050E\u0510\u0512\u0514\u0516\u0518\u051A\u051C\u051E\u0520\u0522\u0524\u0526\u0528\u052A\u052C\u052E\u0531-\u0556\u10A0-\u10C5\u10C7\u10CD\u13A0-\u13F5\u1E00\u1E02\u1E04\u1E06\u1E08\u1E0A\u1E0C\u1E0E\u1E10\u1E12\u1E14\u1E16\u1E18\u1E1A\u1E1C\u1E1E\u1E20\u1E22\u1E24\u1E26\u1E28\u1E2A\u1E2C\u1E2E\u1E30\u1E32\u1E34\u1E36\u1E38\u1E3A\u1E3C\u1E3E\u1E40\u1E42\u1E44\u1E46\u1E48\u1E4A\u1E4C\u1E4E\u1E50\u1E52\u1E54\u1E56\u1E58\u1E5A\u1E5C\u1E5E\u1E60\u1E62\u1E64\u1E66\u1E68\u1E6A\u1E6C\u1E6E\u1E70\u1E72\u1E74\u1E76\u1E78\u1E7A\u1E7C\u1E7E\u1E80\u1E82\u1E84\u1E86\u1E88\u1E8A\u1E8C\u1E8E\u1E90\u1E92\u1E94\u1E9E\u1EA0\u1EA2\u1EA4\u1EA6\u1EA8\u1EAA\u1EAC\u1EAE\u1EB0\u1EB2\u1EB4\u1EB6\u1EB8\u1EBA\u1EBC\u1EBE\u1EC0\u1EC2\u1EC4\u1EC6\u1EC8\u1ECA\u1ECC\u1ECE\u1ED0\u1ED2\u1ED4\u1ED6\u1ED8\u1EDA\u1EDC\u1EDE\u1EE0\u1EE2\u1EE4\u1EE6\u1EE8\u1EEA\u1EEC\u1EEE\u1EF0\u1EF2\u1EF4\u1EF6\u1EF8\u1EFA\u1EFC\u1EFE\u1F08-\u1F0F\u1F18-\u1F1D\u1F28-\u1F2F\u1F38-\u1F3F\u1F48-\u1F4D\u1F59\u1F5B\u1F5D\u1F5F\u1F68-\u1F6F\u1FB8-\u1FBB\u1FC8-\u1FCB\u1FD8-\u1FDB\u1FE8-\u1FEC\u1FF8-\u1FFB\u2102\u2107\u210B-\u210D\u2110-\u2112\u2115\u2119-\u211D\u2124\u2126\u2128\u212A-\u212D\u2130-\u2133\u213E\u213F\u2145\u2183\u2C00-\u2C2E\u2C60\u2C62-\u2C64\u2C67\u2C69\u2C6B\u2C6D-\u2C70\u2C72\u2C75\u2C7E-\u2C80\u2C82\u2C84\u2C86\u2C88\u2C8A\u2C8C\u2C8E\u2C90\u2C92\u2C94\u2C96\u2C98\u2C9A\u2C9C\u2C9E\u2CA0\u2CA2\u2CA4\u2CA6\u2CA8\u2CAA\u2CAC\u2CAE\u2CB0\u2CB2\u2CB4\u2CB6\u2CB8\u2CBA\u2CBC\u2CBE\u2CC0\u2CC2\u2CC4\u2CC6\u2CC8\u2CCA\u2CCC\u2CCE\u2CD0\u2CD2\u2CD4\u2CD6\u2CD8\u2CDA\u2CDC\u2CDE\u2CE0\u2CE2\u2CEB\u2CED\u2CF2\uA640\uA642\uA644\uA646\uA648\uA64A\uA64C\uA64E\uA650\uA652\uA654\uA656\uA658\uA65A\uA65C\uA65E\uA660\uA662\uA664\uA666\uA668\uA66A\uA66C\uA680\uA682\uA684\uA686\uA688\uA68A\uA68C\uA68E\uA690\uA692\uA694\uA696\uA698\uA69A\uA722\uA724\uA726\uA728\uA72A\uA72C\uA72E\uA732\uA734\uA736\uA738\uA73A\uA73C\uA73E\uA740\uA742\uA744\uA746\uA748\uA74A\uA74C\uA74E\uA750\uA752\uA754\uA756\uA758\uA75A\uA75C\uA75E\uA760\uA762\uA764\uA766\uA768\uA76A\uA76C\uA76E\uA779\uA77B\uA77D\uA77E\uA780\uA782\uA784\uA786\uA78B\uA78D\uA790\uA792\uA796\uA798\uA79A\uA79C\uA79E\uA7A0\uA7A2\uA7A4\uA7A6\uA7A8\uA7AA-\uA7AD\uA7B0-\uA7B4\uA7B6\uFF21-\uFF3A',
-            astral: '\uD806[\uDCA0-\uDCBF]|\uD803[\uDC80-\uDCB2]|\uD801[\uDC00-\uDC27]|\uD835[\uDC00-\uDC19\uDC34-\uDC4D\uDC68-\uDC81\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB5\uDCD0-\uDCE9\uDD04\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD38\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD6C-\uDD85\uDDA0-\uDDB9\uDDD4-\uDDED\uDE08-\uDE21\uDE3C-\uDE55\uDE70-\uDE89\uDEA8-\uDEC0\uDEE2-\uDEFA\uDF1C-\uDF34\uDF56-\uDF6E\uDF90-\uDFA8\uDFCA]'
+            bmp: 'A-Z\xC0-\xD6\xD8-\xDE\u0100\u0102\u0104\u0106\u0108\u010A\u010C\u010E\u0110\u0112\u0114\u0116\u0118\u011A\u011C\u011E\u0120\u0122\u0124\u0126\u0128\u012A\u012C\u012E\u0130\u0132\u0134\u0136\u0139\u013B\u013D\u013F\u0141\u0143\u0145\u0147\u014A\u014C\u014E\u0150\u0152\u0154\u0156\u0158\u015A\u015C\u015E\u0160\u0162\u0164\u0166\u0168\u016A\u016C\u016E\u0170\u0172\u0174\u0176\u0178\u0179\u017B\u017D\u0181\u0182\u0184\u0186\u0187\u0189-\u018B\u018E-\u0191\u0193\u0194\u0196-\u0198\u019C\u019D\u019F\u01A0\u01A2\u01A4\u01A6\u01A7\u01A9\u01AC\u01AE\u01AF\u01B1-\u01B3\u01B5\u01B7\u01B8\u01BC\u01C4\u01C7\u01CA\u01CD\u01CF\u01D1\u01D3\u01D5\u01D7\u01D9\u01DB\u01DE\u01E0\u01E2\u01E4\u01E6\u01E8\u01EA\u01EC\u01EE\u01F1\u01F4\u01F6-\u01F8\u01FA\u01FC\u01FE\u0200\u0202\u0204\u0206\u0208\u020A\u020C\u020E\u0210\u0212\u0214\u0216\u0218\u021A\u021C\u021E\u0220\u0222\u0224\u0226\u0228\u022A\u022C\u022E\u0230\u0232\u023A\u023B\u023D\u023E\u0241\u0243-\u0246\u0248\u024A\u024C\u024E\u0370\u0372\u0376\u037F\u0386\u0388-\u038A\u038C\u038E\u038F\u0391-\u03A1\u03A3-\u03AB\u03CF\u03D2-\u03D4\u03D8\u03DA\u03DC\u03DE\u03E0\u03E2\u03E4\u03E6\u03E8\u03EA\u03EC\u03EE\u03F4\u03F7\u03F9\u03FA\u03FD-\u042F\u0460\u0462\u0464\u0466\u0468\u046A\u046C\u046E\u0470\u0472\u0474\u0476\u0478\u047A\u047C\u047E\u0480\u048A\u048C\u048E\u0490\u0492\u0494\u0496\u0498\u049A\u049C\u049E\u04A0\u04A2\u04A4\u04A6\u04A8\u04AA\u04AC\u04AE\u04B0\u04B2\u04B4\u04B6\u04B8\u04BA\u04BC\u04BE\u04C0\u04C1\u04C3\u04C5\u04C7\u04C9\u04CB\u04CD\u04D0\u04D2\u04D4\u04D6\u04D8\u04DA\u04DC\u04DE\u04E0\u04E2\u04E4\u04E6\u04E8\u04EA\u04EC\u04EE\u04F0\u04F2\u04F4\u04F6\u04F8\u04FA\u04FC\u04FE\u0500\u0502\u0504\u0506\u0508\u050A\u050C\u050E\u0510\u0512\u0514\u0516\u0518\u051A\u051C\u051E\u0520\u0522\u0524\u0526\u0528\u052A\u052C\u052E\u0531-\u0556\u10A0-\u10C5\u10C7\u10CD\u13A0-\u13F5\u1E00\u1E02\u1E04\u1E06\u1E08\u1E0A\u1E0C\u1E0E\u1E10\u1E12\u1E14\u1E16\u1E18\u1E1A\u1E1C\u1E1E\u1E20\u1E22\u1E24\u1E26\u1E28\u1E2A\u1E2C\u1E2E\u1E30\u1E32\u1E34\u1E36\u1E38\u1E3A\u1E3C\u1E3E\u1E40\u1E42\u1E44\u1E46\u1E48\u1E4A\u1E4C\u1E4E\u1E50\u1E52\u1E54\u1E56\u1E58\u1E5A\u1E5C\u1E5E\u1E60\u1E62\u1E64\u1E66\u1E68\u1E6A\u1E6C\u1E6E\u1E70\u1E72\u1E74\u1E76\u1E78\u1E7A\u1E7C\u1E7E\u1E80\u1E82\u1E84\u1E86\u1E88\u1E8A\u1E8C\u1E8E\u1E90\u1E92\u1E94\u1E9E\u1EA0\u1EA2\u1EA4\u1EA6\u1EA8\u1EAA\u1EAC\u1EAE\u1EB0\u1EB2\u1EB4\u1EB6\u1EB8\u1EBA\u1EBC\u1EBE\u1EC0\u1EC2\u1EC4\u1EC6\u1EC8\u1ECA\u1ECC\u1ECE\u1ED0\u1ED2\u1ED4\u1ED6\u1ED8\u1EDA\u1EDC\u1EDE\u1EE0\u1EE2\u1EE4\u1EE6\u1EE8\u1EEA\u1EEC\u1EEE\u1EF0\u1EF2\u1EF4\u1EF6\u1EF8\u1EFA\u1EFC\u1EFE\u1F08-\u1F0F\u1F18-\u1F1D\u1F28-\u1F2F\u1F38-\u1F3F\u1F48-\u1F4D\u1F59\u1F5B\u1F5D\u1F5F\u1F68-\u1F6F\u1FB8-\u1FBB\u1FC8-\u1FCB\u1FD8-\u1FDB\u1FE8-\u1FEC\u1FF8-\u1FFB\u2102\u2107\u210B-\u210D\u2110-\u2112\u2115\u2119-\u211D\u2124\u2126\u2128\u212A-\u212D\u2130-\u2133\u213E\u213F\u2145\u2183\u2C00-\u2C2E\u2C60\u2C62-\u2C64\u2C67\u2C69\u2C6B\u2C6D-\u2C70\u2C72\u2C75\u2C7E-\u2C80\u2C82\u2C84\u2C86\u2C88\u2C8A\u2C8C\u2C8E\u2C90\u2C92\u2C94\u2C96\u2C98\u2C9A\u2C9C\u2C9E\u2CA0\u2CA2\u2CA4\u2CA6\u2CA8\u2CAA\u2CAC\u2CAE\u2CB0\u2CB2\u2CB4\u2CB6\u2CB8\u2CBA\u2CBC\u2CBE\u2CC0\u2CC2\u2CC4\u2CC6\u2CC8\u2CCA\u2CCC\u2CCE\u2CD0\u2CD2\u2CD4\u2CD6\u2CD8\u2CDA\u2CDC\u2CDE\u2CE0\u2CE2\u2CEB\u2CED\u2CF2\uA640\uA642\uA644\uA646\uA648\uA64A\uA64C\uA64E\uA650\uA652\uA654\uA656\uA658\uA65A\uA65C\uA65E\uA660\uA662\uA664\uA666\uA668\uA66A\uA66C\uA680\uA682\uA684\uA686\uA688\uA68A\uA68C\uA68E\uA690\uA692\uA694\uA696\uA698\uA69A\uA722\uA724\uA726\uA728\uA72A\uA72C\uA72E\uA732\uA734\uA736\uA738\uA73A\uA73C\uA73E\uA740\uA742\uA744\uA746\uA748\uA74A\uA74C\uA74E\uA750\uA752\uA754\uA756\uA758\uA75A\uA75C\uA75E\uA760\uA762\uA764\uA766\uA768\uA76A\uA76C\uA76E\uA779\uA77B\uA77D\uA77E\uA780\uA782\uA784\uA786\uA78B\uA78D\uA790\uA792\uA796\uA798\uA79A\uA79C\uA79E\uA7A0\uA7A2\uA7A4\uA7A6\uA7A8\uA7AA-\uA7AE\uA7B0-\uA7B4\uA7B6\uFF21-\uFF3A',
+            astral: '\uD801[\uDC00-\uDC27\uDCB0-\uDCD3]|\uD803[\uDC80-\uDCB2]|\uD806[\uDCA0-\uDCBF]|\uD835[\uDC00-\uDC19\uDC34-\uDC4D\uDC68-\uDC81\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB5\uDCD0-\uDCE9\uDD04\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD38\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD6C-\uDD85\uDDA0-\uDDB9\uDDD4-\uDDED\uDE08-\uDE21\uDE3C-\uDE55\uDE70-\uDE89\uDEA8-\uDEC0\uDEE2-\uDEFA\uDF1C-\uDF34\uDF56-\uDF6E\uDF90-\uDFA8\uDFCA]|\uD83A[\uDD00-\uDD21]'
         },
         {
             name: 'M',
             alias: 'Mark',
-            bmp: '\u0300-\u036F\u0483-\u0489\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED\u0711\u0730-\u074A\u07A6-\u07B0\u07EB-\u07F3\u0816-\u0819\u081B-\u0823\u0825-\u0827\u0829-\u082D\u0859-\u085B\u08E3-\u0903\u093A-\u093C\u093E-\u094F\u0951-\u0957\u0962\u0963\u0981-\u0983\u09BC\u09BE-\u09C4\u09C7\u09C8\u09CB-\u09CD\u09D7\u09E2\u09E3\u0A01-\u0A03\u0A3C\u0A3E-\u0A42\u0A47\u0A48\u0A4B-\u0A4D\u0A51\u0A70\u0A71\u0A75\u0A81-\u0A83\u0ABC\u0ABE-\u0AC5\u0AC7-\u0AC9\u0ACB-\u0ACD\u0AE2\u0AE3\u0B01-\u0B03\u0B3C\u0B3E-\u0B44\u0B47\u0B48\u0B4B-\u0B4D\u0B56\u0B57\u0B62\u0B63\u0B82\u0BBE-\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCD\u0BD7\u0C00-\u0C03\u0C3E-\u0C44\u0C46-\u0C48\u0C4A-\u0C4D\u0C55\u0C56\u0C62\u0C63\u0C81-\u0C83\u0CBC\u0CBE-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCD\u0CD5\u0CD6\u0CE2\u0CE3\u0D01-\u0D03\u0D3E-\u0D44\u0D46-\u0D48\u0D4A-\u0D4D\u0D57\u0D62\u0D63\u0D82\u0D83\u0DCA\u0DCF-\u0DD4\u0DD6\u0DD8-\u0DDF\u0DF2\u0DF3\u0E31\u0E34-\u0E3A\u0E47-\u0E4E\u0EB1\u0EB4-\u0EB9\u0EBB\u0EBC\u0EC8-\u0ECD\u0F18\u0F19\u0F35\u0F37\u0F39\u0F3E\u0F3F\u0F71-\u0F84\u0F86\u0F87\u0F8D-\u0F97\u0F99-\u0FBC\u0FC6\u102B-\u103E\u1056-\u1059\u105E-\u1060\u1062-\u1064\u1067-\u106D\u1071-\u1074\u1082-\u108D\u108F\u109A-\u109D\u135D-\u135F\u1712-\u1714\u1732-\u1734\u1752\u1753\u1772\u1773\u17B4-\u17D3\u17DD\u180B-\u180D\u18A9\u1920-\u192B\u1930-\u193B\u1A17-\u1A1B\u1A55-\u1A5E\u1A60-\u1A7C\u1A7F\u1AB0-\u1ABE\u1B00-\u1B04\u1B34-\u1B44\u1B6B-\u1B73\u1B80-\u1B82\u1BA1-\u1BAD\u1BE6-\u1BF3\u1C24-\u1C37\u1CD0-\u1CD2\u1CD4-\u1CE8\u1CED\u1CF2-\u1CF4\u1CF8\u1CF9\u1DC0-\u1DF5\u1DFC-\u1DFF\u20D0-\u20F0\u2CEF-\u2CF1\u2D7F\u2DE0-\u2DFF\u302A-\u302F\u3099\u309A\uA66F-\uA672\uA674-\uA67D\uA69E\uA69F\uA6F0\uA6F1\uA802\uA806\uA80B\uA823-\uA827\uA880\uA881\uA8B4-\uA8C4\uA8E0-\uA8F1\uA926-\uA92D\uA947-\uA953\uA980-\uA983\uA9B3-\uA9C0\uA9E5\uAA29-\uAA36\uAA43\uAA4C\uAA4D\uAA7B-\uAA7D\uAAB0\uAAB2-\uAAB4\uAAB7\uAAB8\uAABE\uAABF\uAAC1\uAAEB-\uAAEF\uAAF5\uAAF6\uABE3-\uABEA\uABEC\uABED\uFB1E\uFE00-\uFE0F\uFE20-\uFE2F',
-            astral: '\uD805[\uDCB0-\uDCC3\uDDAF-\uDDB5\uDDB8-\uDDC0\uDDDC\uDDDD\uDE30-\uDE40\uDEAB-\uDEB7\uDF1D-\uDF2B]|\uD834[\uDD65-\uDD69\uDD6D-\uDD72\uDD7B-\uDD82\uDD85-\uDD8B\uDDAA-\uDDAD\uDE42-\uDE44]|\uD804[\uDC00-\uDC02\uDC38-\uDC46\uDC7F-\uDC82\uDCB0-\uDCBA\uDD00-\uDD02\uDD27-\uDD34\uDD73\uDD80-\uDD82\uDDB3-\uDDC0\uDDCA-\uDDCC\uDE2C-\uDE37\uDEDF-\uDEEA\uDF00-\uDF03\uDF3C\uDF3E-\uDF44\uDF47\uDF48\uDF4B-\uDF4D\uDF57\uDF62\uDF63\uDF66-\uDF6C\uDF70-\uDF74]|\uD81B[\uDF51-\uDF7E\uDF8F-\uDF92]|\uD81A[\uDEF0-\uDEF4\uDF30-\uDF36]|\uD82F[\uDC9D\uDC9E]|\uD800[\uDDFD\uDEE0\uDF76-\uDF7A]|\uD836[\uDE00-\uDE36\uDE3B-\uDE6C\uDE75\uDE84\uDE9B-\uDE9F\uDEA1-\uDEAF]|\uD802[\uDE01-\uDE03\uDE05\uDE06\uDE0C-\uDE0F\uDE38-\uDE3A\uDE3F\uDEE5\uDEE6]|\uD83A[\uDCD0-\uDCD6]|\uDB40[\uDD00-\uDDEF]'
+            bmp: '\u0300-\u036F\u0483-\u0489\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED\u0711\u0730-\u074A\u07A6-\u07B0\u07EB-\u07F3\u0816-\u0819\u081B-\u0823\u0825-\u0827\u0829-\u082D\u0859-\u085B\u08D4-\u08E1\u08E3-\u0903\u093A-\u093C\u093E-\u094F\u0951-\u0957\u0962\u0963\u0981-\u0983\u09BC\u09BE-\u09C4\u09C7\u09C8\u09CB-\u09CD\u09D7\u09E2\u09E3\u0A01-\u0A03\u0A3C\u0A3E-\u0A42\u0A47\u0A48\u0A4B-\u0A4D\u0A51\u0A70\u0A71\u0A75\u0A81-\u0A83\u0ABC\u0ABE-\u0AC5\u0AC7-\u0AC9\u0ACB-\u0ACD\u0AE2\u0AE3\u0B01-\u0B03\u0B3C\u0B3E-\u0B44\u0B47\u0B48\u0B4B-\u0B4D\u0B56\u0B57\u0B62\u0B63\u0B82\u0BBE-\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCD\u0BD7\u0C00-\u0C03\u0C3E-\u0C44\u0C46-\u0C48\u0C4A-\u0C4D\u0C55\u0C56\u0C62\u0C63\u0C81-\u0C83\u0CBC\u0CBE-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCD\u0CD5\u0CD6\u0CE2\u0CE3\u0D01-\u0D03\u0D3E-\u0D44\u0D46-\u0D48\u0D4A-\u0D4D\u0D57\u0D62\u0D63\u0D82\u0D83\u0DCA\u0DCF-\u0DD4\u0DD6\u0DD8-\u0DDF\u0DF2\u0DF3\u0E31\u0E34-\u0E3A\u0E47-\u0E4E\u0EB1\u0EB4-\u0EB9\u0EBB\u0EBC\u0EC8-\u0ECD\u0F18\u0F19\u0F35\u0F37\u0F39\u0F3E\u0F3F\u0F71-\u0F84\u0F86\u0F87\u0F8D-\u0F97\u0F99-\u0FBC\u0FC6\u102B-\u103E\u1056-\u1059\u105E-\u1060\u1062-\u1064\u1067-\u106D\u1071-\u1074\u1082-\u108D\u108F\u109A-\u109D\u135D-\u135F\u1712-\u1714\u1732-\u1734\u1752\u1753\u1772\u1773\u17B4-\u17D3\u17DD\u180B-\u180D\u1885\u1886\u18A9\u1920-\u192B\u1930-\u193B\u1A17-\u1A1B\u1A55-\u1A5E\u1A60-\u1A7C\u1A7F\u1AB0-\u1ABE\u1B00-\u1B04\u1B34-\u1B44\u1B6B-\u1B73\u1B80-\u1B82\u1BA1-\u1BAD\u1BE6-\u1BF3\u1C24-\u1C37\u1CD0-\u1CD2\u1CD4-\u1CE8\u1CED\u1CF2-\u1CF4\u1CF8\u1CF9\u1DC0-\u1DF5\u1DFB-\u1DFF\u20D0-\u20F0\u2CEF-\u2CF1\u2D7F\u2DE0-\u2DFF\u302A-\u302F\u3099\u309A\uA66F-\uA672\uA674-\uA67D\uA69E\uA69F\uA6F0\uA6F1\uA802\uA806\uA80B\uA823-\uA827\uA880\uA881\uA8B4-\uA8C5\uA8E0-\uA8F1\uA926-\uA92D\uA947-\uA953\uA980-\uA983\uA9B3-\uA9C0\uA9E5\uAA29-\uAA36\uAA43\uAA4C\uAA4D\uAA7B-\uAA7D\uAAB0\uAAB2-\uAAB4\uAAB7\uAAB8\uAABE\uAABF\uAAC1\uAAEB-\uAAEF\uAAF5\uAAF6\uABE3-\uABEA\uABEC\uABED\uFB1E\uFE00-\uFE0F\uFE20-\uFE2F',
+            astral: '\uD800[\uDDFD\uDEE0\uDF76-\uDF7A]|\uD802[\uDE01-\uDE03\uDE05\uDE06\uDE0C-\uDE0F\uDE38-\uDE3A\uDE3F\uDEE5\uDEE6]|\uD804[\uDC00-\uDC02\uDC38-\uDC46\uDC7F-\uDC82\uDCB0-\uDCBA\uDD00-\uDD02\uDD27-\uDD34\uDD73\uDD80-\uDD82\uDDB3-\uDDC0\uDDCA-\uDDCC\uDE2C-\uDE37\uDE3E\uDEDF-\uDEEA\uDF00-\uDF03\uDF3C\uDF3E-\uDF44\uDF47\uDF48\uDF4B-\uDF4D\uDF57\uDF62\uDF63\uDF66-\uDF6C\uDF70-\uDF74]|\uD805[\uDC35-\uDC46\uDCB0-\uDCC3\uDDAF-\uDDB5\uDDB8-\uDDC0\uDDDC\uDDDD\uDE30-\uDE40\uDEAB-\uDEB7\uDF1D-\uDF2B]|\uD807[\uDC2F-\uDC36\uDC38-\uDC3F\uDC92-\uDCA7\uDCA9-\uDCB6]|\uD81A[\uDEF0-\uDEF4\uDF30-\uDF36]|\uD81B[\uDF51-\uDF7E\uDF8F-\uDF92]|\uD82F[\uDC9D\uDC9E]|\uD834[\uDD65-\uDD69\uDD6D-\uDD72\uDD7B-\uDD82\uDD85-\uDD8B\uDDAA-\uDDAD\uDE42-\uDE44]|\uD836[\uDE00-\uDE36\uDE3B-\uDE6C\uDE75\uDE84\uDE9B-\uDE9F\uDEA1-\uDEAF]|\uD838[\uDC00-\uDC06\uDC08-\uDC18\uDC1B-\uDC21\uDC23\uDC24\uDC26-\uDC2A]|\uD83A[\uDCD0-\uDCD6\uDD44-\uDD4A]|\uDB40[\uDD00-\uDDEF]'
         },
         {
             name: 'Mc',
             alias: 'Spacing_Mark',
             bmp: '\u0903\u093B\u093E-\u0940\u0949-\u094C\u094E\u094F\u0982\u0983\u09BE-\u09C0\u09C7\u09C8\u09CB\u09CC\u09D7\u0A03\u0A3E-\u0A40\u0A83\u0ABE-\u0AC0\u0AC9\u0ACB\u0ACC\u0B02\u0B03\u0B3E\u0B40\u0B47\u0B48\u0B4B\u0B4C\u0B57\u0BBE\u0BBF\u0BC1\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCC\u0BD7\u0C01-\u0C03\u0C41-\u0C44\u0C82\u0C83\u0CBE\u0CC0-\u0CC4\u0CC7\u0CC8\u0CCA\u0CCB\u0CD5\u0CD6\u0D02\u0D03\u0D3E-\u0D40\u0D46-\u0D48\u0D4A-\u0D4C\u0D57\u0D82\u0D83\u0DCF-\u0DD1\u0DD8-\u0DDF\u0DF2\u0DF3\u0F3E\u0F3F\u0F7F\u102B\u102C\u1031\u1038\u103B\u103C\u1056\u1057\u1062-\u1064\u1067-\u106D\u1083\u1084\u1087-\u108C\u108F\u109A-\u109C\u17B6\u17BE-\u17C5\u17C7\u17C8\u1923-\u1926\u1929-\u192B\u1930\u1931\u1933-\u1938\u1A19\u1A1A\u1A55\u1A57\u1A61\u1A63\u1A64\u1A6D-\u1A72\u1B04\u1B35\u1B3B\u1B3D-\u1B41\u1B43\u1B44\u1B82\u1BA1\u1BA6\u1BA7\u1BAA\u1BE7\u1BEA-\u1BEC\u1BEE\u1BF2\u1BF3\u1C24-\u1C2B\u1C34\u1C35\u1CE1\u1CF2\u1CF3\u302E\u302F\uA823\uA824\uA827\uA880\uA881\uA8B4-\uA8C3\uA952\uA953\uA983\uA9B4\uA9B5\uA9BA\uA9BB\uA9BD-\uA9C0\uAA2F\uAA30\uAA33\uAA34\uAA4D\uAA7B\uAA7D\uAAEB\uAAEE\uAAEF\uAAF5\uABE3\uABE4\uABE6\uABE7\uABE9\uABEA\uABEC',
-            astral: '\uD834[\uDD65\uDD66\uDD6D-\uDD72]|\uD804[\uDC00\uDC02\uDC82\uDCB0-\uDCB2\uDCB7\uDCB8\uDD2C\uDD82\uDDB3-\uDDB5\uDDBF\uDDC0\uDE2C-\uDE2E\uDE32\uDE33\uDE35\uDEE0-\uDEE2\uDF02\uDF03\uDF3E\uDF3F\uDF41-\uDF44\uDF47\uDF48\uDF4B-\uDF4D\uDF57\uDF62\uDF63]|\uD805[\uDCB0-\uDCB2\uDCB9\uDCBB-\uDCBE\uDCC1\uDDAF-\uDDB1\uDDB8-\uDDBB\uDDBE\uDE30-\uDE32\uDE3B\uDE3C\uDE3E\uDEAC\uDEAE\uDEAF\uDEB6\uDF20\uDF21\uDF26]|\uD81B[\uDF51-\uDF7E]'
+            astral: '\uD804[\uDC00\uDC02\uDC82\uDCB0-\uDCB2\uDCB7\uDCB8\uDD2C\uDD82\uDDB3-\uDDB5\uDDBF\uDDC0\uDE2C-\uDE2E\uDE32\uDE33\uDE35\uDEE0-\uDEE2\uDF02\uDF03\uDF3E\uDF3F\uDF41-\uDF44\uDF47\uDF48\uDF4B-\uDF4D\uDF57\uDF62\uDF63]|\uD805[\uDC35-\uDC37\uDC40\uDC41\uDC45\uDCB0-\uDCB2\uDCB9\uDCBB-\uDCBE\uDCC1\uDDAF-\uDDB1\uDDB8-\uDDBB\uDDBE\uDE30-\uDE32\uDE3B\uDE3C\uDE3E\uDEAC\uDEAE\uDEAF\uDEB6\uDF20\uDF21\uDF26]|\uD807[\uDC2F\uDC3E\uDCA9\uDCB1\uDCB4]|\uD81B[\uDF51-\uDF7E]|\uD834[\uDD65\uDD66\uDD6D-\uDD72]'
         },
         {
             name: 'Me',
@@ -22924,38 +28559,38 @@ module.exports = function(XRegExp) {
         {
             name: 'Mn',
             alias: 'Nonspacing_Mark',
-            bmp: '\u0300-\u036F\u0483-\u0487\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED\u0711\u0730-\u074A\u07A6-\u07B0\u07EB-\u07F3\u0816-\u0819\u081B-\u0823\u0825-\u0827\u0829-\u082D\u0859-\u085B\u08E3-\u0902\u093A\u093C\u0941-\u0948\u094D\u0951-\u0957\u0962\u0963\u0981\u09BC\u09C1-\u09C4\u09CD\u09E2\u09E3\u0A01\u0A02\u0A3C\u0A41\u0A42\u0A47\u0A48\u0A4B-\u0A4D\u0A51\u0A70\u0A71\u0A75\u0A81\u0A82\u0ABC\u0AC1-\u0AC5\u0AC7\u0AC8\u0ACD\u0AE2\u0AE3\u0B01\u0B3C\u0B3F\u0B41-\u0B44\u0B4D\u0B56\u0B62\u0B63\u0B82\u0BC0\u0BCD\u0C00\u0C3E-\u0C40\u0C46-\u0C48\u0C4A-\u0C4D\u0C55\u0C56\u0C62\u0C63\u0C81\u0CBC\u0CBF\u0CC6\u0CCC\u0CCD\u0CE2\u0CE3\u0D01\u0D41-\u0D44\u0D4D\u0D62\u0D63\u0DCA\u0DD2-\u0DD4\u0DD6\u0E31\u0E34-\u0E3A\u0E47-\u0E4E\u0EB1\u0EB4-\u0EB9\u0EBB\u0EBC\u0EC8-\u0ECD\u0F18\u0F19\u0F35\u0F37\u0F39\u0F71-\u0F7E\u0F80-\u0F84\u0F86\u0F87\u0F8D-\u0F97\u0F99-\u0FBC\u0FC6\u102D-\u1030\u1032-\u1037\u1039\u103A\u103D\u103E\u1058\u1059\u105E-\u1060\u1071-\u1074\u1082\u1085\u1086\u108D\u109D\u135D-\u135F\u1712-\u1714\u1732-\u1734\u1752\u1753\u1772\u1773\u17B4\u17B5\u17B7-\u17BD\u17C6\u17C9-\u17D3\u17DD\u180B-\u180D\u18A9\u1920-\u1922\u1927\u1928\u1932\u1939-\u193B\u1A17\u1A18\u1A1B\u1A56\u1A58-\u1A5E\u1A60\u1A62\u1A65-\u1A6C\u1A73-\u1A7C\u1A7F\u1AB0-\u1ABD\u1B00-\u1B03\u1B34\u1B36-\u1B3A\u1B3C\u1B42\u1B6B-\u1B73\u1B80\u1B81\u1BA2-\u1BA5\u1BA8\u1BA9\u1BAB-\u1BAD\u1BE6\u1BE8\u1BE9\u1BED\u1BEF-\u1BF1\u1C2C-\u1C33\u1C36\u1C37\u1CD0-\u1CD2\u1CD4-\u1CE0\u1CE2-\u1CE8\u1CED\u1CF4\u1CF8\u1CF9\u1DC0-\u1DF5\u1DFC-\u1DFF\u20D0-\u20DC\u20E1\u20E5-\u20F0\u2CEF-\u2CF1\u2D7F\u2DE0-\u2DFF\u302A-\u302D\u3099\u309A\uA66F\uA674-\uA67D\uA69E\uA69F\uA6F0\uA6F1\uA802\uA806\uA80B\uA825\uA826\uA8C4\uA8E0-\uA8F1\uA926-\uA92D\uA947-\uA951\uA980-\uA982\uA9B3\uA9B6-\uA9B9\uA9BC\uA9E5\uAA29-\uAA2E\uAA31\uAA32\uAA35\uAA36\uAA43\uAA4C\uAA7C\uAAB0\uAAB2-\uAAB4\uAAB7\uAAB8\uAABE\uAABF\uAAC1\uAAEC\uAAED\uAAF6\uABE5\uABE8\uABED\uFB1E\uFE00-\uFE0F\uFE20-\uFE2F',
-            astral: '\uD805[\uDCB3-\uDCB8\uDCBA\uDCBF\uDCC0\uDCC2\uDCC3\uDDB2-\uDDB5\uDDBC\uDDBD\uDDBF\uDDC0\uDDDC\uDDDD\uDE33-\uDE3A\uDE3D\uDE3F\uDE40\uDEAB\uDEAD\uDEB0-\uDEB5\uDEB7\uDF1D-\uDF1F\uDF22-\uDF25\uDF27-\uDF2B]|\uD834[\uDD67-\uDD69\uDD7B-\uDD82\uDD85-\uDD8B\uDDAA-\uDDAD\uDE42-\uDE44]|\uD81A[\uDEF0-\uDEF4\uDF30-\uDF36]|\uD81B[\uDF8F-\uDF92]|\uD82F[\uDC9D\uDC9E]|\uD800[\uDDFD\uDEE0\uDF76-\uDF7A]|\uD836[\uDE00-\uDE36\uDE3B-\uDE6C\uDE75\uDE84\uDE9B-\uDE9F\uDEA1-\uDEAF]|\uD802[\uDE01-\uDE03\uDE05\uDE06\uDE0C-\uDE0F\uDE38-\uDE3A\uDE3F\uDEE5\uDEE6]|\uD804[\uDC01\uDC38-\uDC46\uDC7F-\uDC81\uDCB3-\uDCB6\uDCB9\uDCBA\uDD00-\uDD02\uDD27-\uDD2B\uDD2D-\uDD34\uDD73\uDD80\uDD81\uDDB6-\uDDBE\uDDCA-\uDDCC\uDE2F-\uDE31\uDE34\uDE36\uDE37\uDEDF\uDEE3-\uDEEA\uDF00\uDF01\uDF3C\uDF40\uDF66-\uDF6C\uDF70-\uDF74]|\uD83A[\uDCD0-\uDCD6]|\uDB40[\uDD00-\uDDEF]'
+            bmp: '\u0300-\u036F\u0483-\u0487\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED\u0711\u0730-\u074A\u07A6-\u07B0\u07EB-\u07F3\u0816-\u0819\u081B-\u0823\u0825-\u0827\u0829-\u082D\u0859-\u085B\u08D4-\u08E1\u08E3-\u0902\u093A\u093C\u0941-\u0948\u094D\u0951-\u0957\u0962\u0963\u0981\u09BC\u09C1-\u09C4\u09CD\u09E2\u09E3\u0A01\u0A02\u0A3C\u0A41\u0A42\u0A47\u0A48\u0A4B-\u0A4D\u0A51\u0A70\u0A71\u0A75\u0A81\u0A82\u0ABC\u0AC1-\u0AC5\u0AC7\u0AC8\u0ACD\u0AE2\u0AE3\u0B01\u0B3C\u0B3F\u0B41-\u0B44\u0B4D\u0B56\u0B62\u0B63\u0B82\u0BC0\u0BCD\u0C00\u0C3E-\u0C40\u0C46-\u0C48\u0C4A-\u0C4D\u0C55\u0C56\u0C62\u0C63\u0C81\u0CBC\u0CBF\u0CC6\u0CCC\u0CCD\u0CE2\u0CE3\u0D01\u0D41-\u0D44\u0D4D\u0D62\u0D63\u0DCA\u0DD2-\u0DD4\u0DD6\u0E31\u0E34-\u0E3A\u0E47-\u0E4E\u0EB1\u0EB4-\u0EB9\u0EBB\u0EBC\u0EC8-\u0ECD\u0F18\u0F19\u0F35\u0F37\u0F39\u0F71-\u0F7E\u0F80-\u0F84\u0F86\u0F87\u0F8D-\u0F97\u0F99-\u0FBC\u0FC6\u102D-\u1030\u1032-\u1037\u1039\u103A\u103D\u103E\u1058\u1059\u105E-\u1060\u1071-\u1074\u1082\u1085\u1086\u108D\u109D\u135D-\u135F\u1712-\u1714\u1732-\u1734\u1752\u1753\u1772\u1773\u17B4\u17B5\u17B7-\u17BD\u17C6\u17C9-\u17D3\u17DD\u180B-\u180D\u1885\u1886\u18A9\u1920-\u1922\u1927\u1928\u1932\u1939-\u193B\u1A17\u1A18\u1A1B\u1A56\u1A58-\u1A5E\u1A60\u1A62\u1A65-\u1A6C\u1A73-\u1A7C\u1A7F\u1AB0-\u1ABD\u1B00-\u1B03\u1B34\u1B36-\u1B3A\u1B3C\u1B42\u1B6B-\u1B73\u1B80\u1B81\u1BA2-\u1BA5\u1BA8\u1BA9\u1BAB-\u1BAD\u1BE6\u1BE8\u1BE9\u1BED\u1BEF-\u1BF1\u1C2C-\u1C33\u1C36\u1C37\u1CD0-\u1CD2\u1CD4-\u1CE0\u1CE2-\u1CE8\u1CED\u1CF4\u1CF8\u1CF9\u1DC0-\u1DF5\u1DFB-\u1DFF\u20D0-\u20DC\u20E1\u20E5-\u20F0\u2CEF-\u2CF1\u2D7F\u2DE0-\u2DFF\u302A-\u302D\u3099\u309A\uA66F\uA674-\uA67D\uA69E\uA69F\uA6F0\uA6F1\uA802\uA806\uA80B\uA825\uA826\uA8C4\uA8C5\uA8E0-\uA8F1\uA926-\uA92D\uA947-\uA951\uA980-\uA982\uA9B3\uA9B6-\uA9B9\uA9BC\uA9E5\uAA29-\uAA2E\uAA31\uAA32\uAA35\uAA36\uAA43\uAA4C\uAA7C\uAAB0\uAAB2-\uAAB4\uAAB7\uAAB8\uAABE\uAABF\uAAC1\uAAEC\uAAED\uAAF6\uABE5\uABE8\uABED\uFB1E\uFE00-\uFE0F\uFE20-\uFE2F',
+            astral: '\uD800[\uDDFD\uDEE0\uDF76-\uDF7A]|\uD802[\uDE01-\uDE03\uDE05\uDE06\uDE0C-\uDE0F\uDE38-\uDE3A\uDE3F\uDEE5\uDEE6]|\uD804[\uDC01\uDC38-\uDC46\uDC7F-\uDC81\uDCB3-\uDCB6\uDCB9\uDCBA\uDD00-\uDD02\uDD27-\uDD2B\uDD2D-\uDD34\uDD73\uDD80\uDD81\uDDB6-\uDDBE\uDDCA-\uDDCC\uDE2F-\uDE31\uDE34\uDE36\uDE37\uDE3E\uDEDF\uDEE3-\uDEEA\uDF00\uDF01\uDF3C\uDF40\uDF66-\uDF6C\uDF70-\uDF74]|\uD805[\uDC38-\uDC3F\uDC42-\uDC44\uDC46\uDCB3-\uDCB8\uDCBA\uDCBF\uDCC0\uDCC2\uDCC3\uDDB2-\uDDB5\uDDBC\uDDBD\uDDBF\uDDC0\uDDDC\uDDDD\uDE33-\uDE3A\uDE3D\uDE3F\uDE40\uDEAB\uDEAD\uDEB0-\uDEB5\uDEB7\uDF1D-\uDF1F\uDF22-\uDF25\uDF27-\uDF2B]|\uD807[\uDC30-\uDC36\uDC38-\uDC3D\uDC3F\uDC92-\uDCA7\uDCAA-\uDCB0\uDCB2\uDCB3\uDCB5\uDCB6]|\uD81A[\uDEF0-\uDEF4\uDF30-\uDF36]|\uD81B[\uDF8F-\uDF92]|\uD82F[\uDC9D\uDC9E]|\uD834[\uDD67-\uDD69\uDD7B-\uDD82\uDD85-\uDD8B\uDDAA-\uDDAD\uDE42-\uDE44]|\uD836[\uDE00-\uDE36\uDE3B-\uDE6C\uDE75\uDE84\uDE9B-\uDE9F\uDEA1-\uDEAF]|\uD838[\uDC00-\uDC06\uDC08-\uDC18\uDC1B-\uDC21\uDC23\uDC24\uDC26-\uDC2A]|\uD83A[\uDCD0-\uDCD6\uDD44-\uDD4A]|\uDB40[\uDD00-\uDDEF]'
         },
         {
             name: 'N',
             alias: 'Number',
-            bmp: '0-9\xB2\xB3\xB9\xBC-\xBE\u0660-\u0669\u06F0-\u06F9\u07C0-\u07C9\u0966-\u096F\u09E6-\u09EF\u09F4-\u09F9\u0A66-\u0A6F\u0AE6-\u0AEF\u0B66-\u0B6F\u0B72-\u0B77\u0BE6-\u0BF2\u0C66-\u0C6F\u0C78-\u0C7E\u0CE6-\u0CEF\u0D66-\u0D75\u0DE6-\u0DEF\u0E50-\u0E59\u0ED0-\u0ED9\u0F20-\u0F33\u1040-\u1049\u1090-\u1099\u1369-\u137C\u16EE-\u16F0\u17E0-\u17E9\u17F0-\u17F9\u1810-\u1819\u1946-\u194F\u19D0-\u19DA\u1A80-\u1A89\u1A90-\u1A99\u1B50-\u1B59\u1BB0-\u1BB9\u1C40-\u1C49\u1C50-\u1C59\u2070\u2074-\u2079\u2080-\u2089\u2150-\u2182\u2185-\u2189\u2460-\u249B\u24EA-\u24FF\u2776-\u2793\u2CFD\u3007\u3021-\u3029\u3038-\u303A\u3192-\u3195\u3220-\u3229\u3248-\u324F\u3251-\u325F\u3280-\u3289\u32B1-\u32BF\uA620-\uA629\uA6E6-\uA6EF\uA830-\uA835\uA8D0-\uA8D9\uA900-\uA909\uA9D0-\uA9D9\uA9F0-\uA9F9\uAA50-\uAA59\uABF0-\uABF9\uFF10-\uFF19',
-            astral: '\uD800[\uDD07-\uDD33\uDD40-\uDD78\uDD8A\uDD8B\uDEE1-\uDEFB\uDF20-\uDF23\uDF41\uDF4A\uDFD1-\uDFD5]|\uD801[\uDCA0-\uDCA9]|\uD803[\uDCFA-\uDCFF\uDE60-\uDE7E]|\uD835[\uDFCE-\uDFFF]|\uD83A[\uDCC7-\uDCCF]|\uD81A[\uDE60-\uDE69\uDF50-\uDF59\uDF5B-\uDF61]|\uD806[\uDCE0-\uDCF2]|\uD804[\uDC52-\uDC6F\uDCF0-\uDCF9\uDD36-\uDD3F\uDDD0-\uDDD9\uDDE1-\uDDF4\uDEF0-\uDEF9]|\uD834[\uDF60-\uDF71]|\uD83C[\uDD00-\uDD0C]|\uD809[\uDC00-\uDC6E]|\uD802[\uDC58-\uDC5F\uDC79-\uDC7F\uDCA7-\uDCAF\uDCFB-\uDCFF\uDD16-\uDD1B\uDDBC\uDDBD\uDDC0-\uDDCF\uDDD2-\uDDFF\uDE40-\uDE47\uDE7D\uDE7E\uDE9D-\uDE9F\uDEEB-\uDEEF\uDF58-\uDF5F\uDF78-\uDF7F\uDFA9-\uDFAF]|\uD805[\uDCD0-\uDCD9\uDE50-\uDE59\uDEC0-\uDEC9\uDF30-\uDF3B]'
+            bmp: '0-9\xB2\xB3\xB9\xBC-\xBE\u0660-\u0669\u06F0-\u06F9\u07C0-\u07C9\u0966-\u096F\u09E6-\u09EF\u09F4-\u09F9\u0A66-\u0A6F\u0AE6-\u0AEF\u0B66-\u0B6F\u0B72-\u0B77\u0BE6-\u0BF2\u0C66-\u0C6F\u0C78-\u0C7E\u0CE6-\u0CEF\u0D58-\u0D5E\u0D66-\u0D78\u0DE6-\u0DEF\u0E50-\u0E59\u0ED0-\u0ED9\u0F20-\u0F33\u1040-\u1049\u1090-\u1099\u1369-\u137C\u16EE-\u16F0\u17E0-\u17E9\u17F0-\u17F9\u1810-\u1819\u1946-\u194F\u19D0-\u19DA\u1A80-\u1A89\u1A90-\u1A99\u1B50-\u1B59\u1BB0-\u1BB9\u1C40-\u1C49\u1C50-\u1C59\u2070\u2074-\u2079\u2080-\u2089\u2150-\u2182\u2185-\u2189\u2460-\u249B\u24EA-\u24FF\u2776-\u2793\u2CFD\u3007\u3021-\u3029\u3038-\u303A\u3192-\u3195\u3220-\u3229\u3248-\u324F\u3251-\u325F\u3280-\u3289\u32B1-\u32BF\uA620-\uA629\uA6E6-\uA6EF\uA830-\uA835\uA8D0-\uA8D9\uA900-\uA909\uA9D0-\uA9D9\uA9F0-\uA9F9\uAA50-\uAA59\uABF0-\uABF9\uFF10-\uFF19',
+            astral: '\uD800[\uDD07-\uDD33\uDD40-\uDD78\uDD8A\uDD8B\uDEE1-\uDEFB\uDF20-\uDF23\uDF41\uDF4A\uDFD1-\uDFD5]|\uD801[\uDCA0-\uDCA9]|\uD802[\uDC58-\uDC5F\uDC79-\uDC7F\uDCA7-\uDCAF\uDCFB-\uDCFF\uDD16-\uDD1B\uDDBC\uDDBD\uDDC0-\uDDCF\uDDD2-\uDDFF\uDE40-\uDE47\uDE7D\uDE7E\uDE9D-\uDE9F\uDEEB-\uDEEF\uDF58-\uDF5F\uDF78-\uDF7F\uDFA9-\uDFAF]|\uD803[\uDCFA-\uDCFF\uDE60-\uDE7E]|\uD804[\uDC52-\uDC6F\uDCF0-\uDCF9\uDD36-\uDD3F\uDDD0-\uDDD9\uDDE1-\uDDF4\uDEF0-\uDEF9]|\uD805[\uDC50-\uDC59\uDCD0-\uDCD9\uDE50-\uDE59\uDEC0-\uDEC9\uDF30-\uDF3B]|\uD806[\uDCE0-\uDCF2]|\uD807[\uDC50-\uDC6C]|\uD809[\uDC00-\uDC6E]|\uD81A[\uDE60-\uDE69\uDF50-\uDF59\uDF5B-\uDF61]|\uD834[\uDF60-\uDF71]|\uD835[\uDFCE-\uDFFF]|\uD83A[\uDCC7-\uDCCF\uDD50-\uDD59]|\uD83C[\uDD00-\uDD0C]'
         },
         {
             name: 'Nd',
             alias: 'Decimal_Number',
             bmp: '0-9\u0660-\u0669\u06F0-\u06F9\u07C0-\u07C9\u0966-\u096F\u09E6-\u09EF\u0A66-\u0A6F\u0AE6-\u0AEF\u0B66-\u0B6F\u0BE6-\u0BEF\u0C66-\u0C6F\u0CE6-\u0CEF\u0D66-\u0D6F\u0DE6-\u0DEF\u0E50-\u0E59\u0ED0-\u0ED9\u0F20-\u0F29\u1040-\u1049\u1090-\u1099\u17E0-\u17E9\u1810-\u1819\u1946-\u194F\u19D0-\u19D9\u1A80-\u1A89\u1A90-\u1A99\u1B50-\u1B59\u1BB0-\u1BB9\u1C40-\u1C49\u1C50-\u1C59\uA620-\uA629\uA8D0-\uA8D9\uA900-\uA909\uA9D0-\uA9D9\uA9F0-\uA9F9\uAA50-\uAA59\uABF0-\uABF9\uFF10-\uFF19',
-            astral: '\uD801[\uDCA0-\uDCA9]|\uD835[\uDFCE-\uDFFF]|\uD805[\uDCD0-\uDCD9\uDE50-\uDE59\uDEC0-\uDEC9\uDF30-\uDF39]|\uD806[\uDCE0-\uDCE9]|\uD804[\uDC66-\uDC6F\uDCF0-\uDCF9\uDD36-\uDD3F\uDDD0-\uDDD9\uDEF0-\uDEF9]|\uD81A[\uDE60-\uDE69\uDF50-\uDF59]'
+            astral: '\uD801[\uDCA0-\uDCA9]|\uD804[\uDC66-\uDC6F\uDCF0-\uDCF9\uDD36-\uDD3F\uDDD0-\uDDD9\uDEF0-\uDEF9]|\uD805[\uDC50-\uDC59\uDCD0-\uDCD9\uDE50-\uDE59\uDEC0-\uDEC9\uDF30-\uDF39]|\uD806[\uDCE0-\uDCE9]|\uD807[\uDC50-\uDC59]|\uD81A[\uDE60-\uDE69\uDF50-\uDF59]|\uD835[\uDFCE-\uDFFF]|\uD83A[\uDD50-\uDD59]'
         },
         {
             name: 'Nl',
             alias: 'Letter_Number',
             bmp: '\u16EE-\u16F0\u2160-\u2182\u2185-\u2188\u3007\u3021-\u3029\u3038-\u303A\uA6E6-\uA6EF',
-            astral: '\uD809[\uDC00-\uDC6E]|\uD800[\uDD40-\uDD74\uDF41\uDF4A\uDFD1-\uDFD5]'
+            astral: '\uD800[\uDD40-\uDD74\uDF41\uDF4A\uDFD1-\uDFD5]|\uD809[\uDC00-\uDC6E]'
         },
         {
             name: 'No',
             alias: 'Other_Number',
-            bmp: '\xB2\xB3\xB9\xBC-\xBE\u09F4-\u09F9\u0B72-\u0B77\u0BF0-\u0BF2\u0C78-\u0C7E\u0D70-\u0D75\u0F2A-\u0F33\u1369-\u137C\u17F0-\u17F9\u19DA\u2070\u2074-\u2079\u2080-\u2089\u2150-\u215F\u2189\u2460-\u249B\u24EA-\u24FF\u2776-\u2793\u2CFD\u3192-\u3195\u3220-\u3229\u3248-\u324F\u3251-\u325F\u3280-\u3289\u32B1-\u32BF\uA830-\uA835',
-            astral: '\uD804[\uDC52-\uDC65\uDDE1-\uDDF4]|\uD803[\uDCFA-\uDCFF\uDE60-\uDE7E]|\uD83C[\uDD00-\uDD0C]|\uD806[\uDCEA-\uDCF2]|\uD83A[\uDCC7-\uDCCF]|\uD802[\uDC58-\uDC5F\uDC79-\uDC7F\uDCA7-\uDCAF\uDCFB-\uDCFF\uDD16-\uDD1B\uDDBC\uDDBD\uDDC0-\uDDCF\uDDD2-\uDDFF\uDE40-\uDE47\uDE7D\uDE7E\uDE9D-\uDE9F\uDEEB-\uDEEF\uDF58-\uDF5F\uDF78-\uDF7F\uDFA9-\uDFAF]|\uD805[\uDF3A\uDF3B]|\uD81A[\uDF5B-\uDF61]|\uD834[\uDF60-\uDF71]|\uD800[\uDD07-\uDD33\uDD75-\uDD78\uDD8A\uDD8B\uDEE1-\uDEFB\uDF20-\uDF23]'
+            bmp: '\xB2\xB3\xB9\xBC-\xBE\u09F4-\u09F9\u0B72-\u0B77\u0BF0-\u0BF2\u0C78-\u0C7E\u0D58-\u0D5E\u0D70-\u0D78\u0F2A-\u0F33\u1369-\u137C\u17F0-\u17F9\u19DA\u2070\u2074-\u2079\u2080-\u2089\u2150-\u215F\u2189\u2460-\u249B\u24EA-\u24FF\u2776-\u2793\u2CFD\u3192-\u3195\u3220-\u3229\u3248-\u324F\u3251-\u325F\u3280-\u3289\u32B1-\u32BF\uA830-\uA835',
+            astral: '\uD800[\uDD07-\uDD33\uDD75-\uDD78\uDD8A\uDD8B\uDEE1-\uDEFB\uDF20-\uDF23]|\uD802[\uDC58-\uDC5F\uDC79-\uDC7F\uDCA7-\uDCAF\uDCFB-\uDCFF\uDD16-\uDD1B\uDDBC\uDDBD\uDDC0-\uDDCF\uDDD2-\uDDFF\uDE40-\uDE47\uDE7D\uDE7E\uDE9D-\uDE9F\uDEEB-\uDEEF\uDF58-\uDF5F\uDF78-\uDF7F\uDFA9-\uDFAF]|\uD803[\uDCFA-\uDCFF\uDE60-\uDE7E]|\uD804[\uDC52-\uDC65\uDDE1-\uDDF4]|\uD805[\uDF3A\uDF3B]|\uD806[\uDCEA-\uDCF2]|\uD807[\uDC5A-\uDC6C]|\uD81A[\uDF5B-\uDF61]|\uD834[\uDF60-\uDF71]|\uD83A[\uDCC7-\uDCCF]|\uD83C[\uDD00-\uDD0C]'
         },
         {
             name: 'P',
             alias: 'Punctuation',
-            bmp: '\x21-\x23\x25-\\x2A\x2C-\x2F\x3A\x3B\\x3F\x40\\x5B-\\x5D\x5F\\x7B\x7D\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u0AF0\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166D\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E42\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65',
-            astral: '\uD802[\uDC57\uDD1F\uDD3F\uDE50-\uDE58\uDE7F\uDEF0-\uDEF6\uDF39-\uDF3F\uDF99-\uDF9C]|\uD809[\uDC70-\uDC74]|\uD805[\uDCC6\uDDC1-\uDDD7\uDE41-\uDE43\uDF3C-\uDF3E]|\uD836[\uDE87-\uDE8B]|\uD801\uDD6F|\uD82F\uDC9F|\uD804[\uDC47-\uDC4D\uDCBB\uDCBC\uDCBE-\uDCC1\uDD40-\uDD43\uDD74\uDD75\uDDC5-\uDDC9\uDDCD\uDDDB\uDDDD-\uDDDF\uDE38-\uDE3D\uDEA9]|\uD800[\uDD00-\uDD02\uDF9F\uDFD0]|\uD81A[\uDE6E\uDE6F\uDEF5\uDF37-\uDF3B\uDF44]'
+            bmp: '\x21-\x23\x25-\\x2A\x2C-\x2F\x3A\x3B\\x3F\x40\\x5B-\\x5D\x5F\\x7B\x7D\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u0AF0\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166D\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E44\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65',
+            astral: '\uD800[\uDD00-\uDD02\uDF9F\uDFD0]|\uD801\uDD6F|\uD802[\uDC57\uDD1F\uDD3F\uDE50-\uDE58\uDE7F\uDEF0-\uDEF6\uDF39-\uDF3F\uDF99-\uDF9C]|\uD804[\uDC47-\uDC4D\uDCBB\uDCBC\uDCBE-\uDCC1\uDD40-\uDD43\uDD74\uDD75\uDDC5-\uDDC9\uDDCD\uDDDB\uDDDD-\uDDDF\uDE38-\uDE3D\uDEA9]|\uD805[\uDC4B-\uDC4F\uDC5B\uDC5D\uDCC6\uDDC1-\uDDD7\uDE41-\uDE43\uDE60-\uDE6C\uDF3C-\uDF3E]|\uD807[\uDC41-\uDC45\uDC70\uDC71]|\uD809[\uDC70-\uDC74]|\uD81A[\uDE6E\uDE6F\uDEF5\uDF37-\uDF3B\uDF44]|\uD82F\uDC9F|\uD836[\uDE87-\uDE8B]|\uD83A[\uDD5E\uDD5F]'
         },
         {
             name: 'Pc',
@@ -22985,8 +28620,8 @@ module.exports = function(XRegExp) {
         {
             name: 'Po',
             alias: 'Other_Punctuation',
-            bmp: '\x21-\x23\x25-\x27\\x2A\x2C\\x2E\x2F\x3A\x3B\\x3F\x40\\x5C\xA1\xA7\xB6\xB7\xBF\u037E\u0387\u055A-\u055F\u0589\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u0AF0\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u166D\u166E\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u1805\u1807-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2016\u2017\u2020-\u2027\u2030-\u2038\u203B-\u203E\u2041-\u2043\u2047-\u2051\u2053\u2055-\u205E\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00\u2E01\u2E06-\u2E08\u2E0B\u2E0E-\u2E16\u2E18\u2E19\u2E1B\u2E1E\u2E1F\u2E2A-\u2E2E\u2E30-\u2E39\u2E3C-\u2E3F\u2E41\u3001-\u3003\u303D\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFE10-\uFE16\uFE19\uFE30\uFE45\uFE46\uFE49-\uFE4C\uFE50-\uFE52\uFE54-\uFE57\uFE5F-\uFE61\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF07\uFF0A\uFF0C\uFF0E\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3C\uFF61\uFF64\uFF65',
-            astral: '\uD802[\uDC57\uDD1F\uDD3F\uDE50-\uDE58\uDE7F\uDEF0-\uDEF6\uDF39-\uDF3F\uDF99-\uDF9C]|\uD809[\uDC70-\uDC74]|\uD805[\uDCC6\uDDC1-\uDDD7\uDE41-\uDE43\uDF3C-\uDF3E]|\uD836[\uDE87-\uDE8B]|\uD801\uDD6F|\uD82F\uDC9F|\uD804[\uDC47-\uDC4D\uDCBB\uDCBC\uDCBE-\uDCC1\uDD40-\uDD43\uDD74\uDD75\uDDC5-\uDDC9\uDDCD\uDDDB\uDDDD-\uDDDF\uDE38-\uDE3D\uDEA9]|\uD800[\uDD00-\uDD02\uDF9F\uDFD0]|\uD81A[\uDE6E\uDE6F\uDEF5\uDF37-\uDF3B\uDF44]'
+            bmp: '\x21-\x23\x25-\x27\\x2A\x2C\\x2E\x2F\x3A\x3B\\x3F\x40\\x5C\xA1\xA7\xB6\xB7\xBF\u037E\u0387\u055A-\u055F\u0589\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u0AF0\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u166D\u166E\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u1805\u1807-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2016\u2017\u2020-\u2027\u2030-\u2038\u203B-\u203E\u2041-\u2043\u2047-\u2051\u2053\u2055-\u205E\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00\u2E01\u2E06-\u2E08\u2E0B\u2E0E-\u2E16\u2E18\u2E19\u2E1B\u2E1E\u2E1F\u2E2A-\u2E2E\u2E30-\u2E39\u2E3C-\u2E3F\u2E41\u2E43\u2E44\u3001-\u3003\u303D\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFE10-\uFE16\uFE19\uFE30\uFE45\uFE46\uFE49-\uFE4C\uFE50-\uFE52\uFE54-\uFE57\uFE5F-\uFE61\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF07\uFF0A\uFF0C\uFF0E\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3C\uFF61\uFF64\uFF65',
+            astral: '\uD800[\uDD00-\uDD02\uDF9F\uDFD0]|\uD801\uDD6F|\uD802[\uDC57\uDD1F\uDD3F\uDE50-\uDE58\uDE7F\uDEF0-\uDEF6\uDF39-\uDF3F\uDF99-\uDF9C]|\uD804[\uDC47-\uDC4D\uDCBB\uDCBC\uDCBE-\uDCC1\uDD40-\uDD43\uDD74\uDD75\uDDC5-\uDDC9\uDDCD\uDDDB\uDDDD-\uDDDF\uDE38-\uDE3D\uDEA9]|\uD805[\uDC4B-\uDC4F\uDC5B\uDC5D\uDCC6\uDDC1-\uDDD7\uDE41-\uDE43\uDE60-\uDE6C\uDF3C-\uDF3E]|\uD807[\uDC41-\uDC45\uDC70\uDC71]|\uD809[\uDC70-\uDC74]|\uD81A[\uDE6E\uDE6F\uDEF5\uDF37-\uDF3B\uDF44]|\uD82F\uDC9F|\uD836[\uDE87-\uDE8B]|\uD83A[\uDD5E\uDD5F]'
         },
         {
             name: 'Ps',
@@ -22996,8 +28631,8 @@ module.exports = function(XRegExp) {
         {
             name: 'S',
             alias: 'Symbol',
-            bmp: '\\x24\\x2B\x3C-\x3E\\x5E\x60\\x7C\x7E\xA2-\xA6\xA8\xA9\xAC\xAE-\xB1\xB4\xB8\xD7\xF7\u02C2-\u02C5\u02D2-\u02DF\u02E5-\u02EB\u02ED\u02EF-\u02FF\u0375\u0384\u0385\u03F6\u0482\u058D-\u058F\u0606-\u0608\u060B\u060E\u060F\u06DE\u06E9\u06FD\u06FE\u07F6\u09F2\u09F3\u09FA\u09FB\u0AF1\u0B70\u0BF3-\u0BFA\u0C7F\u0D79\u0E3F\u0F01-\u0F03\u0F13\u0F15-\u0F17\u0F1A-\u0F1F\u0F34\u0F36\u0F38\u0FBE-\u0FC5\u0FC7-\u0FCC\u0FCE\u0FCF\u0FD5-\u0FD8\u109E\u109F\u1390-\u1399\u17DB\u1940\u19DE-\u19FF\u1B61-\u1B6A\u1B74-\u1B7C\u1FBD\u1FBF-\u1FC1\u1FCD-\u1FCF\u1FDD-\u1FDF\u1FED-\u1FEF\u1FFD\u1FFE\u2044\u2052\u207A-\u207C\u208A-\u208C\u20A0-\u20BE\u2100\u2101\u2103-\u2106\u2108\u2109\u2114\u2116-\u2118\u211E-\u2123\u2125\u2127\u2129\u212E\u213A\u213B\u2140-\u2144\u214A-\u214D\u214F\u218A\u218B\u2190-\u2307\u230C-\u2328\u232B-\u23FA\u2400-\u2426\u2440-\u244A\u249C-\u24E9\u2500-\u2767\u2794-\u27C4\u27C7-\u27E5\u27F0-\u2982\u2999-\u29D7\u29DC-\u29FB\u29FE-\u2B73\u2B76-\u2B95\u2B98-\u2BB9\u2BBD-\u2BC8\u2BCA-\u2BD1\u2BEC-\u2BEF\u2CE5-\u2CEA\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5\u2FF0-\u2FFB\u3004\u3012\u3013\u3020\u3036\u3037\u303E\u303F\u309B\u309C\u3190\u3191\u3196-\u319F\u31C0-\u31E3\u3200-\u321E\u322A-\u3247\u3250\u3260-\u327F\u328A-\u32B0\u32C0-\u32FE\u3300-\u33FF\u4DC0-\u4DFF\uA490-\uA4C6\uA700-\uA716\uA720\uA721\uA789\uA78A\uA828-\uA82B\uA836-\uA839\uAA77-\uAA79\uAB5B\uFB29\uFBB2-\uFBC1\uFDFC\uFDFD\uFE62\uFE64-\uFE66\uFE69\uFF04\uFF0B\uFF1C-\uFF1E\uFF3E\uFF40\uFF5C\uFF5E\uFFE0-\uFFE6\uFFE8-\uFFEE\uFFFC\uFFFD',
-            astral: '\uD83E[\uDC00-\uDC0B\uDC10-\uDC47\uDC50-\uDC59\uDC60-\uDC87\uDC90-\uDCAD\uDD10-\uDD18\uDD80-\uDD84\uDDC0]|\uD83C[\uDC00-\uDC2B\uDC30-\uDC93\uDCA0-\uDCAE\uDCB1-\uDCBF\uDCC1-\uDCCF\uDCD1-\uDCF5\uDD10-\uDD2E\uDD30-\uDD6B\uDD70-\uDD9A\uDDE6-\uDE02\uDE10-\uDE3A\uDE40-\uDE48\uDE50\uDE51\uDF00-\uDFFF]|\uD83D[\uDC00-\uDD79\uDD7B-\uDDA3\uDDA5-\uDED0\uDEE0-\uDEEC\uDEF0-\uDEF3\uDF00-\uDF73\uDF80-\uDFD4]|\uD835[\uDEC1\uDEDB\uDEFB\uDF15\uDF35\uDF4F\uDF6F\uDF89\uDFA9\uDFC3]|\uD800[\uDD37-\uDD3F\uDD79-\uDD89\uDD8C\uDD90-\uDD9B\uDDA0\uDDD0-\uDDFC]|\uD82F\uDC9C|\uD805\uDF3F|\uD802[\uDC77\uDC78\uDEC8]|\uD81A[\uDF3C-\uDF3F\uDF45]|\uD836[\uDC00-\uDDFF\uDE37-\uDE3A\uDE6D-\uDE74\uDE76-\uDE83\uDE85\uDE86]|\uD834[\uDC00-\uDCF5\uDD00-\uDD26\uDD29-\uDD64\uDD6A-\uDD6C\uDD83\uDD84\uDD8C-\uDDA9\uDDAE-\uDDE8\uDE00-\uDE41\uDE45\uDF00-\uDF56]|\uD83B[\uDEF0\uDEF1]'
+            bmp: '\\x24\\x2B\x3C-\x3E\\x5E\x60\\x7C\x7E\xA2-\xA6\xA8\xA9\xAC\xAE-\xB1\xB4\xB8\xD7\xF7\u02C2-\u02C5\u02D2-\u02DF\u02E5-\u02EB\u02ED\u02EF-\u02FF\u0375\u0384\u0385\u03F6\u0482\u058D-\u058F\u0606-\u0608\u060B\u060E\u060F\u06DE\u06E9\u06FD\u06FE\u07F6\u09F2\u09F3\u09FA\u09FB\u0AF1\u0B70\u0BF3-\u0BFA\u0C7F\u0D4F\u0D79\u0E3F\u0F01-\u0F03\u0F13\u0F15-\u0F17\u0F1A-\u0F1F\u0F34\u0F36\u0F38\u0FBE-\u0FC5\u0FC7-\u0FCC\u0FCE\u0FCF\u0FD5-\u0FD8\u109E\u109F\u1390-\u1399\u17DB\u1940\u19DE-\u19FF\u1B61-\u1B6A\u1B74-\u1B7C\u1FBD\u1FBF-\u1FC1\u1FCD-\u1FCF\u1FDD-\u1FDF\u1FED-\u1FEF\u1FFD\u1FFE\u2044\u2052\u207A-\u207C\u208A-\u208C\u20A0-\u20BE\u2100\u2101\u2103-\u2106\u2108\u2109\u2114\u2116-\u2118\u211E-\u2123\u2125\u2127\u2129\u212E\u213A\u213B\u2140-\u2144\u214A-\u214D\u214F\u218A\u218B\u2190-\u2307\u230C-\u2328\u232B-\u23FE\u2400-\u2426\u2440-\u244A\u249C-\u24E9\u2500-\u2767\u2794-\u27C4\u27C7-\u27E5\u27F0-\u2982\u2999-\u29D7\u29DC-\u29FB\u29FE-\u2B73\u2B76-\u2B95\u2B98-\u2BB9\u2BBD-\u2BC8\u2BCA-\u2BD1\u2BEC-\u2BEF\u2CE5-\u2CEA\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5\u2FF0-\u2FFB\u3004\u3012\u3013\u3020\u3036\u3037\u303E\u303F\u309B\u309C\u3190\u3191\u3196-\u319F\u31C0-\u31E3\u3200-\u321E\u322A-\u3247\u3250\u3260-\u327F\u328A-\u32B0\u32C0-\u32FE\u3300-\u33FF\u4DC0-\u4DFF\uA490-\uA4C6\uA700-\uA716\uA720\uA721\uA789\uA78A\uA828-\uA82B\uA836-\uA839\uAA77-\uAA79\uAB5B\uFB29\uFBB2-\uFBC1\uFDFC\uFDFD\uFE62\uFE64-\uFE66\uFE69\uFF04\uFF0B\uFF1C-\uFF1E\uFF3E\uFF40\uFF5C\uFF5E\uFFE0-\uFFE6\uFFE8-\uFFEE\uFFFC\uFFFD',
+            astral: '\uD800[\uDD37-\uDD3F\uDD79-\uDD89\uDD8C-\uDD8E\uDD90-\uDD9B\uDDA0\uDDD0-\uDDFC]|\uD802[\uDC77\uDC78\uDEC8]|\uD805\uDF3F|\uD81A[\uDF3C-\uDF3F\uDF45]|\uD82F\uDC9C|\uD834[\uDC00-\uDCF5\uDD00-\uDD26\uDD29-\uDD64\uDD6A-\uDD6C\uDD83\uDD84\uDD8C-\uDDA9\uDDAE-\uDDE8\uDE00-\uDE41\uDE45\uDF00-\uDF56]|\uD835[\uDEC1\uDEDB\uDEFB\uDF15\uDF35\uDF4F\uDF6F\uDF89\uDFA9\uDFC3]|\uD836[\uDC00-\uDDFF\uDE37-\uDE3A\uDE6D-\uDE74\uDE76-\uDE83\uDE85\uDE86]|\uD83B[\uDEF0\uDEF1]|\uD83C[\uDC00-\uDC2B\uDC30-\uDC93\uDCA0-\uDCAE\uDCB1-\uDCBF\uDCC1-\uDCCF\uDCD1-\uDCF5\uDD10-\uDD2E\uDD30-\uDD6B\uDD70-\uDDAC\uDDE6-\uDE02\uDE10-\uDE3B\uDE40-\uDE48\uDE50\uDE51\uDF00-\uDFFF]|\uD83D[\uDC00-\uDED2\uDEE0-\uDEEC\uDEF0-\uDEF6\uDF00-\uDF73\uDF80-\uDFD4]|\uD83E[\uDC00-\uDC0B\uDC10-\uDC47\uDC50-\uDC59\uDC60-\uDC87\uDC90-\uDCAD\uDD10-\uDD1E\uDD20-\uDD27\uDD30\uDD33-\uDD3E\uDD40-\uDD4B\uDD50-\uDD5E\uDD80-\uDD91\uDDC0]'
         },
         {
             name: 'Sc',
@@ -23014,13 +28649,13 @@ module.exports = function(XRegExp) {
             name: 'Sm',
             alias: 'Math_Symbol',
             bmp: '\\x2B\x3C-\x3E\\x7C\x7E\xAC\xB1\xD7\xF7\u03F6\u0606-\u0608\u2044\u2052\u207A-\u207C\u208A-\u208C\u2118\u2140-\u2144\u214B\u2190-\u2194\u219A\u219B\u21A0\u21A3\u21A6\u21AE\u21CE\u21CF\u21D2\u21D4\u21F4-\u22FF\u2320\u2321\u237C\u239B-\u23B3\u23DC-\u23E1\u25B7\u25C1\u25F8-\u25FF\u266F\u27C0-\u27C4\u27C7-\u27E5\u27F0-\u27FF\u2900-\u2982\u2999-\u29D7\u29DC-\u29FB\u29FE-\u2AFF\u2B30-\u2B44\u2B47-\u2B4C\uFB29\uFE62\uFE64-\uFE66\uFF0B\uFF1C-\uFF1E\uFF5C\uFF5E\uFFE2\uFFE9-\uFFEC',
-            astral: '\uD83B[\uDEF0\uDEF1]|\uD835[\uDEC1\uDEDB\uDEFB\uDF15\uDF35\uDF4F\uDF6F\uDF89\uDFA9\uDFC3]'
+            astral: '\uD835[\uDEC1\uDEDB\uDEFB\uDF15\uDF35\uDF4F\uDF6F\uDF89\uDFA9\uDFC3]|\uD83B[\uDEF0\uDEF1]'
         },
         {
             name: 'So',
             alias: 'Other_Symbol',
-            bmp: '\xA6\xA9\xAE\xB0\u0482\u058D\u058E\u060E\u060F\u06DE\u06E9\u06FD\u06FE\u07F6\u09FA\u0B70\u0BF3-\u0BF8\u0BFA\u0C7F\u0D79\u0F01-\u0F03\u0F13\u0F15-\u0F17\u0F1A-\u0F1F\u0F34\u0F36\u0F38\u0FBE-\u0FC5\u0FC7-\u0FCC\u0FCE\u0FCF\u0FD5-\u0FD8\u109E\u109F\u1390-\u1399\u1940\u19DE-\u19FF\u1B61-\u1B6A\u1B74-\u1B7C\u2100\u2101\u2103-\u2106\u2108\u2109\u2114\u2116\u2117\u211E-\u2123\u2125\u2127\u2129\u212E\u213A\u213B\u214A\u214C\u214D\u214F\u218A\u218B\u2195-\u2199\u219C-\u219F\u21A1\u21A2\u21A4\u21A5\u21A7-\u21AD\u21AF-\u21CD\u21D0\u21D1\u21D3\u21D5-\u21F3\u2300-\u2307\u230C-\u231F\u2322-\u2328\u232B-\u237B\u237D-\u239A\u23B4-\u23DB\u23E2-\u23FA\u2400-\u2426\u2440-\u244A\u249C-\u24E9\u2500-\u25B6\u25B8-\u25C0\u25C2-\u25F7\u2600-\u266E\u2670-\u2767\u2794-\u27BF\u2800-\u28FF\u2B00-\u2B2F\u2B45\u2B46\u2B4D-\u2B73\u2B76-\u2B95\u2B98-\u2BB9\u2BBD-\u2BC8\u2BCA-\u2BD1\u2BEC-\u2BEF\u2CE5-\u2CEA\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5\u2FF0-\u2FFB\u3004\u3012\u3013\u3020\u3036\u3037\u303E\u303F\u3190\u3191\u3196-\u319F\u31C0-\u31E3\u3200-\u321E\u322A-\u3247\u3250\u3260-\u327F\u328A-\u32B0\u32C0-\u32FE\u3300-\u33FF\u4DC0-\u4DFF\uA490-\uA4C6\uA828-\uA82B\uA836\uA837\uA839\uAA77-\uAA79\uFDFD\uFFE4\uFFE8\uFFED\uFFEE\uFFFC\uFFFD',
-            astral: '\uD83E[\uDC00-\uDC0B\uDC10-\uDC47\uDC50-\uDC59\uDC60-\uDC87\uDC90-\uDCAD\uDD10-\uDD18\uDD80-\uDD84\uDDC0]|\uD83D[\uDC00-\uDD79\uDD7B-\uDDA3\uDDA5-\uDED0\uDEE0-\uDEEC\uDEF0-\uDEF3\uDF00-\uDF73\uDF80-\uDFD4]|\uD83C[\uDC00-\uDC2B\uDC30-\uDC93\uDCA0-\uDCAE\uDCB1-\uDCBF\uDCC1-\uDCCF\uDCD1-\uDCF5\uDD10-\uDD2E\uDD30-\uDD6B\uDD70-\uDD9A\uDDE6-\uDE02\uDE10-\uDE3A\uDE40-\uDE48\uDE50\uDE51\uDF00-\uDFFA]|\uD800[\uDD37-\uDD3F\uDD79-\uDD89\uDD8C\uDD90-\uDD9B\uDDA0\uDDD0-\uDDFC]|\uD82F\uDC9C|\uD805\uDF3F|\uD802[\uDC77\uDC78\uDEC8]|\uD81A[\uDF3C-\uDF3F\uDF45]|\uD836[\uDC00-\uDDFF\uDE37-\uDE3A\uDE6D-\uDE74\uDE76-\uDE83\uDE85\uDE86]|\uD834[\uDC00-\uDCF5\uDD00-\uDD26\uDD29-\uDD64\uDD6A-\uDD6C\uDD83\uDD84\uDD8C-\uDDA9\uDDAE-\uDDE8\uDE00-\uDE41\uDE45\uDF00-\uDF56]'
+            bmp: '\xA6\xA9\xAE\xB0\u0482\u058D\u058E\u060E\u060F\u06DE\u06E9\u06FD\u06FE\u07F6\u09FA\u0B70\u0BF3-\u0BF8\u0BFA\u0C7F\u0D4F\u0D79\u0F01-\u0F03\u0F13\u0F15-\u0F17\u0F1A-\u0F1F\u0F34\u0F36\u0F38\u0FBE-\u0FC5\u0FC7-\u0FCC\u0FCE\u0FCF\u0FD5-\u0FD8\u109E\u109F\u1390-\u1399\u1940\u19DE-\u19FF\u1B61-\u1B6A\u1B74-\u1B7C\u2100\u2101\u2103-\u2106\u2108\u2109\u2114\u2116\u2117\u211E-\u2123\u2125\u2127\u2129\u212E\u213A\u213B\u214A\u214C\u214D\u214F\u218A\u218B\u2195-\u2199\u219C-\u219F\u21A1\u21A2\u21A4\u21A5\u21A7-\u21AD\u21AF-\u21CD\u21D0\u21D1\u21D3\u21D5-\u21F3\u2300-\u2307\u230C-\u231F\u2322-\u2328\u232B-\u237B\u237D-\u239A\u23B4-\u23DB\u23E2-\u23FE\u2400-\u2426\u2440-\u244A\u249C-\u24E9\u2500-\u25B6\u25B8-\u25C0\u25C2-\u25F7\u2600-\u266E\u2670-\u2767\u2794-\u27BF\u2800-\u28FF\u2B00-\u2B2F\u2B45\u2B46\u2B4D-\u2B73\u2B76-\u2B95\u2B98-\u2BB9\u2BBD-\u2BC8\u2BCA-\u2BD1\u2BEC-\u2BEF\u2CE5-\u2CEA\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5\u2FF0-\u2FFB\u3004\u3012\u3013\u3020\u3036\u3037\u303E\u303F\u3190\u3191\u3196-\u319F\u31C0-\u31E3\u3200-\u321E\u322A-\u3247\u3250\u3260-\u327F\u328A-\u32B0\u32C0-\u32FE\u3300-\u33FF\u4DC0-\u4DFF\uA490-\uA4C6\uA828-\uA82B\uA836\uA837\uA839\uAA77-\uAA79\uFDFD\uFFE4\uFFE8\uFFED\uFFEE\uFFFC\uFFFD',
+            astral: '\uD800[\uDD37-\uDD3F\uDD79-\uDD89\uDD8C-\uDD8E\uDD90-\uDD9B\uDDA0\uDDD0-\uDDFC]|\uD802[\uDC77\uDC78\uDEC8]|\uD805\uDF3F|\uD81A[\uDF3C-\uDF3F\uDF45]|\uD82F\uDC9C|\uD834[\uDC00-\uDCF5\uDD00-\uDD26\uDD29-\uDD64\uDD6A-\uDD6C\uDD83\uDD84\uDD8C-\uDDA9\uDDAE-\uDDE8\uDE00-\uDE41\uDE45\uDF00-\uDF56]|\uD836[\uDC00-\uDDFF\uDE37-\uDE3A\uDE6D-\uDE74\uDE76-\uDE83\uDE85\uDE86]|\uD83C[\uDC00-\uDC2B\uDC30-\uDC93\uDCA0-\uDCAE\uDCB1-\uDCBF\uDCC1-\uDCCF\uDCD1-\uDCF5\uDD10-\uDD2E\uDD30-\uDD6B\uDD70-\uDDAC\uDDE6-\uDE02\uDE10-\uDE3B\uDE40-\uDE48\uDE50\uDE51\uDF00-\uDFFA]|\uD83D[\uDC00-\uDED2\uDEE0-\uDEEC\uDEF0-\uDEF6\uDF00-\uDF73\uDF80-\uDFD4]|\uD83E[\uDC00-\uDC0B\uDC10-\uDC47\uDC50-\uDC59\uDC60-\uDC87\uDC90-\uDCAD\uDD10-\uDD1E\uDD20-\uDD27\uDD30\uDD33-\uDD3E\uDD40-\uDD4B\uDD50-\uDD5E\uDD80-\uDD91\uDDC0]'
         },
         {
             name: 'Z',
@@ -23048,9 +28683,9 @@ module.exports = function(XRegExp) {
 
 },{}],6:[function(require,module,exports){
 /*!
- * XRegExp Unicode Properties 3.1.1
+ * XRegExp Unicode Properties 3.2.0
  * <xregexp.com>
- * Steven Levithan (c) 2012-2016 MIT License
+ * Steven Levithan (c) 2012-2017 MIT License
  * Unicode data by Mathias Bynens <mathiasbynens.be>
  */
 
@@ -23091,7 +28726,7 @@ module.exports = function(XRegExp) {
      *
      * Token names are case insensitive, and any spaces, hyphens, and underscores are ignored.
      *
-     * Uses Unicode 8.0.0.
+     * Uses Unicode 9.0.0.
      *
      * @requires XRegExp, Unicode Base
      */
@@ -23107,8 +28742,8 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Alphabetic',
-            bmp: 'A-Za-z\xAA\xB5\xBA\xC0-\xD6\xD8-\xF6\xF8-\u02C1\u02C6-\u02D1\u02E0-\u02E4\u02EC\u02EE\u0345\u0370-\u0374\u0376\u0377\u037A-\u037D\u037F\u0386\u0388-\u038A\u038C\u038E-\u03A1\u03A3-\u03F5\u03F7-\u0481\u048A-\u052F\u0531-\u0556\u0559\u0561-\u0587\u05B0-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7\u05D0-\u05EA\u05F0-\u05F2\u0610-\u061A\u0620-\u0657\u0659-\u065F\u066E-\u06D3\u06D5-\u06DC\u06E1-\u06E8\u06ED-\u06EF\u06FA-\u06FC\u06FF\u0710-\u073F\u074D-\u07B1\u07CA-\u07EA\u07F4\u07F5\u07FA\u0800-\u0817\u081A-\u082C\u0840-\u0858\u08A0-\u08B4\u08E3-\u08E9\u08F0-\u093B\u093D-\u094C\u094E-\u0950\u0955-\u0963\u0971-\u0983\u0985-\u098C\u098F\u0990\u0993-\u09A8\u09AA-\u09B0\u09B2\u09B6-\u09B9\u09BD-\u09C4\u09C7\u09C8\u09CB\u09CC\u09CE\u09D7\u09DC\u09DD\u09DF-\u09E3\u09F0\u09F1\u0A01-\u0A03\u0A05-\u0A0A\u0A0F\u0A10\u0A13-\u0A28\u0A2A-\u0A30\u0A32\u0A33\u0A35\u0A36\u0A38\u0A39\u0A3E-\u0A42\u0A47\u0A48\u0A4B\u0A4C\u0A51\u0A59-\u0A5C\u0A5E\u0A70-\u0A75\u0A81-\u0A83\u0A85-\u0A8D\u0A8F-\u0A91\u0A93-\u0AA8\u0AAA-\u0AB0\u0AB2\u0AB3\u0AB5-\u0AB9\u0ABD-\u0AC5\u0AC7-\u0AC9\u0ACB\u0ACC\u0AD0\u0AE0-\u0AE3\u0AF9\u0B01-\u0B03\u0B05-\u0B0C\u0B0F\u0B10\u0B13-\u0B28\u0B2A-\u0B30\u0B32\u0B33\u0B35-\u0B39\u0B3D-\u0B44\u0B47\u0B48\u0B4B\u0B4C\u0B56\u0B57\u0B5C\u0B5D\u0B5F-\u0B63\u0B71\u0B82\u0B83\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A\u0B9C\u0B9E\u0B9F\u0BA3\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9\u0BBE-\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCC\u0BD0\u0BD7\u0C00-\u0C03\u0C05-\u0C0C\u0C0E-\u0C10\u0C12-\u0C28\u0C2A-\u0C39\u0C3D-\u0C44\u0C46-\u0C48\u0C4A-\u0C4C\u0C55\u0C56\u0C58-\u0C5A\u0C60-\u0C63\u0C81-\u0C83\u0C85-\u0C8C\u0C8E-\u0C90\u0C92-\u0CA8\u0CAA-\u0CB3\u0CB5-\u0CB9\u0CBD-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCC\u0CD5\u0CD6\u0CDE\u0CE0-\u0CE3\u0CF1\u0CF2\u0D01-\u0D03\u0D05-\u0D0C\u0D0E-\u0D10\u0D12-\u0D3A\u0D3D-\u0D44\u0D46-\u0D48\u0D4A-\u0D4C\u0D4E\u0D57\u0D5F-\u0D63\u0D7A-\u0D7F\u0D82\u0D83\u0D85-\u0D96\u0D9A-\u0DB1\u0DB3-\u0DBB\u0DBD\u0DC0-\u0DC6\u0DCF-\u0DD4\u0DD6\u0DD8-\u0DDF\u0DF2\u0DF3\u0E01-\u0E3A\u0E40-\u0E46\u0E4D\u0E81\u0E82\u0E84\u0E87\u0E88\u0E8A\u0E8D\u0E94-\u0E97\u0E99-\u0E9F\u0EA1-\u0EA3\u0EA5\u0EA7\u0EAA\u0EAB\u0EAD-\u0EB9\u0EBB-\u0EBD\u0EC0-\u0EC4\u0EC6\u0ECD\u0EDC-\u0EDF\u0F00\u0F40-\u0F47\u0F49-\u0F6C\u0F71-\u0F81\u0F88-\u0F97\u0F99-\u0FBC\u1000-\u1036\u1038\u103B-\u103F\u1050-\u1062\u1065-\u1068\u106E-\u1086\u108E\u109C\u109D\u10A0-\u10C5\u10C7\u10CD\u10D0-\u10FA\u10FC-\u1248\u124A-\u124D\u1250-\u1256\u1258\u125A-\u125D\u1260-\u1288\u128A-\u128D\u1290-\u12B0\u12B2-\u12B5\u12B8-\u12BE\u12C0\u12C2-\u12C5\u12C8-\u12D6\u12D8-\u1310\u1312-\u1315\u1318-\u135A\u135F\u1380-\u138F\u13A0-\u13F5\u13F8-\u13FD\u1401-\u166C\u166F-\u167F\u1681-\u169A\u16A0-\u16EA\u16EE-\u16F8\u1700-\u170C\u170E-\u1713\u1720-\u1733\u1740-\u1753\u1760-\u176C\u176E-\u1770\u1772\u1773\u1780-\u17B3\u17B6-\u17C8\u17D7\u17DC\u1820-\u1877\u1880-\u18AA\u18B0-\u18F5\u1900-\u191E\u1920-\u192B\u1930-\u1938\u1950-\u196D\u1970-\u1974\u1980-\u19AB\u19B0-\u19C9\u1A00-\u1A1B\u1A20-\u1A5E\u1A61-\u1A74\u1AA7\u1B00-\u1B33\u1B35-\u1B43\u1B45-\u1B4B\u1B80-\u1BA9\u1BAC-\u1BAF\u1BBA-\u1BE5\u1BE7-\u1BF1\u1C00-\u1C35\u1C4D-\u1C4F\u1C5A-\u1C7D\u1CE9-\u1CEC\u1CEE-\u1CF3\u1CF5\u1CF6\u1D00-\u1DBF\u1DE7-\u1DF4\u1E00-\u1F15\u1F18-\u1F1D\u1F20-\u1F45\u1F48-\u1F4D\u1F50-\u1F57\u1F59\u1F5B\u1F5D\u1F5F-\u1F7D\u1F80-\u1FB4\u1FB6-\u1FBC\u1FBE\u1FC2-\u1FC4\u1FC6-\u1FCC\u1FD0-\u1FD3\u1FD6-\u1FDB\u1FE0-\u1FEC\u1FF2-\u1FF4\u1FF6-\u1FFC\u2071\u207F\u2090-\u209C\u2102\u2107\u210A-\u2113\u2115\u2119-\u211D\u2124\u2126\u2128\u212A-\u212D\u212F-\u2139\u213C-\u213F\u2145-\u2149\u214E\u2160-\u2188\u24B6-\u24E9\u2C00-\u2C2E\u2C30-\u2C5E\u2C60-\u2CE4\u2CEB-\u2CEE\u2CF2\u2CF3\u2D00-\u2D25\u2D27\u2D2D\u2D30-\u2D67\u2D6F\u2D80-\u2D96\u2DA0-\u2DA6\u2DA8-\u2DAE\u2DB0-\u2DB6\u2DB8-\u2DBE\u2DC0-\u2DC6\u2DC8-\u2DCE\u2DD0-\u2DD6\u2DD8-\u2DDE\u2DE0-\u2DFF\u2E2F\u3005-\u3007\u3021-\u3029\u3031-\u3035\u3038-\u303C\u3041-\u3096\u309D-\u309F\u30A1-\u30FA\u30FC-\u30FF\u3105-\u312D\u3131-\u318E\u31A0-\u31BA\u31F0-\u31FF\u3400-\u4DB5\u4E00-\u9FD5\uA000-\uA48C\uA4D0-\uA4FD\uA500-\uA60C\uA610-\uA61F\uA62A\uA62B\uA640-\uA66E\uA674-\uA67B\uA67F-\uA6EF\uA717-\uA71F\uA722-\uA788\uA78B-\uA7AD\uA7B0-\uA7B7\uA7F7-\uA801\uA803-\uA805\uA807-\uA80A\uA80C-\uA827\uA840-\uA873\uA880-\uA8C3\uA8F2-\uA8F7\uA8FB\uA8FD\uA90A-\uA92A\uA930-\uA952\uA960-\uA97C\uA980-\uA9B2\uA9B4-\uA9BF\uA9CF\uA9E0-\uA9E4\uA9E6-\uA9EF\uA9FA-\uA9FE\uAA00-\uAA36\uAA40-\uAA4D\uAA60-\uAA76\uAA7A\uAA7E-\uAABE\uAAC0\uAAC2\uAADB-\uAADD\uAAE0-\uAAEF\uAAF2-\uAAF5\uAB01-\uAB06\uAB09-\uAB0E\uAB11-\uAB16\uAB20-\uAB26\uAB28-\uAB2E\uAB30-\uAB5A\uAB5C-\uAB65\uAB70-\uABEA\uAC00-\uD7A3\uD7B0-\uD7C6\uD7CB-\uD7FB\uF900-\uFA6D\uFA70-\uFAD9\uFB00-\uFB06\uFB13-\uFB17\uFB1D-\uFB28\uFB2A-\uFB36\uFB38-\uFB3C\uFB3E\uFB40\uFB41\uFB43\uFB44\uFB46-\uFBB1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFB\uFE70-\uFE74\uFE76-\uFEFC\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFFBE\uFFC2-\uFFC7\uFFCA-\uFFCF\uFFD2-\uFFD7\uFFDA-\uFFDC',
-            astral: '\uD86E[\uDC00-\uDC1D\uDC20-\uDFFF]|\uD804[\uDC00-\uDC45\uDC82-\uDCB8\uDCD0-\uDCE8\uDD00-\uDD32\uDD50-\uDD72\uDD76\uDD80-\uDDBF\uDDC1-\uDDC4\uDDDA\uDDDC\uDE00-\uDE11\uDE13-\uDE34\uDE37\uDE80-\uDE86\uDE88\uDE8A-\uDE8D\uDE8F-\uDE9D\uDE9F-\uDEA8\uDEB0-\uDEE8\uDF00-\uDF03\uDF05-\uDF0C\uDF0F\uDF10\uDF13-\uDF28\uDF2A-\uDF30\uDF32\uDF33\uDF35-\uDF39\uDF3D-\uDF44\uDF47\uDF48\uDF4B\uDF4C\uDF50\uDF57\uDF5D-\uDF63]|\uD86D[\uDC00-\uDF34\uDF40-\uDFFF]|\uD869[\uDC00-\uDED6\uDF00-\uDFFF]|\uD803[\uDC00-\uDC48\uDC80-\uDCB2\uDCC0-\uDCF2]|\uD83A[\uDC00-\uDCC4]|\uD81A[\uDC00-\uDE38\uDE40-\uDE5E\uDED0-\uDEED\uDF00-\uDF36\uDF40-\uDF43\uDF63-\uDF77\uDF7D-\uDF8F]|\uD801[\uDC00-\uDC9D\uDD00-\uDD27\uDD30-\uDD63\uDE00-\uDF36\uDF40-\uDF55\uDF60-\uDF67]|\uD83C[\uDD30-\uDD49\uDD50-\uDD69\uDD70-\uDD89]|\uD80D[\uDC00-\uDC2E]|\uD87E[\uDC00-\uDE1D]|[\uD80C\uD840-\uD868\uD86A-\uD86C\uD86F-\uD872][\uDC00-\uDFFF]|\uD835[\uDC00-\uDC54\uDC56-\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD1E-\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD52-\uDEA5\uDEA8-\uDEC0\uDEC2-\uDEDA\uDEDC-\uDEFA\uDEFC-\uDF14\uDF16-\uDF34\uDF36-\uDF4E\uDF50-\uDF6E\uDF70-\uDF88\uDF8A-\uDFA8\uDFAA-\uDFC2\uDFC4-\uDFCB]|\uD82F[\uDC00-\uDC6A\uDC70-\uDC7C\uDC80-\uDC88\uDC90-\uDC99\uDC9E]|\uD808[\uDC00-\uDF99]|\uD83B[\uDE00-\uDE03\uDE05-\uDE1F\uDE21\uDE22\uDE24\uDE27\uDE29-\uDE32\uDE34-\uDE37\uDE39\uDE3B\uDE42\uDE47\uDE49\uDE4B\uDE4D-\uDE4F\uDE51\uDE52\uDE54\uDE57\uDE59\uDE5B\uDE5D\uDE5F\uDE61\uDE62\uDE64\uDE67-\uDE6A\uDE6C-\uDE72\uDE74-\uDE77\uDE79-\uDE7C\uDE7E\uDE80-\uDE89\uDE8B-\uDE9B\uDEA1-\uDEA3\uDEA5-\uDEA9\uDEAB-\uDEBB]|\uD805[\uDC80-\uDCC1\uDCC4\uDCC5\uDCC7\uDD80-\uDDB5\uDDB8-\uDDBE\uDDD8-\uDDDD\uDE00-\uDE3E\uDE40\uDE44\uDE80-\uDEB5\uDF00-\uDF19\uDF1D-\uDF2A]|\uD809[\uDC00-\uDC6E\uDC80-\uDD43]|\uD806[\uDCA0-\uDCDF\uDCFF\uDEC0-\uDEF8]|\uD800[\uDC00-\uDC0B\uDC0D-\uDC26\uDC28-\uDC3A\uDC3C\uDC3D\uDC3F-\uDC4D\uDC50-\uDC5D\uDC80-\uDCFA\uDD40-\uDD74\uDE80-\uDE9C\uDEA0-\uDED0\uDF00-\uDF1F\uDF30-\uDF4A\uDF50-\uDF7A\uDF80-\uDF9D\uDFA0-\uDFC3\uDFC8-\uDFCF\uDFD1-\uDFD5]|\uD802[\uDC00-\uDC05\uDC08\uDC0A-\uDC35\uDC37\uDC38\uDC3C\uDC3F-\uDC55\uDC60-\uDC76\uDC80-\uDC9E\uDCE0-\uDCF2\uDCF4\uDCF5\uDD00-\uDD15\uDD20-\uDD39\uDD80-\uDDB7\uDDBE\uDDBF\uDE00-\uDE03\uDE05\uDE06\uDE0C-\uDE13\uDE15-\uDE17\uDE19-\uDE33\uDE60-\uDE7C\uDE80-\uDE9C\uDEC0-\uDEC7\uDEC9-\uDEE4\uDF00-\uDF35\uDF40-\uDF55\uDF60-\uDF72\uDF80-\uDF91]|\uD811[\uDC00-\uDE46]|\uD82C[\uDC00\uDC01]|\uD81B[\uDF00-\uDF44\uDF50-\uDF7E\uDF93-\uDF9F]|\uD873[\uDC00-\uDEA1]'
+            bmp: 'A-Za-z\xAA\xB5\xBA\xC0-\xD6\xD8-\xF6\xF8-\u02C1\u02C6-\u02D1\u02E0-\u02E4\u02EC\u02EE\u0345\u0370-\u0374\u0376\u0377\u037A-\u037D\u037F\u0386\u0388-\u038A\u038C\u038E-\u03A1\u03A3-\u03F5\u03F7-\u0481\u048A-\u052F\u0531-\u0556\u0559\u0561-\u0587\u05B0-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7\u05D0-\u05EA\u05F0-\u05F2\u0610-\u061A\u0620-\u0657\u0659-\u065F\u066E-\u06D3\u06D5-\u06DC\u06E1-\u06E8\u06ED-\u06EF\u06FA-\u06FC\u06FF\u0710-\u073F\u074D-\u07B1\u07CA-\u07EA\u07F4\u07F5\u07FA\u0800-\u0817\u081A-\u082C\u0840-\u0858\u08A0-\u08B4\u08B6-\u08BD\u08D4-\u08DF\u08E3-\u08E9\u08F0-\u093B\u093D-\u094C\u094E-\u0950\u0955-\u0963\u0971-\u0983\u0985-\u098C\u098F\u0990\u0993-\u09A8\u09AA-\u09B0\u09B2\u09B6-\u09B9\u09BD-\u09C4\u09C7\u09C8\u09CB\u09CC\u09CE\u09D7\u09DC\u09DD\u09DF-\u09E3\u09F0\u09F1\u0A01-\u0A03\u0A05-\u0A0A\u0A0F\u0A10\u0A13-\u0A28\u0A2A-\u0A30\u0A32\u0A33\u0A35\u0A36\u0A38\u0A39\u0A3E-\u0A42\u0A47\u0A48\u0A4B\u0A4C\u0A51\u0A59-\u0A5C\u0A5E\u0A70-\u0A75\u0A81-\u0A83\u0A85-\u0A8D\u0A8F-\u0A91\u0A93-\u0AA8\u0AAA-\u0AB0\u0AB2\u0AB3\u0AB5-\u0AB9\u0ABD-\u0AC5\u0AC7-\u0AC9\u0ACB\u0ACC\u0AD0\u0AE0-\u0AE3\u0AF9\u0B01-\u0B03\u0B05-\u0B0C\u0B0F\u0B10\u0B13-\u0B28\u0B2A-\u0B30\u0B32\u0B33\u0B35-\u0B39\u0B3D-\u0B44\u0B47\u0B48\u0B4B\u0B4C\u0B56\u0B57\u0B5C\u0B5D\u0B5F-\u0B63\u0B71\u0B82\u0B83\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A\u0B9C\u0B9E\u0B9F\u0BA3\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9\u0BBE-\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCC\u0BD0\u0BD7\u0C00-\u0C03\u0C05-\u0C0C\u0C0E-\u0C10\u0C12-\u0C28\u0C2A-\u0C39\u0C3D-\u0C44\u0C46-\u0C48\u0C4A-\u0C4C\u0C55\u0C56\u0C58-\u0C5A\u0C60-\u0C63\u0C80-\u0C83\u0C85-\u0C8C\u0C8E-\u0C90\u0C92-\u0CA8\u0CAA-\u0CB3\u0CB5-\u0CB9\u0CBD-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCC\u0CD5\u0CD6\u0CDE\u0CE0-\u0CE3\u0CF1\u0CF2\u0D01-\u0D03\u0D05-\u0D0C\u0D0E-\u0D10\u0D12-\u0D3A\u0D3D-\u0D44\u0D46-\u0D48\u0D4A-\u0D4C\u0D4E\u0D54-\u0D57\u0D5F-\u0D63\u0D7A-\u0D7F\u0D82\u0D83\u0D85-\u0D96\u0D9A-\u0DB1\u0DB3-\u0DBB\u0DBD\u0DC0-\u0DC6\u0DCF-\u0DD4\u0DD6\u0DD8-\u0DDF\u0DF2\u0DF3\u0E01-\u0E3A\u0E40-\u0E46\u0E4D\u0E81\u0E82\u0E84\u0E87\u0E88\u0E8A\u0E8D\u0E94-\u0E97\u0E99-\u0E9F\u0EA1-\u0EA3\u0EA5\u0EA7\u0EAA\u0EAB\u0EAD-\u0EB9\u0EBB-\u0EBD\u0EC0-\u0EC4\u0EC6\u0ECD\u0EDC-\u0EDF\u0F00\u0F40-\u0F47\u0F49-\u0F6C\u0F71-\u0F81\u0F88-\u0F97\u0F99-\u0FBC\u1000-\u1036\u1038\u103B-\u103F\u1050-\u1062\u1065-\u1068\u106E-\u1086\u108E\u109C\u109D\u10A0-\u10C5\u10C7\u10CD\u10D0-\u10FA\u10FC-\u1248\u124A-\u124D\u1250-\u1256\u1258\u125A-\u125D\u1260-\u1288\u128A-\u128D\u1290-\u12B0\u12B2-\u12B5\u12B8-\u12BE\u12C0\u12C2-\u12C5\u12C8-\u12D6\u12D8-\u1310\u1312-\u1315\u1318-\u135A\u135F\u1380-\u138F\u13A0-\u13F5\u13F8-\u13FD\u1401-\u166C\u166F-\u167F\u1681-\u169A\u16A0-\u16EA\u16EE-\u16F8\u1700-\u170C\u170E-\u1713\u1720-\u1733\u1740-\u1753\u1760-\u176C\u176E-\u1770\u1772\u1773\u1780-\u17B3\u17B6-\u17C8\u17D7\u17DC\u1820-\u1877\u1880-\u18AA\u18B0-\u18F5\u1900-\u191E\u1920-\u192B\u1930-\u1938\u1950-\u196D\u1970-\u1974\u1980-\u19AB\u19B0-\u19C9\u1A00-\u1A1B\u1A20-\u1A5E\u1A61-\u1A74\u1AA7\u1B00-\u1B33\u1B35-\u1B43\u1B45-\u1B4B\u1B80-\u1BA9\u1BAC-\u1BAF\u1BBA-\u1BE5\u1BE7-\u1BF1\u1C00-\u1C35\u1C4D-\u1C4F\u1C5A-\u1C7D\u1C80-\u1C88\u1CE9-\u1CEC\u1CEE-\u1CF3\u1CF5\u1CF6\u1D00-\u1DBF\u1DE7-\u1DF4\u1E00-\u1F15\u1F18-\u1F1D\u1F20-\u1F45\u1F48-\u1F4D\u1F50-\u1F57\u1F59\u1F5B\u1F5D\u1F5F-\u1F7D\u1F80-\u1FB4\u1FB6-\u1FBC\u1FBE\u1FC2-\u1FC4\u1FC6-\u1FCC\u1FD0-\u1FD3\u1FD6-\u1FDB\u1FE0-\u1FEC\u1FF2-\u1FF4\u1FF6-\u1FFC\u2071\u207F\u2090-\u209C\u2102\u2107\u210A-\u2113\u2115\u2119-\u211D\u2124\u2126\u2128\u212A-\u212D\u212F-\u2139\u213C-\u213F\u2145-\u2149\u214E\u2160-\u2188\u24B6-\u24E9\u2C00-\u2C2E\u2C30-\u2C5E\u2C60-\u2CE4\u2CEB-\u2CEE\u2CF2\u2CF3\u2D00-\u2D25\u2D27\u2D2D\u2D30-\u2D67\u2D6F\u2D80-\u2D96\u2DA0-\u2DA6\u2DA8-\u2DAE\u2DB0-\u2DB6\u2DB8-\u2DBE\u2DC0-\u2DC6\u2DC8-\u2DCE\u2DD0-\u2DD6\u2DD8-\u2DDE\u2DE0-\u2DFF\u2E2F\u3005-\u3007\u3021-\u3029\u3031-\u3035\u3038-\u303C\u3041-\u3096\u309D-\u309F\u30A1-\u30FA\u30FC-\u30FF\u3105-\u312D\u3131-\u318E\u31A0-\u31BA\u31F0-\u31FF\u3400-\u4DB5\u4E00-\u9FD5\uA000-\uA48C\uA4D0-\uA4FD\uA500-\uA60C\uA610-\uA61F\uA62A\uA62B\uA640-\uA66E\uA674-\uA67B\uA67F-\uA6EF\uA717-\uA71F\uA722-\uA788\uA78B-\uA7AE\uA7B0-\uA7B7\uA7F7-\uA801\uA803-\uA805\uA807-\uA80A\uA80C-\uA827\uA840-\uA873\uA880-\uA8C3\uA8C5\uA8F2-\uA8F7\uA8FB\uA8FD\uA90A-\uA92A\uA930-\uA952\uA960-\uA97C\uA980-\uA9B2\uA9B4-\uA9BF\uA9CF\uA9E0-\uA9E4\uA9E6-\uA9EF\uA9FA-\uA9FE\uAA00-\uAA36\uAA40-\uAA4D\uAA60-\uAA76\uAA7A\uAA7E-\uAABE\uAAC0\uAAC2\uAADB-\uAADD\uAAE0-\uAAEF\uAAF2-\uAAF5\uAB01-\uAB06\uAB09-\uAB0E\uAB11-\uAB16\uAB20-\uAB26\uAB28-\uAB2E\uAB30-\uAB5A\uAB5C-\uAB65\uAB70-\uABEA\uAC00-\uD7A3\uD7B0-\uD7C6\uD7CB-\uD7FB\uF900-\uFA6D\uFA70-\uFAD9\uFB00-\uFB06\uFB13-\uFB17\uFB1D-\uFB28\uFB2A-\uFB36\uFB38-\uFB3C\uFB3E\uFB40\uFB41\uFB43\uFB44\uFB46-\uFBB1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFB\uFE70-\uFE74\uFE76-\uFEFC\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFFBE\uFFC2-\uFFC7\uFFCA-\uFFCF\uFFD2-\uFFD7\uFFDA-\uFFDC',
+            astral: '\uD800[\uDC00-\uDC0B\uDC0D-\uDC26\uDC28-\uDC3A\uDC3C\uDC3D\uDC3F-\uDC4D\uDC50-\uDC5D\uDC80-\uDCFA\uDD40-\uDD74\uDE80-\uDE9C\uDEA0-\uDED0\uDF00-\uDF1F\uDF30-\uDF4A\uDF50-\uDF7A\uDF80-\uDF9D\uDFA0-\uDFC3\uDFC8-\uDFCF\uDFD1-\uDFD5]|\uD801[\uDC00-\uDC9D\uDCB0-\uDCD3\uDCD8-\uDCFB\uDD00-\uDD27\uDD30-\uDD63\uDE00-\uDF36\uDF40-\uDF55\uDF60-\uDF67]|\uD802[\uDC00-\uDC05\uDC08\uDC0A-\uDC35\uDC37\uDC38\uDC3C\uDC3F-\uDC55\uDC60-\uDC76\uDC80-\uDC9E\uDCE0-\uDCF2\uDCF4\uDCF5\uDD00-\uDD15\uDD20-\uDD39\uDD80-\uDDB7\uDDBE\uDDBF\uDE00-\uDE03\uDE05\uDE06\uDE0C-\uDE13\uDE15-\uDE17\uDE19-\uDE33\uDE60-\uDE7C\uDE80-\uDE9C\uDEC0-\uDEC7\uDEC9-\uDEE4\uDF00-\uDF35\uDF40-\uDF55\uDF60-\uDF72\uDF80-\uDF91]|\uD803[\uDC00-\uDC48\uDC80-\uDCB2\uDCC0-\uDCF2]|\uD804[\uDC00-\uDC45\uDC82-\uDCB8\uDCD0-\uDCE8\uDD00-\uDD32\uDD50-\uDD72\uDD76\uDD80-\uDDBF\uDDC1-\uDDC4\uDDDA\uDDDC\uDE00-\uDE11\uDE13-\uDE34\uDE37\uDE3E\uDE80-\uDE86\uDE88\uDE8A-\uDE8D\uDE8F-\uDE9D\uDE9F-\uDEA8\uDEB0-\uDEE8\uDF00-\uDF03\uDF05-\uDF0C\uDF0F\uDF10\uDF13-\uDF28\uDF2A-\uDF30\uDF32\uDF33\uDF35-\uDF39\uDF3D-\uDF44\uDF47\uDF48\uDF4B\uDF4C\uDF50\uDF57\uDF5D-\uDF63]|\uD805[\uDC00-\uDC41\uDC43-\uDC45\uDC47-\uDC4A\uDC80-\uDCC1\uDCC4\uDCC5\uDCC7\uDD80-\uDDB5\uDDB8-\uDDBE\uDDD8-\uDDDD\uDE00-\uDE3E\uDE40\uDE44\uDE80-\uDEB5\uDF00-\uDF19\uDF1D-\uDF2A]|\uD806[\uDCA0-\uDCDF\uDCFF\uDEC0-\uDEF8]|\uD807[\uDC00-\uDC08\uDC0A-\uDC36\uDC38-\uDC3E\uDC40\uDC72-\uDC8F\uDC92-\uDCA7\uDCA9-\uDCB6]|\uD808[\uDC00-\uDF99]|\uD809[\uDC00-\uDC6E\uDC80-\uDD43]|[\uD80C\uD81C-\uD820\uD840-\uD868\uD86A-\uD86C\uD86F-\uD872][\uDC00-\uDFFF]|\uD80D[\uDC00-\uDC2E]|\uD811[\uDC00-\uDE46]|\uD81A[\uDC00-\uDE38\uDE40-\uDE5E\uDED0-\uDEED\uDF00-\uDF36\uDF40-\uDF43\uDF63-\uDF77\uDF7D-\uDF8F]|\uD81B[\uDF00-\uDF44\uDF50-\uDF7E\uDF93-\uDF9F\uDFE0]|\uD821[\uDC00-\uDFEC]|\uD822[\uDC00-\uDEF2]|\uD82C[\uDC00\uDC01]|\uD82F[\uDC00-\uDC6A\uDC70-\uDC7C\uDC80-\uDC88\uDC90-\uDC99\uDC9E]|\uD835[\uDC00-\uDC54\uDC56-\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD1E-\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD52-\uDEA5\uDEA8-\uDEC0\uDEC2-\uDEDA\uDEDC-\uDEFA\uDEFC-\uDF14\uDF16-\uDF34\uDF36-\uDF4E\uDF50-\uDF6E\uDF70-\uDF88\uDF8A-\uDFA8\uDFAA-\uDFC2\uDFC4-\uDFCB]|\uD838[\uDC00-\uDC06\uDC08-\uDC18\uDC1B-\uDC21\uDC23\uDC24\uDC26-\uDC2A]|\uD83A[\uDC00-\uDCC4\uDD00-\uDD43\uDD47]|\uD83B[\uDE00-\uDE03\uDE05-\uDE1F\uDE21\uDE22\uDE24\uDE27\uDE29-\uDE32\uDE34-\uDE37\uDE39\uDE3B\uDE42\uDE47\uDE49\uDE4B\uDE4D-\uDE4F\uDE51\uDE52\uDE54\uDE57\uDE59\uDE5B\uDE5D\uDE5F\uDE61\uDE62\uDE64\uDE67-\uDE6A\uDE6C-\uDE72\uDE74-\uDE77\uDE79-\uDE7C\uDE7E\uDE80-\uDE89\uDE8B-\uDE9B\uDEA1-\uDEA3\uDEA5-\uDEA9\uDEAB-\uDEBB]|\uD83C[\uDD30-\uDD49\uDD50-\uDD69\uDD70-\uDD89]|\uD869[\uDC00-\uDED6\uDF00-\uDFFF]|\uD86D[\uDC00-\uDF34\uDF40-\uDFFF]|\uD86E[\uDC00-\uDC1D\uDC20-\uDFFF]|\uD873[\uDC00-\uDEA1]|\uD87E[\uDC00-\uDE1D]'
         },
         {
             name: 'Any',
@@ -23119,22 +28754,22 @@ module.exports = function(XRegExp) {
         {
             name: 'Default_Ignorable_Code_Point',
             bmp: '\xAD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFF8',
-            astral: '[\uDB40-\uDB43][\uDC00-\uDFFF]|\uD834[\uDD73-\uDD7A]|\uD82F[\uDCA0-\uDCA3]'
+            astral: '\uD82F[\uDCA0-\uDCA3]|\uD834[\uDD73-\uDD7A]|[\uDB40-\uDB43][\uDC00-\uDFFF]'
         },
         {
             name: 'Lowercase',
-            bmp: 'a-z\xAA\xB5\xBA\xDF-\xF6\xF8-\xFF\u0101\u0103\u0105\u0107\u0109\u010B\u010D\u010F\u0111\u0113\u0115\u0117\u0119\u011B\u011D\u011F\u0121\u0123\u0125\u0127\u0129\u012B\u012D\u012F\u0131\u0133\u0135\u0137\u0138\u013A\u013C\u013E\u0140\u0142\u0144\u0146\u0148\u0149\u014B\u014D\u014F\u0151\u0153\u0155\u0157\u0159\u015B\u015D\u015F\u0161\u0163\u0165\u0167\u0169\u016B\u016D\u016F\u0171\u0173\u0175\u0177\u017A\u017C\u017E-\u0180\u0183\u0185\u0188\u018C\u018D\u0192\u0195\u0199-\u019B\u019E\u01A1\u01A3\u01A5\u01A8\u01AA\u01AB\u01AD\u01B0\u01B4\u01B6\u01B9\u01BA\u01BD-\u01BF\u01C6\u01C9\u01CC\u01CE\u01D0\u01D2\u01D4\u01D6\u01D8\u01DA\u01DC\u01DD\u01DF\u01E1\u01E3\u01E5\u01E7\u01E9\u01EB\u01ED\u01EF\u01F0\u01F3\u01F5\u01F9\u01FB\u01FD\u01FF\u0201\u0203\u0205\u0207\u0209\u020B\u020D\u020F\u0211\u0213\u0215\u0217\u0219\u021B\u021D\u021F\u0221\u0223\u0225\u0227\u0229\u022B\u022D\u022F\u0231\u0233-\u0239\u023C\u023F\u0240\u0242\u0247\u0249\u024B\u024D\u024F-\u0293\u0295-\u02B8\u02C0\u02C1\u02E0-\u02E4\u0345\u0371\u0373\u0377\u037A-\u037D\u0390\u03AC-\u03CE\u03D0\u03D1\u03D5-\u03D7\u03D9\u03DB\u03DD\u03DF\u03E1\u03E3\u03E5\u03E7\u03E9\u03EB\u03ED\u03EF-\u03F3\u03F5\u03F8\u03FB\u03FC\u0430-\u045F\u0461\u0463\u0465\u0467\u0469\u046B\u046D\u046F\u0471\u0473\u0475\u0477\u0479\u047B\u047D\u047F\u0481\u048B\u048D\u048F\u0491\u0493\u0495\u0497\u0499\u049B\u049D\u049F\u04A1\u04A3\u04A5\u04A7\u04A9\u04AB\u04AD\u04AF\u04B1\u04B3\u04B5\u04B7\u04B9\u04BB\u04BD\u04BF\u04C2\u04C4\u04C6\u04C8\u04CA\u04CC\u04CE\u04CF\u04D1\u04D3\u04D5\u04D7\u04D9\u04DB\u04DD\u04DF\u04E1\u04E3\u04E5\u04E7\u04E9\u04EB\u04ED\u04EF\u04F1\u04F3\u04F5\u04F7\u04F9\u04FB\u04FD\u04FF\u0501\u0503\u0505\u0507\u0509\u050B\u050D\u050F\u0511\u0513\u0515\u0517\u0519\u051B\u051D\u051F\u0521\u0523\u0525\u0527\u0529\u052B\u052D\u052F\u0561-\u0587\u13F8-\u13FD\u1D00-\u1DBF\u1E01\u1E03\u1E05\u1E07\u1E09\u1E0B\u1E0D\u1E0F\u1E11\u1E13\u1E15\u1E17\u1E19\u1E1B\u1E1D\u1E1F\u1E21\u1E23\u1E25\u1E27\u1E29\u1E2B\u1E2D\u1E2F\u1E31\u1E33\u1E35\u1E37\u1E39\u1E3B\u1E3D\u1E3F\u1E41\u1E43\u1E45\u1E47\u1E49\u1E4B\u1E4D\u1E4F\u1E51\u1E53\u1E55\u1E57\u1E59\u1E5B\u1E5D\u1E5F\u1E61\u1E63\u1E65\u1E67\u1E69\u1E6B\u1E6D\u1E6F\u1E71\u1E73\u1E75\u1E77\u1E79\u1E7B\u1E7D\u1E7F\u1E81\u1E83\u1E85\u1E87\u1E89\u1E8B\u1E8D\u1E8F\u1E91\u1E93\u1E95-\u1E9D\u1E9F\u1EA1\u1EA3\u1EA5\u1EA7\u1EA9\u1EAB\u1EAD\u1EAF\u1EB1\u1EB3\u1EB5\u1EB7\u1EB9\u1EBB\u1EBD\u1EBF\u1EC1\u1EC3\u1EC5\u1EC7\u1EC9\u1ECB\u1ECD\u1ECF\u1ED1\u1ED3\u1ED5\u1ED7\u1ED9\u1EDB\u1EDD\u1EDF\u1EE1\u1EE3\u1EE5\u1EE7\u1EE9\u1EEB\u1EED\u1EEF\u1EF1\u1EF3\u1EF5\u1EF7\u1EF9\u1EFB\u1EFD\u1EFF-\u1F07\u1F10-\u1F15\u1F20-\u1F27\u1F30-\u1F37\u1F40-\u1F45\u1F50-\u1F57\u1F60-\u1F67\u1F70-\u1F7D\u1F80-\u1F87\u1F90-\u1F97\u1FA0-\u1FA7\u1FB0-\u1FB4\u1FB6\u1FB7\u1FBE\u1FC2-\u1FC4\u1FC6\u1FC7\u1FD0-\u1FD3\u1FD6\u1FD7\u1FE0-\u1FE7\u1FF2-\u1FF4\u1FF6\u1FF7\u2071\u207F\u2090-\u209C\u210A\u210E\u210F\u2113\u212F\u2134\u2139\u213C\u213D\u2146-\u2149\u214E\u2170-\u217F\u2184\u24D0-\u24E9\u2C30-\u2C5E\u2C61\u2C65\u2C66\u2C68\u2C6A\u2C6C\u2C71\u2C73\u2C74\u2C76-\u2C7D\u2C81\u2C83\u2C85\u2C87\u2C89\u2C8B\u2C8D\u2C8F\u2C91\u2C93\u2C95\u2C97\u2C99\u2C9B\u2C9D\u2C9F\u2CA1\u2CA3\u2CA5\u2CA7\u2CA9\u2CAB\u2CAD\u2CAF\u2CB1\u2CB3\u2CB5\u2CB7\u2CB9\u2CBB\u2CBD\u2CBF\u2CC1\u2CC3\u2CC5\u2CC7\u2CC9\u2CCB\u2CCD\u2CCF\u2CD1\u2CD3\u2CD5\u2CD7\u2CD9\u2CDB\u2CDD\u2CDF\u2CE1\u2CE3\u2CE4\u2CEC\u2CEE\u2CF3\u2D00-\u2D25\u2D27\u2D2D\uA641\uA643\uA645\uA647\uA649\uA64B\uA64D\uA64F\uA651\uA653\uA655\uA657\uA659\uA65B\uA65D\uA65F\uA661\uA663\uA665\uA667\uA669\uA66B\uA66D\uA681\uA683\uA685\uA687\uA689\uA68B\uA68D\uA68F\uA691\uA693\uA695\uA697\uA699\uA69B-\uA69D\uA723\uA725\uA727\uA729\uA72B\uA72D\uA72F-\uA731\uA733\uA735\uA737\uA739\uA73B\uA73D\uA73F\uA741\uA743\uA745\uA747\uA749\uA74B\uA74D\uA74F\uA751\uA753\uA755\uA757\uA759\uA75B\uA75D\uA75F\uA761\uA763\uA765\uA767\uA769\uA76B\uA76D\uA76F-\uA778\uA77A\uA77C\uA77F\uA781\uA783\uA785\uA787\uA78C\uA78E\uA791\uA793-\uA795\uA797\uA799\uA79B\uA79D\uA79F\uA7A1\uA7A3\uA7A5\uA7A7\uA7A9\uA7B5\uA7B7\uA7F8-\uA7FA\uAB30-\uAB5A\uAB5C-\uAB65\uAB70-\uABBF\uFB00-\uFB06\uFB13-\uFB17\uFF41-\uFF5A',
-            astral: '\uD803[\uDCC0-\uDCF2]|\uD835[\uDC1A-\uDC33\uDC4E-\uDC54\uDC56-\uDC67\uDC82-\uDC9B\uDCB6-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDCCF\uDCEA-\uDD03\uDD1E-\uDD37\uDD52-\uDD6B\uDD86-\uDD9F\uDDBA-\uDDD3\uDDEE-\uDE07\uDE22-\uDE3B\uDE56-\uDE6F\uDE8A-\uDEA5\uDEC2-\uDEDA\uDEDC-\uDEE1\uDEFC-\uDF14\uDF16-\uDF1B\uDF36-\uDF4E\uDF50-\uDF55\uDF70-\uDF88\uDF8A-\uDF8F\uDFAA-\uDFC2\uDFC4-\uDFC9\uDFCB]|\uD801[\uDC28-\uDC4F]|\uD806[\uDCC0-\uDCDF]'
+            bmp: 'a-z\xAA\xB5\xBA\xDF-\xF6\xF8-\xFF\u0101\u0103\u0105\u0107\u0109\u010B\u010D\u010F\u0111\u0113\u0115\u0117\u0119\u011B\u011D\u011F\u0121\u0123\u0125\u0127\u0129\u012B\u012D\u012F\u0131\u0133\u0135\u0137\u0138\u013A\u013C\u013E\u0140\u0142\u0144\u0146\u0148\u0149\u014B\u014D\u014F\u0151\u0153\u0155\u0157\u0159\u015B\u015D\u015F\u0161\u0163\u0165\u0167\u0169\u016B\u016D\u016F\u0171\u0173\u0175\u0177\u017A\u017C\u017E-\u0180\u0183\u0185\u0188\u018C\u018D\u0192\u0195\u0199-\u019B\u019E\u01A1\u01A3\u01A5\u01A8\u01AA\u01AB\u01AD\u01B0\u01B4\u01B6\u01B9\u01BA\u01BD-\u01BF\u01C6\u01C9\u01CC\u01CE\u01D0\u01D2\u01D4\u01D6\u01D8\u01DA\u01DC\u01DD\u01DF\u01E1\u01E3\u01E5\u01E7\u01E9\u01EB\u01ED\u01EF\u01F0\u01F3\u01F5\u01F9\u01FB\u01FD\u01FF\u0201\u0203\u0205\u0207\u0209\u020B\u020D\u020F\u0211\u0213\u0215\u0217\u0219\u021B\u021D\u021F\u0221\u0223\u0225\u0227\u0229\u022B\u022D\u022F\u0231\u0233-\u0239\u023C\u023F\u0240\u0242\u0247\u0249\u024B\u024D\u024F-\u0293\u0295-\u02B8\u02C0\u02C1\u02E0-\u02E4\u0345\u0371\u0373\u0377\u037A-\u037D\u0390\u03AC-\u03CE\u03D0\u03D1\u03D5-\u03D7\u03D9\u03DB\u03DD\u03DF\u03E1\u03E3\u03E5\u03E7\u03E9\u03EB\u03ED\u03EF-\u03F3\u03F5\u03F8\u03FB\u03FC\u0430-\u045F\u0461\u0463\u0465\u0467\u0469\u046B\u046D\u046F\u0471\u0473\u0475\u0477\u0479\u047B\u047D\u047F\u0481\u048B\u048D\u048F\u0491\u0493\u0495\u0497\u0499\u049B\u049D\u049F\u04A1\u04A3\u04A5\u04A7\u04A9\u04AB\u04AD\u04AF\u04B1\u04B3\u04B5\u04B7\u04B9\u04BB\u04BD\u04BF\u04C2\u04C4\u04C6\u04C8\u04CA\u04CC\u04CE\u04CF\u04D1\u04D3\u04D5\u04D7\u04D9\u04DB\u04DD\u04DF\u04E1\u04E3\u04E5\u04E7\u04E9\u04EB\u04ED\u04EF\u04F1\u04F3\u04F5\u04F7\u04F9\u04FB\u04FD\u04FF\u0501\u0503\u0505\u0507\u0509\u050B\u050D\u050F\u0511\u0513\u0515\u0517\u0519\u051B\u051D\u051F\u0521\u0523\u0525\u0527\u0529\u052B\u052D\u052F\u0561-\u0587\u13F8-\u13FD\u1C80-\u1C88\u1D00-\u1DBF\u1E01\u1E03\u1E05\u1E07\u1E09\u1E0B\u1E0D\u1E0F\u1E11\u1E13\u1E15\u1E17\u1E19\u1E1B\u1E1D\u1E1F\u1E21\u1E23\u1E25\u1E27\u1E29\u1E2B\u1E2D\u1E2F\u1E31\u1E33\u1E35\u1E37\u1E39\u1E3B\u1E3D\u1E3F\u1E41\u1E43\u1E45\u1E47\u1E49\u1E4B\u1E4D\u1E4F\u1E51\u1E53\u1E55\u1E57\u1E59\u1E5B\u1E5D\u1E5F\u1E61\u1E63\u1E65\u1E67\u1E69\u1E6B\u1E6D\u1E6F\u1E71\u1E73\u1E75\u1E77\u1E79\u1E7B\u1E7D\u1E7F\u1E81\u1E83\u1E85\u1E87\u1E89\u1E8B\u1E8D\u1E8F\u1E91\u1E93\u1E95-\u1E9D\u1E9F\u1EA1\u1EA3\u1EA5\u1EA7\u1EA9\u1EAB\u1EAD\u1EAF\u1EB1\u1EB3\u1EB5\u1EB7\u1EB9\u1EBB\u1EBD\u1EBF\u1EC1\u1EC3\u1EC5\u1EC7\u1EC9\u1ECB\u1ECD\u1ECF\u1ED1\u1ED3\u1ED5\u1ED7\u1ED9\u1EDB\u1EDD\u1EDF\u1EE1\u1EE3\u1EE5\u1EE7\u1EE9\u1EEB\u1EED\u1EEF\u1EF1\u1EF3\u1EF5\u1EF7\u1EF9\u1EFB\u1EFD\u1EFF-\u1F07\u1F10-\u1F15\u1F20-\u1F27\u1F30-\u1F37\u1F40-\u1F45\u1F50-\u1F57\u1F60-\u1F67\u1F70-\u1F7D\u1F80-\u1F87\u1F90-\u1F97\u1FA0-\u1FA7\u1FB0-\u1FB4\u1FB6\u1FB7\u1FBE\u1FC2-\u1FC4\u1FC6\u1FC7\u1FD0-\u1FD3\u1FD6\u1FD7\u1FE0-\u1FE7\u1FF2-\u1FF4\u1FF6\u1FF7\u2071\u207F\u2090-\u209C\u210A\u210E\u210F\u2113\u212F\u2134\u2139\u213C\u213D\u2146-\u2149\u214E\u2170-\u217F\u2184\u24D0-\u24E9\u2C30-\u2C5E\u2C61\u2C65\u2C66\u2C68\u2C6A\u2C6C\u2C71\u2C73\u2C74\u2C76-\u2C7D\u2C81\u2C83\u2C85\u2C87\u2C89\u2C8B\u2C8D\u2C8F\u2C91\u2C93\u2C95\u2C97\u2C99\u2C9B\u2C9D\u2C9F\u2CA1\u2CA3\u2CA5\u2CA7\u2CA9\u2CAB\u2CAD\u2CAF\u2CB1\u2CB3\u2CB5\u2CB7\u2CB9\u2CBB\u2CBD\u2CBF\u2CC1\u2CC3\u2CC5\u2CC7\u2CC9\u2CCB\u2CCD\u2CCF\u2CD1\u2CD3\u2CD5\u2CD7\u2CD9\u2CDB\u2CDD\u2CDF\u2CE1\u2CE3\u2CE4\u2CEC\u2CEE\u2CF3\u2D00-\u2D25\u2D27\u2D2D\uA641\uA643\uA645\uA647\uA649\uA64B\uA64D\uA64F\uA651\uA653\uA655\uA657\uA659\uA65B\uA65D\uA65F\uA661\uA663\uA665\uA667\uA669\uA66B\uA66D\uA681\uA683\uA685\uA687\uA689\uA68B\uA68D\uA68F\uA691\uA693\uA695\uA697\uA699\uA69B-\uA69D\uA723\uA725\uA727\uA729\uA72B\uA72D\uA72F-\uA731\uA733\uA735\uA737\uA739\uA73B\uA73D\uA73F\uA741\uA743\uA745\uA747\uA749\uA74B\uA74D\uA74F\uA751\uA753\uA755\uA757\uA759\uA75B\uA75D\uA75F\uA761\uA763\uA765\uA767\uA769\uA76B\uA76D\uA76F-\uA778\uA77A\uA77C\uA77F\uA781\uA783\uA785\uA787\uA78C\uA78E\uA791\uA793-\uA795\uA797\uA799\uA79B\uA79D\uA79F\uA7A1\uA7A3\uA7A5\uA7A7\uA7A9\uA7B5\uA7B7\uA7F8-\uA7FA\uAB30-\uAB5A\uAB5C-\uAB65\uAB70-\uABBF\uFB00-\uFB06\uFB13-\uFB17\uFF41-\uFF5A',
+            astral: '\uD801[\uDC28-\uDC4F\uDCD8-\uDCFB]|\uD803[\uDCC0-\uDCF2]|\uD806[\uDCC0-\uDCDF]|\uD835[\uDC1A-\uDC33\uDC4E-\uDC54\uDC56-\uDC67\uDC82-\uDC9B\uDCB6-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDCCF\uDCEA-\uDD03\uDD1E-\uDD37\uDD52-\uDD6B\uDD86-\uDD9F\uDDBA-\uDDD3\uDDEE-\uDE07\uDE22-\uDE3B\uDE56-\uDE6F\uDE8A-\uDEA5\uDEC2-\uDEDA\uDEDC-\uDEE1\uDEFC-\uDF14\uDF16-\uDF1B\uDF36-\uDF4E\uDF50-\uDF55\uDF70-\uDF88\uDF8A-\uDF8F\uDFAA-\uDFC2\uDFC4-\uDFC9\uDFCB]|\uD83A[\uDD22-\uDD43]'
         },
         {
             name: 'Noncharacter_Code_Point',
             bmp: '\uFDD0-\uFDEF\uFFFE\uFFFF',
-            astral: '[\uDB3F\uDB7F\uDBBF\uDBFF\uD83F\uD87F\uD8BF\uDAFF\uD97F\uD9BF\uD9FF\uDA3F\uD8FF\uDABF\uDA7F\uD93F][\uDFFE\uDFFF]'
+            astral: '[\uD83F\uD87F\uD8BF\uD8FF\uD93F\uD97F\uD9BF\uD9FF\uDA3F\uDA7F\uDABF\uDAFF\uDB3F\uDB7F\uDBBF\uDBFF][\uDFFE\uDFFF]'
         },
         {
             name: 'Uppercase',
-            bmp: 'A-Z\xC0-\xD6\xD8-\xDE\u0100\u0102\u0104\u0106\u0108\u010A\u010C\u010E\u0110\u0112\u0114\u0116\u0118\u011A\u011C\u011E\u0120\u0122\u0124\u0126\u0128\u012A\u012C\u012E\u0130\u0132\u0134\u0136\u0139\u013B\u013D\u013F\u0141\u0143\u0145\u0147\u014A\u014C\u014E\u0150\u0152\u0154\u0156\u0158\u015A\u015C\u015E\u0160\u0162\u0164\u0166\u0168\u016A\u016C\u016E\u0170\u0172\u0174\u0176\u0178\u0179\u017B\u017D\u0181\u0182\u0184\u0186\u0187\u0189-\u018B\u018E-\u0191\u0193\u0194\u0196-\u0198\u019C\u019D\u019F\u01A0\u01A2\u01A4\u01A6\u01A7\u01A9\u01AC\u01AE\u01AF\u01B1-\u01B3\u01B5\u01B7\u01B8\u01BC\u01C4\u01C7\u01CA\u01CD\u01CF\u01D1\u01D3\u01D5\u01D7\u01D9\u01DB\u01DE\u01E0\u01E2\u01E4\u01E6\u01E8\u01EA\u01EC\u01EE\u01F1\u01F4\u01F6-\u01F8\u01FA\u01FC\u01FE\u0200\u0202\u0204\u0206\u0208\u020A\u020C\u020E\u0210\u0212\u0214\u0216\u0218\u021A\u021C\u021E\u0220\u0222\u0224\u0226\u0228\u022A\u022C\u022E\u0230\u0232\u023A\u023B\u023D\u023E\u0241\u0243-\u0246\u0248\u024A\u024C\u024E\u0370\u0372\u0376\u037F\u0386\u0388-\u038A\u038C\u038E\u038F\u0391-\u03A1\u03A3-\u03AB\u03CF\u03D2-\u03D4\u03D8\u03DA\u03DC\u03DE\u03E0\u03E2\u03E4\u03E6\u03E8\u03EA\u03EC\u03EE\u03F4\u03F7\u03F9\u03FA\u03FD-\u042F\u0460\u0462\u0464\u0466\u0468\u046A\u046C\u046E\u0470\u0472\u0474\u0476\u0478\u047A\u047C\u047E\u0480\u048A\u048C\u048E\u0490\u0492\u0494\u0496\u0498\u049A\u049C\u049E\u04A0\u04A2\u04A4\u04A6\u04A8\u04AA\u04AC\u04AE\u04B0\u04B2\u04B4\u04B6\u04B8\u04BA\u04BC\u04BE\u04C0\u04C1\u04C3\u04C5\u04C7\u04C9\u04CB\u04CD\u04D0\u04D2\u04D4\u04D6\u04D8\u04DA\u04DC\u04DE\u04E0\u04E2\u04E4\u04E6\u04E8\u04EA\u04EC\u04EE\u04F0\u04F2\u04F4\u04F6\u04F8\u04FA\u04FC\u04FE\u0500\u0502\u0504\u0506\u0508\u050A\u050C\u050E\u0510\u0512\u0514\u0516\u0518\u051A\u051C\u051E\u0520\u0522\u0524\u0526\u0528\u052A\u052C\u052E\u0531-\u0556\u10A0-\u10C5\u10C7\u10CD\u13A0-\u13F5\u1E00\u1E02\u1E04\u1E06\u1E08\u1E0A\u1E0C\u1E0E\u1E10\u1E12\u1E14\u1E16\u1E18\u1E1A\u1E1C\u1E1E\u1E20\u1E22\u1E24\u1E26\u1E28\u1E2A\u1E2C\u1E2E\u1E30\u1E32\u1E34\u1E36\u1E38\u1E3A\u1E3C\u1E3E\u1E40\u1E42\u1E44\u1E46\u1E48\u1E4A\u1E4C\u1E4E\u1E50\u1E52\u1E54\u1E56\u1E58\u1E5A\u1E5C\u1E5E\u1E60\u1E62\u1E64\u1E66\u1E68\u1E6A\u1E6C\u1E6E\u1E70\u1E72\u1E74\u1E76\u1E78\u1E7A\u1E7C\u1E7E\u1E80\u1E82\u1E84\u1E86\u1E88\u1E8A\u1E8C\u1E8E\u1E90\u1E92\u1E94\u1E9E\u1EA0\u1EA2\u1EA4\u1EA6\u1EA8\u1EAA\u1EAC\u1EAE\u1EB0\u1EB2\u1EB4\u1EB6\u1EB8\u1EBA\u1EBC\u1EBE\u1EC0\u1EC2\u1EC4\u1EC6\u1EC8\u1ECA\u1ECC\u1ECE\u1ED0\u1ED2\u1ED4\u1ED6\u1ED8\u1EDA\u1EDC\u1EDE\u1EE0\u1EE2\u1EE4\u1EE6\u1EE8\u1EEA\u1EEC\u1EEE\u1EF0\u1EF2\u1EF4\u1EF6\u1EF8\u1EFA\u1EFC\u1EFE\u1F08-\u1F0F\u1F18-\u1F1D\u1F28-\u1F2F\u1F38-\u1F3F\u1F48-\u1F4D\u1F59\u1F5B\u1F5D\u1F5F\u1F68-\u1F6F\u1FB8-\u1FBB\u1FC8-\u1FCB\u1FD8-\u1FDB\u1FE8-\u1FEC\u1FF8-\u1FFB\u2102\u2107\u210B-\u210D\u2110-\u2112\u2115\u2119-\u211D\u2124\u2126\u2128\u212A-\u212D\u2130-\u2133\u213E\u213F\u2145\u2160-\u216F\u2183\u24B6-\u24CF\u2C00-\u2C2E\u2C60\u2C62-\u2C64\u2C67\u2C69\u2C6B\u2C6D-\u2C70\u2C72\u2C75\u2C7E-\u2C80\u2C82\u2C84\u2C86\u2C88\u2C8A\u2C8C\u2C8E\u2C90\u2C92\u2C94\u2C96\u2C98\u2C9A\u2C9C\u2C9E\u2CA0\u2CA2\u2CA4\u2CA6\u2CA8\u2CAA\u2CAC\u2CAE\u2CB0\u2CB2\u2CB4\u2CB6\u2CB8\u2CBA\u2CBC\u2CBE\u2CC0\u2CC2\u2CC4\u2CC6\u2CC8\u2CCA\u2CCC\u2CCE\u2CD0\u2CD2\u2CD4\u2CD6\u2CD8\u2CDA\u2CDC\u2CDE\u2CE0\u2CE2\u2CEB\u2CED\u2CF2\uA640\uA642\uA644\uA646\uA648\uA64A\uA64C\uA64E\uA650\uA652\uA654\uA656\uA658\uA65A\uA65C\uA65E\uA660\uA662\uA664\uA666\uA668\uA66A\uA66C\uA680\uA682\uA684\uA686\uA688\uA68A\uA68C\uA68E\uA690\uA692\uA694\uA696\uA698\uA69A\uA722\uA724\uA726\uA728\uA72A\uA72C\uA72E\uA732\uA734\uA736\uA738\uA73A\uA73C\uA73E\uA740\uA742\uA744\uA746\uA748\uA74A\uA74C\uA74E\uA750\uA752\uA754\uA756\uA758\uA75A\uA75C\uA75E\uA760\uA762\uA764\uA766\uA768\uA76A\uA76C\uA76E\uA779\uA77B\uA77D\uA77E\uA780\uA782\uA784\uA786\uA78B\uA78D\uA790\uA792\uA796\uA798\uA79A\uA79C\uA79E\uA7A0\uA7A2\uA7A4\uA7A6\uA7A8\uA7AA-\uA7AD\uA7B0-\uA7B4\uA7B6\uFF21-\uFF3A',
-            astral: '\uD806[\uDCA0-\uDCBF]|\uD803[\uDC80-\uDCB2]|\uD835[\uDC00-\uDC19\uDC34-\uDC4D\uDC68-\uDC81\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB5\uDCD0-\uDCE9\uDD04\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD38\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD6C-\uDD85\uDDA0-\uDDB9\uDDD4-\uDDED\uDE08-\uDE21\uDE3C-\uDE55\uDE70-\uDE89\uDEA8-\uDEC0\uDEE2-\uDEFA\uDF1C-\uDF34\uDF56-\uDF6E\uDF90-\uDFA8\uDFCA]|\uD801[\uDC00-\uDC27]|\uD83C[\uDD30-\uDD49\uDD50-\uDD69\uDD70-\uDD89]'
+            bmp: 'A-Z\xC0-\xD6\xD8-\xDE\u0100\u0102\u0104\u0106\u0108\u010A\u010C\u010E\u0110\u0112\u0114\u0116\u0118\u011A\u011C\u011E\u0120\u0122\u0124\u0126\u0128\u012A\u012C\u012E\u0130\u0132\u0134\u0136\u0139\u013B\u013D\u013F\u0141\u0143\u0145\u0147\u014A\u014C\u014E\u0150\u0152\u0154\u0156\u0158\u015A\u015C\u015E\u0160\u0162\u0164\u0166\u0168\u016A\u016C\u016E\u0170\u0172\u0174\u0176\u0178\u0179\u017B\u017D\u0181\u0182\u0184\u0186\u0187\u0189-\u018B\u018E-\u0191\u0193\u0194\u0196-\u0198\u019C\u019D\u019F\u01A0\u01A2\u01A4\u01A6\u01A7\u01A9\u01AC\u01AE\u01AF\u01B1-\u01B3\u01B5\u01B7\u01B8\u01BC\u01C4\u01C7\u01CA\u01CD\u01CF\u01D1\u01D3\u01D5\u01D7\u01D9\u01DB\u01DE\u01E0\u01E2\u01E4\u01E6\u01E8\u01EA\u01EC\u01EE\u01F1\u01F4\u01F6-\u01F8\u01FA\u01FC\u01FE\u0200\u0202\u0204\u0206\u0208\u020A\u020C\u020E\u0210\u0212\u0214\u0216\u0218\u021A\u021C\u021E\u0220\u0222\u0224\u0226\u0228\u022A\u022C\u022E\u0230\u0232\u023A\u023B\u023D\u023E\u0241\u0243-\u0246\u0248\u024A\u024C\u024E\u0370\u0372\u0376\u037F\u0386\u0388-\u038A\u038C\u038E\u038F\u0391-\u03A1\u03A3-\u03AB\u03CF\u03D2-\u03D4\u03D8\u03DA\u03DC\u03DE\u03E0\u03E2\u03E4\u03E6\u03E8\u03EA\u03EC\u03EE\u03F4\u03F7\u03F9\u03FA\u03FD-\u042F\u0460\u0462\u0464\u0466\u0468\u046A\u046C\u046E\u0470\u0472\u0474\u0476\u0478\u047A\u047C\u047E\u0480\u048A\u048C\u048E\u0490\u0492\u0494\u0496\u0498\u049A\u049C\u049E\u04A0\u04A2\u04A4\u04A6\u04A8\u04AA\u04AC\u04AE\u04B0\u04B2\u04B4\u04B6\u04B8\u04BA\u04BC\u04BE\u04C0\u04C1\u04C3\u04C5\u04C7\u04C9\u04CB\u04CD\u04D0\u04D2\u04D4\u04D6\u04D8\u04DA\u04DC\u04DE\u04E0\u04E2\u04E4\u04E6\u04E8\u04EA\u04EC\u04EE\u04F0\u04F2\u04F4\u04F6\u04F8\u04FA\u04FC\u04FE\u0500\u0502\u0504\u0506\u0508\u050A\u050C\u050E\u0510\u0512\u0514\u0516\u0518\u051A\u051C\u051E\u0520\u0522\u0524\u0526\u0528\u052A\u052C\u052E\u0531-\u0556\u10A0-\u10C5\u10C7\u10CD\u13A0-\u13F5\u1E00\u1E02\u1E04\u1E06\u1E08\u1E0A\u1E0C\u1E0E\u1E10\u1E12\u1E14\u1E16\u1E18\u1E1A\u1E1C\u1E1E\u1E20\u1E22\u1E24\u1E26\u1E28\u1E2A\u1E2C\u1E2E\u1E30\u1E32\u1E34\u1E36\u1E38\u1E3A\u1E3C\u1E3E\u1E40\u1E42\u1E44\u1E46\u1E48\u1E4A\u1E4C\u1E4E\u1E50\u1E52\u1E54\u1E56\u1E58\u1E5A\u1E5C\u1E5E\u1E60\u1E62\u1E64\u1E66\u1E68\u1E6A\u1E6C\u1E6E\u1E70\u1E72\u1E74\u1E76\u1E78\u1E7A\u1E7C\u1E7E\u1E80\u1E82\u1E84\u1E86\u1E88\u1E8A\u1E8C\u1E8E\u1E90\u1E92\u1E94\u1E9E\u1EA0\u1EA2\u1EA4\u1EA6\u1EA8\u1EAA\u1EAC\u1EAE\u1EB0\u1EB2\u1EB4\u1EB6\u1EB8\u1EBA\u1EBC\u1EBE\u1EC0\u1EC2\u1EC4\u1EC6\u1EC8\u1ECA\u1ECC\u1ECE\u1ED0\u1ED2\u1ED4\u1ED6\u1ED8\u1EDA\u1EDC\u1EDE\u1EE0\u1EE2\u1EE4\u1EE6\u1EE8\u1EEA\u1EEC\u1EEE\u1EF0\u1EF2\u1EF4\u1EF6\u1EF8\u1EFA\u1EFC\u1EFE\u1F08-\u1F0F\u1F18-\u1F1D\u1F28-\u1F2F\u1F38-\u1F3F\u1F48-\u1F4D\u1F59\u1F5B\u1F5D\u1F5F\u1F68-\u1F6F\u1FB8-\u1FBB\u1FC8-\u1FCB\u1FD8-\u1FDB\u1FE8-\u1FEC\u1FF8-\u1FFB\u2102\u2107\u210B-\u210D\u2110-\u2112\u2115\u2119-\u211D\u2124\u2126\u2128\u212A-\u212D\u2130-\u2133\u213E\u213F\u2145\u2160-\u216F\u2183\u24B6-\u24CF\u2C00-\u2C2E\u2C60\u2C62-\u2C64\u2C67\u2C69\u2C6B\u2C6D-\u2C70\u2C72\u2C75\u2C7E-\u2C80\u2C82\u2C84\u2C86\u2C88\u2C8A\u2C8C\u2C8E\u2C90\u2C92\u2C94\u2C96\u2C98\u2C9A\u2C9C\u2C9E\u2CA0\u2CA2\u2CA4\u2CA6\u2CA8\u2CAA\u2CAC\u2CAE\u2CB0\u2CB2\u2CB4\u2CB6\u2CB8\u2CBA\u2CBC\u2CBE\u2CC0\u2CC2\u2CC4\u2CC6\u2CC8\u2CCA\u2CCC\u2CCE\u2CD0\u2CD2\u2CD4\u2CD6\u2CD8\u2CDA\u2CDC\u2CDE\u2CE0\u2CE2\u2CEB\u2CED\u2CF2\uA640\uA642\uA644\uA646\uA648\uA64A\uA64C\uA64E\uA650\uA652\uA654\uA656\uA658\uA65A\uA65C\uA65E\uA660\uA662\uA664\uA666\uA668\uA66A\uA66C\uA680\uA682\uA684\uA686\uA688\uA68A\uA68C\uA68E\uA690\uA692\uA694\uA696\uA698\uA69A\uA722\uA724\uA726\uA728\uA72A\uA72C\uA72E\uA732\uA734\uA736\uA738\uA73A\uA73C\uA73E\uA740\uA742\uA744\uA746\uA748\uA74A\uA74C\uA74E\uA750\uA752\uA754\uA756\uA758\uA75A\uA75C\uA75E\uA760\uA762\uA764\uA766\uA768\uA76A\uA76C\uA76E\uA779\uA77B\uA77D\uA77E\uA780\uA782\uA784\uA786\uA78B\uA78D\uA790\uA792\uA796\uA798\uA79A\uA79C\uA79E\uA7A0\uA7A2\uA7A4\uA7A6\uA7A8\uA7AA-\uA7AE\uA7B0-\uA7B4\uA7B6\uFF21-\uFF3A',
+            astral: '\uD801[\uDC00-\uDC27\uDCB0-\uDCD3]|\uD803[\uDC80-\uDCB2]|\uD806[\uDCA0-\uDCBF]|\uD835[\uDC00-\uDC19\uDC34-\uDC4D\uDC68-\uDC81\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB5\uDCD0-\uDCE9\uDD04\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD38\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD6C-\uDD85\uDDA0-\uDDB9\uDDD4-\uDDED\uDE08-\uDE21\uDE3C-\uDE55\uDE70-\uDE89\uDEA8-\uDEC0\uDEE2-\uDEFA\uDF1C-\uDF34\uDF56-\uDF6E\uDF90-\uDFA8\uDFCA]|\uD83A[\uDD00-\uDD21]|\uD83C[\uDD30-\uDD49\uDD50-\uDD69\uDD70-\uDD89]'
         },
         {
             name: 'White_Space',
@@ -23156,9 +28791,9 @@ module.exports = function(XRegExp) {
 
 },{}],7:[function(require,module,exports){
 /*!
- * XRegExp Unicode Scripts 3.1.1
+ * XRegExp Unicode Scripts 3.2.0
  * <xregexp.com>
- * Steven Levithan (c) 2010-2016 MIT License
+ * Steven Levithan (c) 2010-2017 MIT License
  * Unicode data by Mathias Bynens <mathiasbynens.be>
  */
 
@@ -23169,7 +28804,7 @@ module.exports = function(XRegExp) {
      * Adds support for all Unicode scripts. E.g., `\p{Latin}`. Token names are case insensitive,
      * and any spaces, hyphens, and underscores are ignored.
      *
-     * Uses Unicode 8.0.0.
+     * Uses Unicode 9.0.0.
      *
      * @requires XRegExp, Unicode Base
      */
@@ -23180,6 +28815,10 @@ module.exports = function(XRegExp) {
 
     XRegExp.addUnicodeData([
         {
+            name: 'Adlam',
+            astral: '\uD83A[\uDD00-\uDD4A\uDD50-\uDD59\uDD5E\uDD5F]'
+        },
+        {
             name: 'Ahom',
             astral: '\uD805[\uDF00-\uDF19\uDF1D-\uDF2B\uDF30-\uDF3F]'
         },
@@ -23189,7 +28828,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Arabic',
-            bmp: '\u0600-\u0604\u0606-\u060B\u060D-\u061A\u061E\u0620-\u063F\u0641-\u064A\u0656-\u066F\u0671-\u06DC\u06DE-\u06FF\u0750-\u077F\u08A0-\u08B4\u08E3-\u08FF\uFB50-\uFBC1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFD\uFE70-\uFE74\uFE76-\uFEFC',
+            bmp: '\u0600-\u0604\u0606-\u060B\u060D-\u061A\u061E\u0620-\u063F\u0641-\u064A\u0656-\u066F\u0671-\u06DC\u06DE-\u06FF\u0750-\u077F\u08A0-\u08B4\u08B6-\u08BD\u08D4-\u08E1\u08E3-\u08FF\uFB50-\uFBC1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFD\uFE70-\uFE74\uFE76-\uFEFC',
             astral: '\uD803[\uDE60-\uDE7E]|\uD83B[\uDE00-\uDE03\uDE05-\uDE1F\uDE21\uDE22\uDE24\uDE27\uDE29-\uDE32\uDE34-\uDE37\uDE39\uDE3B\uDE42\uDE47\uDE49\uDE4B\uDE4D-\uDE4F\uDE51\uDE52\uDE54\uDE57\uDE59\uDE5B\uDE5D\uDE5F\uDE61\uDE62\uDE64\uDE67-\uDE6A\uDE6C-\uDE72\uDE74-\uDE77\uDE79-\uDE7C\uDE7E\uDE80-\uDE89\uDE8B-\uDE9B\uDEA1-\uDEA3\uDEA5-\uDEA9\uDEAB-\uDEBB\uDEF0\uDEF1]'
         },
         {
@@ -23220,6 +28859,10 @@ module.exports = function(XRegExp) {
         {
             name: 'Bengali',
             bmp: '\u0980-\u0983\u0985-\u098C\u098F\u0990\u0993-\u09A8\u09AA-\u09B0\u09B2\u09B6-\u09B9\u09BC-\u09C4\u09C7\u09C8\u09CB-\u09CE\u09D7\u09DC\u09DD\u09DF-\u09E3\u09E6-\u09FB'
+        },
+        {
+            name: 'Bhaiksuki',
+            astral: '\uD807[\uDC00-\uDC08\uDC0A-\uDC36\uDC38-\uDC45\uDC50-\uDC6C]'
         },
         {
             name: 'Bopomofo',
@@ -23267,8 +28910,8 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Common',
-            bmp: '\0-\x40\\x5B-\x60\\x7B-\xA9\xAB-\xB9\xBB-\xBF\xD7\xF7\u02B9-\u02DF\u02E5-\u02E9\u02EC-\u02FF\u0374\u037E\u0385\u0387\u0589\u0605\u060C\u061B\u061C\u061F\u0640\u06DD\u0964\u0965\u0E3F\u0FD5-\u0FD8\u10FB\u16EB-\u16ED\u1735\u1736\u1802\u1803\u1805\u1CD3\u1CE1\u1CE9-\u1CEC\u1CEE-\u1CF3\u1CF5\u1CF6\u2000-\u200B\u200E-\u2064\u2066-\u2070\u2074-\u207E\u2080-\u208E\u20A0-\u20BE\u2100-\u2125\u2127-\u2129\u212C-\u2131\u2133-\u214D\u214F-\u215F\u2189-\u218B\u2190-\u23FA\u2400-\u2426\u2440-\u244A\u2460-\u27FF\u2900-\u2B73\u2B76-\u2B95\u2B98-\u2BB9\u2BBD-\u2BC8\u2BCA-\u2BD1\u2BEC-\u2BEF\u2E00-\u2E42\u2FF0-\u2FFB\u3000-\u3004\u3006\u3008-\u3020\u3030-\u3037\u303C-\u303F\u309B\u309C\u30A0\u30FB\u30FC\u3190-\u319F\u31C0-\u31E3\u3220-\u325F\u327F-\u32CF\u3358-\u33FF\u4DC0-\u4DFF\uA700-\uA721\uA788-\uA78A\uA830-\uA839\uA92E\uA9CF\uAB5B\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE66\uFE68-\uFE6B\uFEFF\uFF01-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65\uFF70\uFF9E\uFF9F\uFFE0-\uFFE6\uFFE8-\uFFEE\uFFF9-\uFFFD',
-            astral: '\uD83E[\uDC00-\uDC0B\uDC10-\uDC47\uDC50-\uDC59\uDC60-\uDC87\uDC90-\uDCAD\uDD10-\uDD18\uDD80-\uDD84\uDDC0]|\uD82F[\uDCA0-\uDCA3]|\uD835[\uDC00-\uDC54\uDC56-\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD1E-\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD52-\uDEA5\uDEA8-\uDFCB\uDFCE-\uDFFF]|\uDB40[\uDC01\uDC20-\uDC7F]|\uD83D[\uDC00-\uDD79\uDD7B-\uDDA3\uDDA5-\uDED0\uDEE0-\uDEEC\uDEF0-\uDEF3\uDF00-\uDF73\uDF80-\uDFD4]|\uD800[\uDD00-\uDD02\uDD07-\uDD33\uDD37-\uDD3F\uDD90-\uDD9B\uDDD0-\uDDFC\uDEE1-\uDEFB]|\uD834[\uDC00-\uDCF5\uDD00-\uDD26\uDD29-\uDD66\uDD6A-\uDD7A\uDD83\uDD84\uDD8C-\uDDA9\uDDAE-\uDDE8\uDF00-\uDF56\uDF60-\uDF71]|\uD83C[\uDC00-\uDC2B\uDC30-\uDC93\uDCA0-\uDCAE\uDCB1-\uDCBF\uDCC1-\uDCCF\uDCD1-\uDCF5\uDD00-\uDD0C\uDD10-\uDD2E\uDD30-\uDD6B\uDD70-\uDD9A\uDDE6-\uDDFF\uDE01\uDE02\uDE10-\uDE3A\uDE40-\uDE48\uDE50\uDE51\uDF00-\uDFFF]'
+            bmp: '\0-\x40\\x5B-\x60\\x7B-\xA9\xAB-\xB9\xBB-\xBF\xD7\xF7\u02B9-\u02DF\u02E5-\u02E9\u02EC-\u02FF\u0374\u037E\u0385\u0387\u0589\u0605\u060C\u061B\u061C\u061F\u0640\u06DD\u08E2\u0964\u0965\u0E3F\u0FD5-\u0FD8\u10FB\u16EB-\u16ED\u1735\u1736\u1802\u1803\u1805\u1CD3\u1CE1\u1CE9-\u1CEC\u1CEE-\u1CF3\u1CF5\u1CF6\u2000-\u200B\u200E-\u2064\u2066-\u2070\u2074-\u207E\u2080-\u208E\u20A0-\u20BE\u2100-\u2125\u2127-\u2129\u212C-\u2131\u2133-\u214D\u214F-\u215F\u2189-\u218B\u2190-\u23FE\u2400-\u2426\u2440-\u244A\u2460-\u27FF\u2900-\u2B73\u2B76-\u2B95\u2B98-\u2BB9\u2BBD-\u2BC8\u2BCA-\u2BD1\u2BEC-\u2BEF\u2E00-\u2E44\u2FF0-\u2FFB\u3000-\u3004\u3006\u3008-\u3020\u3030-\u3037\u303C-\u303F\u309B\u309C\u30A0\u30FB\u30FC\u3190-\u319F\u31C0-\u31E3\u3220-\u325F\u327F-\u32CF\u3358-\u33FF\u4DC0-\u4DFF\uA700-\uA721\uA788-\uA78A\uA830-\uA839\uA92E\uA9CF\uAB5B\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE66\uFE68-\uFE6B\uFEFF\uFF01-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65\uFF70\uFF9E\uFF9F\uFFE0-\uFFE6\uFFE8-\uFFEE\uFFF9-\uFFFD',
+            astral: '\uD800[\uDD00-\uDD02\uDD07-\uDD33\uDD37-\uDD3F\uDD90-\uDD9B\uDDD0-\uDDFC\uDEE1-\uDEFB]|\uD82F[\uDCA0-\uDCA3]|\uD834[\uDC00-\uDCF5\uDD00-\uDD26\uDD29-\uDD66\uDD6A-\uDD7A\uDD83\uDD84\uDD8C-\uDDA9\uDDAE-\uDDE8\uDF00-\uDF56\uDF60-\uDF71]|\uD835[\uDC00-\uDC54\uDC56-\uDC9C\uDC9E\uDC9F\uDCA2\uDCA5\uDCA6\uDCA9-\uDCAC\uDCAE-\uDCB9\uDCBB\uDCBD-\uDCC3\uDCC5-\uDD05\uDD07-\uDD0A\uDD0D-\uDD14\uDD16-\uDD1C\uDD1E-\uDD39\uDD3B-\uDD3E\uDD40-\uDD44\uDD46\uDD4A-\uDD50\uDD52-\uDEA5\uDEA8-\uDFCB\uDFCE-\uDFFF]|\uD83C[\uDC00-\uDC2B\uDC30-\uDC93\uDCA0-\uDCAE\uDCB1-\uDCBF\uDCC1-\uDCCF\uDCD1-\uDCF5\uDD00-\uDD0C\uDD10-\uDD2E\uDD30-\uDD6B\uDD70-\uDDAC\uDDE6-\uDDFF\uDE01\uDE02\uDE10-\uDE3B\uDE40-\uDE48\uDE50\uDE51\uDF00-\uDFFF]|\uD83D[\uDC00-\uDED2\uDEE0-\uDEEC\uDEF0-\uDEF6\uDF00-\uDF73\uDF80-\uDFD4]|\uD83E[\uDC00-\uDC0B\uDC10-\uDC47\uDC50-\uDC59\uDC60-\uDC87\uDC90-\uDCAD\uDD10-\uDD1E\uDD20-\uDD27\uDD30\uDD33-\uDD3E\uDD40-\uDD4B\uDD50-\uDD5E\uDD80-\uDD91\uDDC0]|\uDB40[\uDC01\uDC20-\uDC7F]'
         },
         {
             name: 'Coptic',
@@ -23276,7 +28919,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Cuneiform',
-            astral: '\uD809[\uDC00-\uDC6E\uDC70-\uDC74\uDC80-\uDD43]|\uD808[\uDC00-\uDF99]'
+            astral: '\uD808[\uDC00-\uDF99]|\uD809[\uDC00-\uDC6E\uDC70-\uDC74\uDC80-\uDD43]'
         },
         {
             name: 'Cypriot',
@@ -23284,7 +28927,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Cyrillic',
-            bmp: '\u0400-\u0484\u0487-\u052F\u1D2B\u1D78\u2DE0-\u2DFF\uA640-\uA69F\uFE2E\uFE2F'
+            bmp: '\u0400-\u0484\u0487-\u052F\u1C80-\u1C88\u1D2B\u1D78\u2DE0-\u2DFF\uA640-\uA69F\uFE2E\uFE2F'
         },
         {
             name: 'Deseret',
@@ -23316,7 +28959,8 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Glagolitic',
-            bmp: '\u2C00-\u2C2E\u2C30-\u2C5E'
+            bmp: '\u2C00-\u2C2E\u2C30-\u2C5E',
+            astral: '\uD838[\uDC00-\uDC06\uDC08-\uDC18\uDC1B-\uDC21\uDC23\uDC24\uDC26-\uDC2A]'
         },
         {
             name: 'Gothic',
@@ -23329,7 +28973,7 @@ module.exports = function(XRegExp) {
         {
             name: 'Greek',
             bmp: '\u0370-\u0373\u0375-\u0377\u037A-\u037D\u037F\u0384\u0386\u0388-\u038A\u038C\u038E-\u03A1\u03A3-\u03E1\u03F0-\u03FF\u1D26-\u1D2A\u1D5D-\u1D61\u1D66-\u1D6A\u1DBF\u1F00-\u1F15\u1F18-\u1F1D\u1F20-\u1F45\u1F48-\u1F4D\u1F50-\u1F57\u1F59\u1F5B\u1F5D\u1F5F-\u1F7D\u1F80-\u1FB4\u1FB6-\u1FC4\u1FC6-\u1FD3\u1FD6-\u1FDB\u1FDD-\u1FEF\u1FF2-\u1FF4\u1FF6-\u1FFE\u2126\uAB65',
-            astral: '\uD800[\uDD40-\uDD8C\uDDA0]|\uD834[\uDE00-\uDE45]'
+            astral: '\uD800[\uDD40-\uDD8E\uDDA0]|\uD834[\uDE00-\uDE45]'
         },
         {
             name: 'Gujarati',
@@ -23342,7 +28986,7 @@ module.exports = function(XRegExp) {
         {
             name: 'Han',
             bmp: '\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5\u3005\u3007\u3021-\u3029\u3038-\u303B\u3400-\u4DB5\u4E00-\u9FD5\uF900-\uFA6D\uFA70-\uFAD9',
-            astral: '\uD86E[\uDC00-\uDC1D\uDC20-\uDFFF]|[\uD840-\uD868\uD86A-\uD86C\uD86F-\uD872][\uDC00-\uDFFF]|\uD86D[\uDC00-\uDF34\uDF40-\uDFFF]|\uD87E[\uDC00-\uDE1D]|\uD869[\uDC00-\uDED6\uDF00-\uDFFF]|\uD873[\uDC00-\uDEA1]'
+            astral: '[\uD840-\uD868\uD86A-\uD86C\uD86F-\uD872][\uDC00-\uDFFF]|\uD869[\uDC00-\uDED6\uDF00-\uDFFF]|\uD86D[\uDC00-\uDF34\uDF40-\uDFFF]|\uD86E[\uDC00-\uDC1D\uDC20-\uDFFF]|\uD873[\uDC00-\uDEA1]|\uD87E[\uDC00-\uDE1D]'
         },
         {
             name: 'Hangul',
@@ -23371,8 +29015,8 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Inherited',
-            bmp: '\u0300-\u036F\u0485\u0486\u064B-\u0655\u0670\u0951\u0952\u1AB0-\u1ABE\u1CD0-\u1CD2\u1CD4-\u1CE0\u1CE2-\u1CE8\u1CED\u1CF4\u1CF8\u1CF9\u1DC0-\u1DF5\u1DFC-\u1DFF\u200C\u200D\u20D0-\u20F0\u302A-\u302D\u3099\u309A\uFE00-\uFE0F\uFE20-\uFE2D',
-            astral: '\uD834[\uDD67-\uDD69\uDD7B-\uDD82\uDD85-\uDD8B\uDDAA-\uDDAD]|\uD800[\uDDFD\uDEE0]|\uDB40[\uDD00-\uDDEF]'
+            bmp: '\u0300-\u036F\u0485\u0486\u064B-\u0655\u0670\u0951\u0952\u1AB0-\u1ABE\u1CD0-\u1CD2\u1CD4-\u1CE0\u1CE2-\u1CE8\u1CED\u1CF4\u1CF8\u1CF9\u1DC0-\u1DF5\u1DFB-\u1DFF\u200C\u200D\u20D0-\u20F0\u302A-\u302D\u3099\u309A\uFE00-\uFE0F\uFE20-\uFE2D',
+            astral: '\uD800[\uDDFD\uDEE0]|\uD834[\uDD67-\uDD69\uDD7B-\uDD82\uDD85-\uDD8B\uDDAA-\uDDAD]|\uDB40[\uDD00-\uDDEF]'
         },
         {
             name: 'Inscriptional_Pahlavi',
@@ -23392,7 +29036,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Kannada',
-            bmp: '\u0C81-\u0C83\u0C85-\u0C8C\u0C8E-\u0C90\u0C92-\u0CA8\u0CAA-\u0CB3\u0CB5-\u0CB9\u0CBC-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCD\u0CD5\u0CD6\u0CDE\u0CE0-\u0CE3\u0CE6-\u0CEF\u0CF1\u0CF2'
+            bmp: '\u0C80-\u0C83\u0C85-\u0C8C\u0C8E-\u0C90\u0C92-\u0CA8\u0CAA-\u0CB3\u0CB5-\u0CB9\u0CBC-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCD\u0CD5\u0CD6\u0CDE\u0CE0-\u0CE3\u0CE6-\u0CEF\u0CF1\u0CF2'
         },
         {
             name: 'Katakana',
@@ -23413,7 +29057,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Khojki',
-            astral: '\uD804[\uDE00-\uDE11\uDE13-\uDE3D]'
+            astral: '\uD804[\uDE00-\uDE11\uDE13-\uDE3E]'
         },
         {
             name: 'Khudawadi',
@@ -23425,7 +29069,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Latin',
-            bmp: 'A-Za-z\xAA\xBA\xC0-\xD6\xD8-\xF6\xF8-\u02B8\u02E0-\u02E4\u1D00-\u1D25\u1D2C-\u1D5C\u1D62-\u1D65\u1D6B-\u1D77\u1D79-\u1DBE\u1E00-\u1EFF\u2071\u207F\u2090-\u209C\u212A\u212B\u2132\u214E\u2160-\u2188\u2C60-\u2C7F\uA722-\uA787\uA78B-\uA7AD\uA7B0-\uA7B7\uA7F7-\uA7FF\uAB30-\uAB5A\uAB5C-\uAB64\uFB00-\uFB06\uFF21-\uFF3A\uFF41-\uFF5A'
+            bmp: 'A-Za-z\xAA\xBA\xC0-\xD6\xD8-\xF6\xF8-\u02B8\u02E0-\u02E4\u1D00-\u1D25\u1D2C-\u1D5C\u1D62-\u1D65\u1D6B-\u1D77\u1D79-\u1DBE\u1E00-\u1EFF\u2071\u207F\u2090-\u209C\u212A\u212B\u2132\u214E\u2160-\u2188\u2C60-\u2C7F\uA722-\uA787\uA78B-\uA7AE\uA7B0-\uA7B7\uA7F7-\uA7FF\uAB30-\uAB5A\uAB5C-\uAB64\uFB00-\uFB06\uFF21-\uFF3A\uFF41-\uFF5A'
         },
         {
             name: 'Lepcha',
@@ -23461,7 +29105,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Malayalam',
-            bmp: '\u0D01-\u0D03\u0D05-\u0D0C\u0D0E-\u0D10\u0D12-\u0D3A\u0D3D-\u0D44\u0D46-\u0D48\u0D4A-\u0D4E\u0D57\u0D5F-\u0D63\u0D66-\u0D75\u0D79-\u0D7F'
+            bmp: '\u0D01-\u0D03\u0D05-\u0D0C\u0D0E-\u0D10\u0D12-\u0D3A\u0D3D-\u0D44\u0D46-\u0D48\u0D4A-\u0D4F\u0D54-\u0D63\u0D66-\u0D7F'
         },
         {
             name: 'Mandaic',
@@ -23470,6 +29114,10 @@ module.exports = function(XRegExp) {
         {
             name: 'Manichaean',
             astral: '\uD802[\uDEC0-\uDEE6\uDEEB-\uDEF6]'
+        },
+        {
+            name: 'Marchen',
+            astral: '\uD807[\uDC70-\uDC8F\uDC92-\uDCA7\uDCA9-\uDCB6]'
         },
         {
             name: 'Meetei_Mayek',
@@ -23497,7 +29145,8 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Mongolian',
-            bmp: '\u1800\u1801\u1804\u1806-\u180E\u1810-\u1819\u1820-\u1877\u1880-\u18AA'
+            bmp: '\u1800\u1801\u1804\u1806-\u180E\u1810-\u1819\u1820-\u1877\u1880-\u18AA',
+            astral: '\uD805[\uDE60-\uDE6C]'
         },
         {
             name: 'Mro',
@@ -23518,6 +29167,10 @@ module.exports = function(XRegExp) {
         {
             name: 'New_Tai_Lue',
             bmp: '\u1980-\u19AB\u19B0-\u19C9\u19D0-\u19DA\u19DE\u19DF'
+        },
+        {
+            name: 'Newa',
+            astral: '\uD805[\uDC00-\uDC59\uDC5B\uDC5D]'
         },
         {
             name: 'Nko',
@@ -23564,6 +29217,10 @@ module.exports = function(XRegExp) {
             bmp: '\u0B01-\u0B03\u0B05-\u0B0C\u0B0F\u0B10\u0B13-\u0B28\u0B2A-\u0B30\u0B32\u0B33\u0B35-\u0B39\u0B3C-\u0B44\u0B47\u0B48\u0B4B-\u0B4D\u0B56\u0B57\u0B5C\u0B5D\u0B5F-\u0B63\u0B66-\u0B77'
         },
         {
+            name: 'Osage',
+            astral: '\uD801[\uDCB0-\uDCD3\uDCD8-\uDCFB]'
+        },
+        {
             name: 'Osmanya',
             astral: '\uD801[\uDC80-\uDC9D\uDCA0-\uDCA9]'
         },
@@ -23605,7 +29262,7 @@ module.exports = function(XRegExp) {
         },
         {
             name: 'Saurashtra',
-            bmp: '\uA880-\uA8C4\uA8CE-\uA8D9'
+            bmp: '\uA880-\uA8C5\uA8CE-\uA8D9'
         },
         {
             name: 'Sharada',
@@ -23673,6 +29330,10 @@ module.exports = function(XRegExp) {
             bmp: '\u0B82\u0B83\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A\u0B9C\u0B9E\u0B9F\u0BA3\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9\u0BBE-\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCD\u0BD0\u0BD7\u0BE6-\u0BFA'
         },
         {
+            name: 'Tangut',
+            astral: '\uD81B\uDFE0|[\uD81C-\uD820][\uDC00-\uDFFF]|\uD821[\uDC00-\uDFEC]|\uD822[\uDC00-\uDEF2]'
+        },
+        {
             name: 'Telugu',
             bmp: '\u0C00-\u0C03\u0C05-\u0C0C\u0C0E-\u0C10\u0C12-\u0C28\u0C2A-\u0C39\u0C3D-\u0C44\u0C46-\u0C48\u0C4A-\u0C4D\u0C55\u0C56\u0C58-\u0C5A\u0C60-\u0C63\u0C66-\u0C6F\u0C78-\u0C7F'
         },
@@ -23731,9 +29392,9 @@ module.exports = XRegExp;
 
 },{"./addons/build":1,"./addons/matchrecursive":2,"./addons/unicode-base":3,"./addons/unicode-blocks":4,"./addons/unicode-categories":5,"./addons/unicode-properties":6,"./addons/unicode-scripts":7,"./xregexp":9}],9:[function(require,module,exports){
 /*!
- * XRegExp 3.1.1
+ * XRegExp 3.2.0
  * <xregexp.com>
- * Steven Levithan (c) 2007-2016 MIT License
+ * Steven Levithan (c) 2007-2017 MIT License
  */
 
 'use strict';
@@ -23792,7 +29453,7 @@ var hasFlagsProp = /x/.flags !== undefined;
 var toString = {}.toString;
 
 function hasNativeFlag(flag) {
-    // Can't check based on the presense of properties/getters since browsers might support such
+    // Can't check based on the presence of properties/getters since browsers might support such
     // properties even when they don't support the corresponding flag in regex construction (tested
     // in Chrome 48, where `'unicode' in /x/` is true but trying to construct a regex with flag `u`
     // throws an error)
@@ -23803,10 +29464,6 @@ function hasNativeFlag(flag) {
         new RegExp('', flag);
     } catch (exception) {
         isSupported = false;
-    }
-    if (isSupported && flag === 'y') {
-        // Work around Safari 9.1.1 bug
-        return new RegExp('aa|.', 'y').test('b');
     }
     return isSupported;
 }
@@ -23826,6 +29483,7 @@ var registeredFlags = {
 /**
  * Attaches extended data and `XRegExp.prototype` properties to a regex object.
  *
+ * @private
  * @param {RegExp} regex Regex to augment.
  * @param {Array} captureNames Array with capture names, or `null`.
  * @param {String} xSource XRegExp pattern used to generate `regex`, or `null` if N/A.
@@ -23868,6 +29526,7 @@ function augment(regex, captureNames, xSource, xFlags, isInternalOnly) {
 /**
  * Removes any duplicate characters from the provided string.
  *
+ * @private
  * @param {String} str String to remove duplicate characters from.
  * @returns {String} String with any duplicate characters removed.
  */
@@ -23880,15 +29539,17 @@ function clipDuplicates(str) {
  * properties. The copy has a fresh `lastIndex` property (set to zero). Allows adding and removing
  * flags g and y while copying the regex.
  *
+ * @private
  * @param {RegExp} regex Regex to copy.
  * @param {Object} [options] Options object with optional properties:
- *   <li>`addG` {Boolean} Add flag g while copying the regex.
- *   <li>`addY` {Boolean} Add flag y while copying the regex.
- *   <li>`removeG` {Boolean} Remove flag g while copying the regex.
- *   <li>`removeY` {Boolean} Remove flag y while copying the regex.
- *   <li>`isInternalOnly` {Boolean} Whether the copied regex will be used only for internal
+ *   - `addG` {Boolean} Add flag g while copying the regex.
+ *   - `addY` {Boolean} Add flag y while copying the regex.
+ *   - `removeG` {Boolean} Remove flag g while copying the regex.
+ *   - `removeY` {Boolean} Remove flag y while copying the regex.
+ *   - `isInternalOnly` {Boolean} Whether the copied regex will be used only for internal
  *     operations, and never exposed to users. For internal-only regexes, we can improve perf by
  *     skipping some operations like attaching `XRegExp.prototype` properties.
+ *   - `source` {String} Overrides `<regex>.source`, for special cases.
  * @returns {RegExp} Copy of the provided regex, possibly with modified flags.
  */
 function copyRegex(regex, options) {
@@ -23896,12 +29557,12 @@ function copyRegex(regex, options) {
         throw new TypeError('Type RegExp expected');
     }
 
-    var xData = regex[REGEX_DATA] || {},
-        flags = getNativeFlags(regex),
-        flagsToAdd = '',
-        flagsToRemove = '',
-        xregexpSource = null,
-        xregexpFlags = null;
+    var xData = regex[REGEX_DATA] || {};
+    var flags = getNativeFlags(regex);
+    var flagsToAdd = '';
+    var flagsToRemove = '';
+    var xregexpSource = null;
+    var xregexpFlags = null;
 
     options = options || {};
 
@@ -23935,7 +29596,7 @@ function copyRegex(regex, options) {
     // unnecessary for regexes constructed by `XRegExp` because the regex has already undergone the
     // translation to native regex syntax
     regex = augment(
-        new RegExp(regex.source, flags),
+        new RegExp(options.source || regex.source, flags),
         hasNamedCapture(regex) ? xData.captureNames.slice(0) : null,
         xregexpSource,
         xregexpFlags,
@@ -23948,6 +29609,7 @@ function copyRegex(regex, options) {
 /**
  * Converts hexadecimal to decimal.
  *
+ * @private
  * @param {String} hex
  * @returns {Number}
  */
@@ -23956,8 +29618,36 @@ function dec(hex) {
 }
 
 /**
+ * Returns a pattern that can be used in a native RegExp in place of an ignorable token such as an
+ * inline comment or whitespace with flag x. This is used directly as a token handler function
+ * passed to `XRegExp.addToken`.
+ *
+ * @private
+ * @param {String} match Match arg of `XRegExp.addToken` handler
+ * @param {String} scope Scope arg of `XRegExp.addToken` handler
+ * @param {String} flags Flags arg of `XRegExp.addToken` handler
+ * @returns {String} Either '' or '(?:)', depending on which is needed in the context of the match.
+ */
+function getContextualTokenSeparator(match, scope, flags) {
+    if (
+        // No need to separate tokens if at the beginning or end of a group
+        match.input.charAt(match.index - 1) === '(' ||
+        match.input.charAt(match.index + match[0].length) === ')' ||
+        // Avoid separating tokens when the following token is a quantifier
+        isPatternNext(match.input, match.index + match[0].length, flags, '[?*+]|{\\d+(?:,\\d*)?}')
+    ) {
+        return '';
+    }
+    // Keep tokens separated. This avoids e.g. inadvertedly changing `\1 1` or `\1(?#)1` to `\11`.
+    // This also ensures all tokens remain as discrete atoms, e.g. it avoids converting the syntax
+    // error `(? :` into `(?:`.
+    return '(?:)';
+}
+
+/**
  * Returns native `RegExp` flags used by a regex object.
  *
+ * @private
  * @param {RegExp} regex Regex to check.
  * @returns {String} Native flags in use.
  */
@@ -23966,13 +29656,14 @@ function getNativeFlags(regex) {
         regex.flags :
         // Explicitly using `RegExp.prototype.toString` (rather than e.g. `String` or concatenation
         // with an empty string) allows this to continue working predictably when
-        // `XRegExp.proptotype.toString` is overriden
+        // `XRegExp.proptotype.toString` is overridden
         nativ.exec.call(/\/([a-z]*)$/i, RegExp.prototype.toString.call(regex))[1];
 }
 
 /**
  * Determines whether a regex has extended instance data used to track capture names.
  *
+ * @private
  * @param {RegExp} regex Regex to check.
  * @returns {Boolean} Whether the regex uses named capture.
  */
@@ -23983,6 +29674,7 @@ function hasNamedCapture(regex) {
 /**
  * Converts decimal to hexadecimal.
  *
+ * @private
  * @param {Number|String} dec
  * @returns {String}
  */
@@ -23993,12 +29685,14 @@ function hex(dec) {
 /**
  * Returns the first index at which a given value can be found in an array.
  *
+ * @private
  * @param {Array} array Array to search.
  * @param {*} value Value to locate in the array.
  * @returns {Number} Zero-based index at which the item is found, or -1.
  */
 function indexOf(array, value) {
-    var len = array.length, i;
+    var len = array.length;
+    var i;
 
     for (i = 0; i < len; ++i) {
         if (array[i] === value) {
@@ -24010,8 +29704,34 @@ function indexOf(array, value) {
 }
 
 /**
+ * Checks whether the next nonignorable token after the specified position matches the
+ * `needlePattern`
+ *
+ * @private
+ * @param {String} pattern Pattern to search within.
+ * @param {Number} pos Index in `pattern` to search at.
+ * @param {String} flags Flags used by the pattern.
+ * @param {String} needlePattern Pattern to match the next token against.
+ * @returns {Boolean} Whether the next nonignorable token matches `needlePattern`
+ */
+function isPatternNext(pattern, pos, flags, needlePattern) {
+    var inlineCommentPattern = '\\(\\?#[^)]*\\)';
+    var lineCommentPattern = '#[^#\\n]*';
+    var patternsToIgnore = flags.indexOf('x') > -1 ?
+        // Ignore any leading whitespace, line comments, and inline comments
+        ['\\s', lineCommentPattern, inlineCommentPattern] :
+        // Ignore any leading inline comments
+        [inlineCommentPattern];
+    return nativ.test.call(
+        new RegExp('^(?:' + patternsToIgnore.join('|') + ')*(?:' + needlePattern + ')'),
+        pattern.slice(pos)
+    );
+}
+
+/**
  * Determines whether a value is of the specified type, by resolving its internal [[Class]].
  *
+ * @private
  * @param {*} value Object to check.
  * @param {String} type Type to check for, in TitleCase.
  * @returns {Boolean} Whether the object matches the type.
@@ -24021,27 +29741,9 @@ function isType(value, type) {
 }
 
 /**
- * Checks whether the next nonignorable token after the specified position is a quantifier.
- *
- * @param {String} pattern Pattern to search within.
- * @param {Number} pos Index in `pattern` to search at.
- * @param {String} flags Flags used by the pattern.
- * @returns {Boolean} Whether the next token is a quantifier.
- */
-function isQuantifierNext(pattern, pos, flags) {
-    return nativ.test.call(
-        flags.indexOf('x') > -1 ?
-            // Ignore any leading whitespace, line comments, and inline comments
-            /^(?:\s|#[^#\n]*|\(\?#[^)]*\))*(?:[?*+]|{\d+(?:,\d*)?})/ :
-            // Ignore any leading inline comments
-            /^(?:\(\?#[^)]*\))*(?:[?*+]|{\d+(?:,\d*)?})/,
-        pattern.slice(pos)
-    );
-}
-
-/**
  * Adds leading zeros if shorter than four characters. Used for fixed-length hexadecimal values.
  *
+ * @private
  * @param {String} str
  * @returns {String}
  */
@@ -24056,6 +29758,7 @@ function pad4(str) {
  * Checks for flag-related errors, and strips/applies flags in a leading mode modifier. Offloads
  * the flag preparation logic from the `XRegExp` constructor.
  *
+ * @private
  * @param {String} pattern Regex pattern, possibly with a leading mode modifier.
  * @param {String} flags Any combination of flags.
  * @returns {Object} Object with properties `pattern` and `flags`.
@@ -24094,6 +29797,7 @@ function prepareFlags(pattern, flags) {
 /**
  * Prepares an options object from the given value.
  *
+ * @private
  * @param {String|Object} value Value to convert to an options object.
  * @returns {Object} Options object.
  */
@@ -24114,6 +29818,7 @@ function prepareOptions(value) {
 /**
  * Registers a flag so it doesn't throw an 'unknown flag' error.
  *
+ * @private
  * @param {String} flag Single-character flag to register.
  */
 function registerFlag(flag) {
@@ -24128,6 +29833,7 @@ function registerFlag(flag) {
  * Runs built-in and custom regex syntax tokens in reverse insertion order at the specified
  * position, until a match is found.
  *
+ * @private
  * @param {String} pattern Original pattern from which an XRegExp object is being built.
  * @param {String} flags Flags being used to construct the regex.
  * @param {Number} pos Position to search for tokens within `pattern`.
@@ -24136,11 +29842,11 @@ function registerFlag(flag) {
  * @returns {Object} Object with properties `matchLength`, `output`, and `reparse`; or `null`.
  */
 function runTokens(pattern, flags, pos, scope, context) {
-    var i = tokens.length,
-        leadChar = pattern.charAt(pos),
-        result = null,
-        match,
-        t;
+    var i = tokens.length;
+    var leadChar = pattern.charAt(pos);
+    var result = null;
+    var match;
+    var t;
 
     // Run in reverse insertion order
     while (i--) {
@@ -24173,6 +29879,7 @@ function runTokens(pattern, flags, pos, scope, context) {
  * all new regexes created by XRegExp. This causes an error to be thrown when creating regexes if
  * the Unicode Base addon is not available, since flag A is registered by that addon.
  *
+ * @private
  * @param {Boolean} on `true` to enable; `false` to disable.
  */
 function setAstral(on) {
@@ -24182,6 +29889,7 @@ function setAstral(on) {
 /**
  * Enables or disables native method overrides.
  *
+ * @private
  * @param {Boolean} on `true` to enable; `false` to disable.
  */
 function setNatives(on) {
@@ -24198,6 +29906,7 @@ function setNatives(on) {
  * Returns the object, or throws an error if it is `null` or `undefined`. This is used to follow
  * the ES5 abstract operation `ToObject`.
  *
+ * @private
  * @param {*} value Object to check and return.
  * @returns {*} The provided object.
  */
@@ -24224,16 +29933,16 @@ function toObject(value) {
  * @param {String|RegExp} pattern Regex pattern string, or an existing regex object to copy.
  * @param {String} [flags] Any combination of flags.
  *   Native flags:
- *     <li>`g` - global
- *     <li>`i` - ignore case
- *     <li>`m` - multiline anchors
- *     <li>`u` - unicode (ES6)
- *     <li>`y` - sticky (Firefox 3+, ES6)
+ *     - `g` - global
+ *     - `i` - ignore case
+ *     - `m` - multiline anchors
+ *     - `u` - unicode (ES6)
+ *     - `y` - sticky (Firefox 3+, ES6)
  *   Additional XRegExp flags:
- *     <li>`n` - explicit capture
- *     <li>`s` - dot matches all (aka singleline)
- *     <li>`x` - free-spacing and line comments (aka extended)
- *     <li>`A` - astral (requires the Unicode Base addon)
+ *     - `n` - explicit capture
+ *     - `s` - dot matches all (aka singleline)
+ *     - `x` - free-spacing and line comments (aka extended)
+ *     - `A` - astral (requires the Unicode Base addon)
  *   Flags cannot be provided when constructing one `RegExp` from another.
  * @returns {RegExp} Extended regular expression object.
  * @example
@@ -24348,15 +30057,17 @@ XRegExp.prototype = new RegExp();
  * '2.0.0-beta-3'.
  *
  * @static
+ * @memberOf XRegExp
  * @type String
  */
-XRegExp.version = '3.1.1';
+XRegExp.version = '3.2.0';
 
 // ==--------------------------==
 // Public methods
 // ==--------------------------==
 
 // Intentionally undocumented; used in tests and addons
+XRegExp._clipDuplicates = clipDuplicates;
 XRegExp._hasNativeFlag = hasNativeFlag;
 XRegExp._dec = dec;
 XRegExp._hex = hex;
@@ -24366,26 +30077,27 @@ XRegExp._pad4 = pad4;
  * Extends XRegExp syntax and allows custom flags. This is used internally and can be used to
  * create XRegExp addons. If more than one token can match the same string, the last added wins.
  *
+ * @memberOf XRegExp
  * @param {RegExp} regex Regex object that matches the new token.
  * @param {Function} handler Function that returns a new pattern string (using native regex syntax)
  *   to replace the matched token within all future XRegExp regexes. Has access to persistent
  *   properties of the regex being built, through `this`. Invoked with three arguments:
- *   <li>The match array, with named backreference properties.
- *   <li>The regex scope where the match was found: 'default' or 'class'.
- *   <li>The flags used by the regex, including any flags in a leading mode modifier.
+ *   - The match array, with named backreference properties.
+ *   - The regex scope where the match was found: 'default' or 'class'.
+ *   - The flags used by the regex, including any flags in a leading mode modifier.
  *   The handler function becomes part of the XRegExp construction process, so be careful not to
  *   construct XRegExps within the function or you will trigger infinite recursion.
  * @param {Object} [options] Options object with optional properties:
- *   <li>`scope` {String} Scope where the token applies: 'default', 'class', or 'all'.
- *   <li>`flag` {String} Single-character flag that triggers the token. This also registers the
+ *   - `scope` {String} Scope where the token applies: 'default', 'class', or 'all'.
+ *   - `flag` {String} Single-character flag that triggers the token. This also registers the
  *     flag, which prevents XRegExp from throwing an 'unknown flag' error when the flag is used.
- *   <li>`optionalFlags` {String} Any custom flags checked for within the token `handler` that are
+ *   - `optionalFlags` {String} Any custom flags checked for within the token `handler` that are
  *     not required to trigger the token. This registers the flags, to prevent XRegExp from
  *     throwing an 'unknown flag' error when any of the flags are used.
- *   <li>`reparse` {Boolean} Whether the `handler` function's output should not be treated as
+ *   - `reparse` {Boolean} Whether the `handler` function's output should not be treated as
  *     final, and instead be reparseable by other tokens (including the current token). Allows
  *     token chaining or deferring.
- *   <li>`leadChar` {String} Single character that occurs at the beginning of any successful match
+ *   - `leadChar` {String} Single character that occurs at the beginning of any successful match
  *     of the token (not always applicable). This doesn't change the behavior of the token unless
  *     you provide an erroneous value. However, providing it can increase the token's performance
  *     since the token can be skipped at any positions where this character doesn't appear.
@@ -24412,7 +30124,8 @@ XRegExp._pad4 = pad4;
  */
 XRegExp.addToken = function(regex, handler, options) {
     options = options || {};
-    var optionalFlags = options.optionalFlags, i;
+    var optionalFlags = options.optionalFlags;
+    var i;
 
     if (options.flag) {
         registerFlag(options.flag);
@@ -24448,6 +30161,7 @@ XRegExp.addToken = function(regex, handler, options) {
  * Caches and returns the result of calling `XRegExp(pattern, flags)`. On any subsequent call with
  * the same pattern and flag combination, the cached copy of the regex is returned.
  *
+ * @memberOf XRegExp
  * @param {String} pattern Regex pattern string.
  * @param {String} [flags] Any combination of XRegExp flags.
  * @returns {RegExp} Cached XRegExp object.
@@ -24481,6 +30195,7 @@ XRegExp.cache.flush = function(cacheName) {
  * Escapes any regular expression metacharacters, for use when matching literal strings. The result
  * can safely be used at any point within a regex that uses any flags.
  *
+ * @memberOf XRegExp
  * @param {String} str String to escape.
  * @returns {String} String with regex metacharacters escaped.
  * @example
@@ -24489,7 +30204,7 @@ XRegExp.cache.flush = function(cacheName) {
  * // -> 'Escaped\?\ <\.>'
  */
 XRegExp.escape = function(str) {
-    return nativ.replace.call(toObject(str), /[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+    return nativ.replace.call(toObject(str), /[-\[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 };
 
 /**
@@ -24500,6 +30215,7 @@ XRegExp.escape = function(str) {
  * used, but is updated for compatibility. Also fixes browser bugs compared to the native
  * `RegExp.prototype.exec` and can be used reliably cross-browser.
  *
+ * @memberOf XRegExp
  * @param {String} str String to search.
  * @param {RegExp} regex Regex to search with.
  * @param {Number} [pos=0] Zero-based index at which to start the search.
@@ -24521,14 +30237,23 @@ XRegExp.escape = function(str) {
  * // result -> ['2', '3', '4']
  */
 XRegExp.exec = function(str, regex, pos, sticky) {
-    var cacheKey = 'g',
-        addY = false,
-        match,
-        r2;
+    var cacheKey = 'g';
+    var addY = false;
+    var fakeY = false;
+    var match;
+    var r2;
 
     addY = hasNativeY && !!(sticky || (regex.sticky && sticky !== false));
     if (addY) {
         cacheKey += 'y';
+    } else if (sticky) {
+        // Simulate sticky matching by appending an empty capture to the original regex. The
+        // resulting regex will succeed no matter what at the current index (set with `lastIndex`),
+        // and will not search the rest of the subject string. We'll know that the original regex
+        // has failed if that last capture is `''` rather than `undefined` (i.e., if that last
+        // capture participated in the match).
+        fakeY = true;
+        cacheKey += 'FakeY';
     }
 
     regex[REGEX_DATA] = regex[REGEX_DATA] || {};
@@ -24538,17 +30263,21 @@ XRegExp.exec = function(str, regex, pos, sticky) {
         regex[REGEX_DATA][cacheKey] = copyRegex(regex, {
             addG: true,
             addY: addY,
+            source: fakeY ? regex.source + '|()' : undefined,
             removeY: sticky === false,
             isInternalOnly: true
         })
     );
 
-    r2.lastIndex = pos = pos || 0;
+    pos = pos || 0;
+    r2.lastIndex = pos;
 
     // Fixed `exec` required for `lastIndex` fix, named backreferences, etc.
     match = fixed.exec.call(r2, str);
 
-    if (sticky && match && match.index !== pos) {
+    // Get rid of the capture added by the pseudo-sticky matcher if needed. An empty string means
+    // the original regexp failed (see above).
+    if (fakeY && match && match.pop() === '') {
         match = null;
     }
 
@@ -24564,13 +30293,14 @@ XRegExp.exec = function(str, regex, pos, sticky) {
  * string and continue until the end, regardless of the state of the regex's `global` property and
  * initial `lastIndex`.
  *
+ * @memberOf XRegExp
  * @param {String} str String to search.
  * @param {RegExp} regex Regex to search with.
  * @param {Function} callback Function to execute for each match. Invoked with four arguments:
- *   <li>The match array, with named backreference properties.
- *   <li>The zero-based match index.
- *   <li>The string being traversed.
- *   <li>The regex object being used to traverse the string.
+ *   - The match array, with named backreference properties.
+ *   - The zero-based match index.
+ *   - The string being traversed.
+ *   - The regex object being used to traverse the string.
  * @example
  *
  * // Extracts every other digit from a string
@@ -24581,9 +30311,9 @@ XRegExp.exec = function(str, regex, pos, sticky) {
  * // evens -> [2, 4]
  */
 XRegExp.forEach = function(str, regex, callback) {
-    var pos = 0,
-        i = -1,
-        match;
+    var pos = 0;
+    var i = -1;
+    var match;
 
     while ((match = XRegExp.exec(str, regex, pos))) {
         // Because `regex` is provided to `callback`, the function could use the deprecated/
@@ -24603,6 +30333,7 @@ XRegExp.forEach = function(str, regex, callback) {
  * `XRegExp.prototype` properties, and has a fresh `lastIndex` property (set to zero). Native
  * regexes are not recompiled using XRegExp syntax.
  *
+ * @memberOf XRegExp
  * @param {RegExp} regex Regex to globalize.
  * @returns {RegExp} Copy of the provided regex with flag `g` added.
  * @example
@@ -24618,6 +30349,7 @@ XRegExp.globalize = function(regex) {
  * Installs optional features according to the specified options. Can be undone using
  * `XRegExp.uninstall`.
  *
+ * @memberOf XRegExp
  * @param {Object|String} options Options object or string.
  * @example
  *
@@ -24648,9 +30380,10 @@ XRegExp.install = function(options) {
 /**
  * Checks whether an individual optional feature is installed.
  *
+ * @memberOf XRegExp
  * @param {String} feature Name of the feature to check. One of:
- *   <li>`astral`
- *   <li>`natives`
+ *   - `astral`
+ *   - `natives`
  * @returns {Boolean} Whether the feature is installed.
  * @example
  *
@@ -24664,6 +30397,7 @@ XRegExp.isInstalled = function(feature) {
  * Returns `true` if an object is a regex; `false` if it isn't. This works correctly for regexes
  * created in another frame, when `instanceof` and `constructor` checks would fail.
  *
+ * @memberOf XRegExp
  * @param {*} value Object to check.
  * @returns {Boolean} Whether the object is a `RegExp` object.
  * @example
@@ -24685,6 +30419,7 @@ XRegExp.isRegExp = function(value) {
  * and an empty array instead of `null` when no matches are found in match-all mode). It also lets
  * you override flag g and ignore `lastIndex`, and fixes browser bugs.
  *
+ * @memberOf XRegExp
  * @param {String} str String to search.
  * @param {RegExp} regex Regex to search with.
  * @param {String} [scope='one'] Use 'one' to return the first match as a string. Use 'all' to
@@ -24705,10 +30440,10 @@ XRegExp.isRegExp = function(value) {
  * XRegExp.match('abc', /x/, 'all'); // -> []
  */
 XRegExp.match = function(str, regex, scope) {
-    var global = (regex.global && scope !== 'one') || scope === 'all',
-        cacheKey = ((global ? 'g' : '') + (regex.sticky ? 'y' : '')) || 'noGY',
-        result,
-        r2;
+    var global = (regex.global && scope !== 'one') || scope === 'all';
+    var cacheKey = ((global ? 'g' : '') + (regex.sticky ? 'y' : '')) || 'noGY';
+    var result;
+    var r2;
 
     regex[REGEX_DATA] = regex[REGEX_DATA] || {};
 
@@ -24740,6 +30475,7 @@ XRegExp.match = function(str, regex, scope) {
  * `regex` and `backref` properties. When a backreference is specified, the named or numbered
  * backreference is passed forward to the next regex or returned.
  *
+ * @memberOf XRegExp
  * @param {String} str String to search.
  * @param {Array} chain Regexes that each search for matches within preceding results.
  * @returns {Array} Matches by the last regex in the chain, or an empty array.
@@ -24801,24 +30537,25 @@ XRegExp.matchChain = function(str, chain) {
  * functions can use named backreferences via `arguments[0].name`. Also fixes browser bugs compared
  * to the native `String.prototype.replace` and can be used reliably cross-browser.
  *
+ * @memberOf XRegExp
  * @param {String} str String to search.
  * @param {RegExp|String} search Search pattern to be replaced.
  * @param {String|Function} replacement Replacement string or a function invoked to create it.
  *   Replacement strings can include special replacement syntax:
- *     <li>$$ - Inserts a literal $ character.
- *     <li>$&, $0 - Inserts the matched substring.
- *     <li>$` - Inserts the string that precedes the matched substring (left context).
- *     <li>$' - Inserts the string that follows the matched substring (right context).
- *     <li>$n, $nn - Where n/nn are digits referencing an existent capturing group, inserts
+ *     - $$ - Inserts a literal $ character.
+ *     - $&, $0 - Inserts the matched substring.
+ *     - $` - Inserts the string that precedes the matched substring (left context).
+ *     - $' - Inserts the string that follows the matched substring (right context).
+ *     - $n, $nn - Where n/nn are digits referencing an existent capturing group, inserts
  *       backreference n/nn.
- *     <li>${n} - Where n is a name or any number of digits that reference an existent capturing
+ *     - ${n} - Where n is a name or any number of digits that reference an existent capturing
  *       group, inserts backreference n.
  *   Replacement functions are invoked with three or more arguments:
- *     <li>The matched substring (corresponds to $& above). Named backreferences are accessible as
+ *     - The matched substring (corresponds to $& above). Named backreferences are accessible as
  *       properties of this first argument.
- *     <li>0..n arguments, one for each backreference (corresponding to $1, $2, etc. above).
- *     <li>The zero-based index of the match within the total search string.
- *     <li>The total string being searched.
+ *     - 0..n arguments, one for each backreference (corresponding to $1, $2, etc. above).
+ *     - The zero-based index of the match within the total search string.
+ *     - The total string being searched.
  * @param {String} [scope='one'] Use 'one' to replace the first match only, or 'all'. If not
  *   explicitly specified and using a regex with flag g, `scope` is 'all'.
  * @returns {String} New string with one or all matches replaced.
@@ -24840,11 +30577,11 @@ XRegExp.matchChain = function(str, chain) {
  * // -> 'XRegExp builds XRegExps'
  */
 XRegExp.replace = function(str, search, replacement, scope) {
-    var isRegex = XRegExp.isRegExp(search),
-        global = (search.global && scope !== 'one') || scope === 'all',
-        cacheKey = ((global ? 'g' : '') + (search.sticky ? 'y' : '')) || 'noGY',
-        s2 = search,
-        result;
+    var isRegex = XRegExp.isRegExp(search);
+    var global = (search.global && scope !== 'one') || scope === 'all';
+    var cacheKey = ((global ? 'g' : '') + (search.sticky ? 'y' : '')) || 'noGY';
+    var s2 = search;
+    var result;
 
     if (isRegex) {
         search[REGEX_DATA] = search[REGEX_DATA] || {};
@@ -24880,6 +30617,7 @@ XRegExp.replace = function(str, search, replacement, scope) {
  * replacement string or function, and an optional scope of 'one' or 'all'. Uses the XRegExp
  * replacement text syntax, which supports named backreference properties via `${name}`.
  *
+ * @memberOf XRegExp
  * @param {String} str String to search.
  * @param {Array} replacements Array of replacement detail arrays.
  * @returns {String} New string with all replacements.
@@ -24897,7 +30635,8 @@ XRegExp.replace = function(str, search, replacement, scope) {
  * ]);
  */
 XRegExp.replaceEach = function(str, replacements) {
-    var i, r;
+    var i;
+    var r;
 
     for (i = 0; i < replacements.length; ++i) {
         r = replacements[i];
@@ -24914,6 +30653,7 @@ XRegExp.replaceEach = function(str, replacements) {
  * Fixes browser bugs compared to the native `String.prototype.split` and can be used reliably
  * cross-browser.
  *
+ * @memberOf XRegExp
  * @param {String} str String to split.
  * @param {RegExp|String} separator Regex or string to use for separating the string.
  * @param {Number} [limit] Maximum number of items to include in the result array.
@@ -24943,6 +30683,7 @@ XRegExp.split = function(str, separator, limit) {
  * updated for compatibility. Also fixes browser bugs compared to the native
  * `RegExp.prototype.test` and can be used reliably cross-browser.
  *
+ * @memberOf XRegExp
  * @param {String} str String to search.
  * @param {RegExp} regex Regex to search with.
  * @param {Number} [pos=0] Zero-based index at which to start the search.
@@ -24967,6 +30708,7 @@ XRegExp.test = function(str, regex, pos, sticky) {
  * Uninstalls optional features according to the specified options. All optional features start out
  * uninstalled, so this is used to undo the actions of `XRegExp.install`.
  *
+ * @memberOf XRegExp
  * @param {Object|String} options Options object or string.
  * @example
  *
@@ -25001,15 +30743,23 @@ XRegExp.uninstall = function(options) {
  * the larger combined pattern. Native flags used by provided regexes are ignored in favor of the
  * `flags` argument.
  *
+ * @memberOf XRegExp
  * @param {Array} patterns Regexes and strings to combine.
  * @param {String} [flags] Any combination of XRegExp flags.
+ * @param {Object} [options] Options object with optional properties:
+ *   - `conjunction` {String} Type of conjunction to use: 'or' (default) or 'none'.
  * @returns {RegExp} Union of the provided regexes and strings.
  * @example
  *
  * XRegExp.union(['a+b*c', /(dogs)\1/, /(cats)\1/], 'i');
  * // -> /a\+b\*c|(dogs)\1|(cats)\2/i
+ *
+ * XRegExp.union([/man/, /bear/, /pig/], 'i', {conjunction: 'none'});
+ * // -> /manbearpig/i
  */
-XRegExp.union = function(patterns, flags) {
+XRegExp.union = function(patterns, flags, options) {
+    options = options || {};
+    var conjunction = options.conjunction || 'or';
     var numCaptures = 0;
     var numPriorCaptures;
     var captureNames;
@@ -25037,7 +30787,7 @@ XRegExp.union = function(patterns, flags) {
         throw new TypeError('Must provide a nonempty array of patterns to merge');
     }
 
-    var parts = /(\()(?!\?)|\\([1-9]\d*)|\\[\s\S]|\[(?:[^\\\]]|\\[\s\S])*]/g;
+    var parts = /(\()(?!\?)|\\([1-9]\d*)|\\[\s\S]|\[(?:[^\\\]]|\\[\s\S])*\]/g;
     var output = [];
     var pattern;
     for (var i = 0; i < patterns.length; ++i) {
@@ -25055,7 +30805,8 @@ XRegExp.union = function(patterns, flags) {
         }
     }
 
-    return XRegExp(output.join('|'), flags);
+    var separator = conjunction === 'none' ? '' : '|';
+    return XRegExp(output.join(separator), flags);
 };
 
 // ==--------------------------==
@@ -25067,15 +30818,16 @@ XRegExp.union = function(patterns, flags) {
  * bugs in the native `RegExp.prototype.exec`. Calling `XRegExp.install('natives')` uses this to
  * override the native method. Use via `XRegExp.exec` without overriding natives.
  *
+ * @memberOf RegExp
  * @param {String} str String to search.
  * @returns {Array} Match array with named backreference properties, or `null`.
  */
 fixed.exec = function(str) {
-    var origLastIndex = this.lastIndex,
-        match = nativ.exec.apply(this, arguments),
-        name,
-        r2,
-        i;
+    var origLastIndex = this.lastIndex;
+    var match = nativ.exec.apply(this, arguments);
+    var name;
+    var r2;
+    var i;
 
     if (match) {
         // Fix browsers whose `exec` methods don't return `undefined` for nonparticipating capturing
@@ -25089,7 +30841,8 @@ fixed.exec = function(str) {
             // Using `str.slice(match.index)` rather than `match[0]` in case lookahead allowed
             // matching due to characters outside the match
             nativ.replace.call(String(str).slice(match.index), r2, function() {
-                var len = arguments.length, i;
+                var len = arguments.length;
+                var i;
                 // Skip index 0 and the last 2
                 for (i = 1; i < len - 2; ++i) {
                     if (arguments[i] === undefined) {
@@ -25128,6 +30881,7 @@ fixed.exec = function(str) {
  * Fixes browser bugs in the native `RegExp.prototype.test`. Calling `XRegExp.install('natives')`
  * uses this to override the native method.
  *
+ * @memberOf RegExp
  * @param {String} str String to search.
  * @returns {Boolean} Whether the regex matched the provided value.
  */
@@ -25141,6 +30895,7 @@ fixed.test = function(str) {
  * bugs in the native `String.prototype.match`. Calling `XRegExp.install('natives')` uses this to
  * override the native method.
  *
+ * @memberOf String
  * @param {RegExp|*} regex Regex to search with. If not a regex object, it is passed to `RegExp`.
  * @returns {Array} If `regex` uses flag g, an array of match strings or `null`. Without flag g,
  *   the result of calling `regex.exec(this)`.
@@ -25171,15 +30926,16 @@ fixed.match = function(regex) {
  * that this doesn't support SpiderMonkey's proprietary third (`flags`) argument. Use via
  * `XRegExp.replace` without overriding natives.
  *
+ * @memberOf String
  * @param {RegExp|String} search Search pattern to be replaced.
  * @param {String|Function} replacement Replacement string or a function invoked to create it.
  * @returns {String} New string with one or all matches replaced.
  */
 fixed.replace = function(search, replacement) {
-    var isRegex = XRegExp.isRegExp(search),
-        origLastIndex,
-        captureNames,
-        result;
+    var isRegex = XRegExp.isRegExp(search);
+    var origLastIndex;
+    var captureNames;
+    var result;
 
     if (isRegex) {
         if (search[REGEX_DATA]) {
@@ -25196,7 +30952,8 @@ fixed.replace = function(search, replacement) {
         // Stringifying `this` fixes a bug in IE < 9 where the last argument in replacement
         // functions isn't type-converted to a string
         result = nativ.replace.call(String(this), search, function() {
-            var args = arguments, i;
+            var args = arguments;
+            var i;
             if (captureNames) {
                 // Change the `arguments[0]` string primitive to a `String` object that can store
                 // properties. This really does need to use `String` as a constructor
@@ -25302,6 +31059,7 @@ fixed.replace = function(search, replacement) {
  * Fixes browser bugs in the native `String.prototype.split`. Calling `XRegExp.install('natives')`
  * uses this to override the native method. Use via `XRegExp.split` without overriding natives.
  *
+ * @memberOf String
  * @param {RegExp|String} separator Regex or string to use for separating the string.
  * @param {Number} [limit] Maximum number of items to include in the result array.
  * @returns {Array} Array of substrings.
@@ -25312,11 +31070,11 @@ fixed.split = function(separator, limit) {
         return nativ.split.apply(this, arguments);
     }
 
-    var str = String(this),
-        output = [],
-        origLastIndex = separator.lastIndex,
-        lastLastIndex = 0,
-        lastLength;
+    var str = String(this);
+    var output = [];
+    var origLastIndex = separator.lastIndex;
+    var lastLastIndex = 0;
+    var lastLength;
 
     // Values for `limit`, per the spec:
     // If undefined: pow(2,32) - 1
@@ -25414,7 +31172,7 @@ XRegExp.addToken(
  * character class endings can't be determined.
  */
 XRegExp.addToken(
-    /\[(\^?)]/,
+    /\[(\^?)\]/,
     function(match) {
         // For cross-browser compatibility with ES3, convert [] to \b\B and [^] to [\s\S].
         // (?!) should work like \b\B, but is unreliable in some versions of Firefox
@@ -25429,12 +31187,7 @@ XRegExp.addToken(
  */
 XRegExp.addToken(
     /\(\?#[^)]*\)/,
-    function(match, scope, flags) {
-        // Keep tokens separated unless the following token is a quantifier. This avoids e.g.
-        // inadvertedly changing `\1(?#)1` to `\11`.
-        return isQuantifierNext(match.input, match.index + match[0].length, flags) ?
-            '' : '(?:)';
-    },
+    getContextualTokenSeparator,
     {leadChar: '('}
 );
 
@@ -25443,12 +31196,7 @@ XRegExp.addToken(
  */
 XRegExp.addToken(
     /\s+|#[^\n]*\n?/,
-    function(match, scope, flags) {
-        // Keep tokens separated unless the following token is a quantifier. This avoids e.g.
-        // inadvertedly changing `\1 1` to `\11`.
-        return isQuantifierNext(match.input, match.index + match[0].length, flags) ?
-            '' : '(?:)';
-    },
+    getContextualTokenSeparator,
     {flag: 'x'}
 );
 
@@ -25474,8 +31222,8 @@ XRegExp.addToken(
     /\\k<([\w$]+)>/,
     function(match) {
         // Groups with the same name is an error, else would need `lastIndexOf`
-        var index = isNaN(match[1]) ? (indexOf(this.captureNames, match[1]) + 1) : +match[1],
-            endIndex = match.index + match[0].length;
+        var index = isNaN(match[1]) ? (indexOf(this.captureNames, match[1]) + 1) : +match[1];
+        var endIndex = match.index + match[0].length;
         if (!index || index > this.captureNames.length) {
             throw new SyntaxError('Backreference to undefined group ' + match[0]);
         }
@@ -25581,7 +31329,7 @@ module.exports = XRegExp;
   var undefined;
 
   /** Used as the semantic version number. */
-  var VERSION = '4.17.4';
+  var VERSION = '4.17.5';
 
   /** Error message constants. */
   var FUNC_ERROR_TEXT = 'Expected a function';
@@ -25958,9 +31706,11 @@ module.exports = XRegExp;
     function remainingWait(time) {
       var timeSinceLastCall = time - lastCallTime,
           timeSinceLastInvoke = time - lastInvokeTime,
-          result = wait - timeSinceLastCall;
+          timeWaiting = wait - timeSinceLastCall;
 
-      return maxing ? nativeMin(result, maxWait - timeSinceLastInvoke) : result;
+      return maxing
+        ? nativeMin(timeWaiting, maxWait - timeSinceLastInvoke)
+        : timeWaiting;
     }
 
     function shouldInvoke(time) {
