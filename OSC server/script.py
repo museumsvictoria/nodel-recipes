@@ -1,4 +1,4 @@
-'''OSC Server Node (powered by pyOSC)'''
+'''OSC Server Node'''
 
 '''
 https://www.music.mcgill.ca/~gary/306/week9/osc.html
