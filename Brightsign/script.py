@@ -42,6 +42,11 @@ def local_action_PlayClip01(arg = None):
   print 'Action PlayClip01 requested.'
   send_udp_string('PlayClip01')
 
+def local_action_Mute(arg = None):
+  """{"title":"Mute","group":"Volume","schema":{"type":"string","enum": ['On', 'Off'], "required": True}}"""
+  print 'Action Mute%s requested' % arg
+  send_udp_string('MuteOn') if arg == 'On' else send_udp_string('MuteOff')
+
 def local_action_MuteOn(arg = None):
   """{"title":"MuteOn","desc":"MuteOn","group":"Volume"}"""
   print 'Action MuteOn requested.'
