@@ -322,11 +322,14 @@ def local_action_PollErrorState(ignore=None):
 
 # [ lamp hours status
 
-local_event_LampUseHours = LocalEvent({'group': 'Info', 'schema': {'type': 'integer'}})
+local_event_LampUseHours = LocalEvent({'group': 'Info', 'desc': 'In hours (space separated for multiple lamps)', 'schema': {'type': 'string'}})
 
 def local_action_PollLampUseHours(ignore=None):
   '''{"group": "Info", "order": 2.1}'''
-  tcp.request('LAMP?', lambda resp: handleValueReq(resp, 'LAMP', lambda value: local_event_LampUseHours.emit(int(value))))
+  def handleResp(value):
+    local_event_LampUseHours.emit(value)
+    
+  tcp.request('LAMP?', lambda resp: handleValueReq(resp, 'LAMP', handleResp))
   
 # poll every 24 hours, 30s first time.
 poller_lampHours = Timer(lambda: lookup_local_action('PollLampUseHours').call(), 24*3600, 30)
@@ -439,7 +442,18 @@ lastReceive = [0]
 local_event_LastContactDetect = LocalEvent({'group': 'Status', 'title': 'Last contact detect', 'schema': {'type': 'string'}})
   
 def statusCheck():
-  lampUseHours = local_event_LampUseHours.getArg() or 0
+  # determine lamp hours as a number, may start as a pair e.g. "2132 2133"
+  allLampsUse = str(local_event_LampUseHours.getArg() or '') # (as string)
+  multipleLamps = False
+  
+  # dealing with multiple lamps?
+  if ' ' in allLampsUse:
+    # find the max out of multiple lamps    
+    lampUseHours = max([int(x) for x in allLampsUse.split(' ')])
+    multipleLamps = True
+    
+  else:
+    lampUseHours = int(allLampsUse or 0)
   
   diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
   now = date_now()
@@ -460,7 +474,7 @@ def statusCheck():
   
   elif lampUseHours >= lampUseHoursThreshold:
     local_event_Status.emit({'level': 1, 
-                             'message': 'Lamp usage is high (%s hours above threshold of %s). It may need replacement soon.' % 
+                             'message': 'Lamp usage is high (%s hours above threshold of %s). A replacement may be needed soon.' % 
                                (1+lampUseHours-lampUseHoursThreshold, lampUseHoursThreshold)})
     
   else:
