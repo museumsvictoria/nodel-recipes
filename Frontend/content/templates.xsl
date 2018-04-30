@@ -221,7 +221,7 @@
   <!-- range -->
   <!-- field -->
   <xsl:template match="field">
-    <div><form><input class="form-control" data-arg-source="this" data-event="{@event}" disabled="true"/></form></div>
+    <div><form><input class="form-control" data-arg-source="this" data-event="{@event}" readonly="true"/></form></div>
   </xsl:template>
   <!-- field -->
   <!-- meter -->
