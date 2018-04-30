@@ -216,7 +216,48 @@
   <!-- panel -->
   <!-- range -->
   <xsl:template match="range">
-    <div><form class="range"><input data-arg-source="this" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" /><output data-event="{@event}"></output></form></div>
+    <div class="range">
+      <xsl:if test="@type='vertical'">
+        <xsl:attribute name="data-type">
+          <xsl:value-of select="@type"/>
+        </xsl:attribute>
+        <xsl:attribute name="class">
+          <xsl:text>range rangeh</xsl:text>
+          <xsl:choose>
+            <xsl:when test="@height"><xsl:value-of select="@height"/></xsl:when>
+            <xsl:otherwise>200</xsl:otherwise>
+          </xsl:choose>
+          <xsl:text>px</xsl:text>
+        </xsl:attribute>
+        <style>.rangeh<xsl:choose>
+          <xsl:when test="@height"><xsl:value-of select="@height"/></xsl:when>
+            <xsl:otherwise>200</xsl:otherwise>
+          </xsl:choose>px {height: <xsl:choose>
+            <xsl:when test="@height"><xsl:value-of select="@height"/></xsl:when>
+            <xsl:otherwise>200</xsl:otherwise>
+          </xsl:choose>px;}</style>
+      </xsl:if>
+      <div>
+        <xsl:if test="@type='vertical'">
+          <xsl:attribute name="class">
+            <xsl:text>rangew</xsl:text>
+            <xsl:choose>
+              <xsl:when test="@height"><xsl:value-of select="@height"/></xsl:when>
+              <xsl:otherwise>200</xsl:otherwise>
+            </xsl:choose>
+            <xsl:text>px</xsl:text>
+          </xsl:attribute>
+          <style>.rangew<xsl:choose>
+            <xsl:when test="@height"><xsl:value-of select="@height"/></xsl:when>
+              <xsl:otherwise>200</xsl:otherwise>
+            </xsl:choose>px {width: <xsl:choose>
+              <xsl:when test="@height"><xsl:value-of select="@height"/></xsl:when>
+              <xsl:otherwise>200</xsl:otherwise>
+            </xsl:choose>px;}</style>
+        </xsl:if>
+        <form><input data-arg-source="this" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" /><output data-event="{@event}"></output></form>
+      </div>
+    </div>
   </xsl:template>
   <!-- range -->
   <!-- field -->

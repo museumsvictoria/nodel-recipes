@@ -9038,15 +9038,41 @@ body
 
     border-radius: 0 0 4px 4px;
 }
-form.range
+.range form
 {
     position: relative;
 }
-form.range > output
+.range form > output
 {
     position: absolute;
     top: 0;
     left: 15px;
+
+    pointer-events: none;
+}
+.range[data-type='vertical'] form
+{
+    -webkit-transform: rotate(270deg) translate(-100%);
+        -ms-transform: rotate(270deg) translate(-100%);
+         -o-transform: rotate(270deg) translate(-100%);
+            transform: rotate(270deg) translate(-100%);
+    -webkit-transform-origin: top left;
+        -ms-transform-origin: top left;
+         -o-transform-origin: top left;
+            transform-origin: top left;
+}
+.range[data-type='vertical'] form > output
+{
+    height: 40px;
+
+    -webkit-transform: rotate(90deg);
+        -ms-transform: rotate(90deg);
+         -o-transform: rotate(90deg);
+            transform: rotate(90deg);
+    -webkit-transform-origin: center;
+        -ms-transform-origin: center;
+         -o-transform-origin: center;
+            transform-origin: center;
 }
 input[type=range]
 {
@@ -9143,7 +9169,7 @@ input[type=range]::-ms-fill-upper
 div.row > div > .btn,
 div.row > div > .btn-group,
 div.row > div > .nav-pills,
-form.range
+.range
 {
     margin-bottom: 15px;
 }

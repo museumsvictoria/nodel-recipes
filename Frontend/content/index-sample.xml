@@ -55,7 +55,7 @@
       </column>
     </row>
     <row>
-      <column sm="8">
+      <column sm="7">
         <row>
           <column sm="12">
             <title>Testing button groups</title>
@@ -86,6 +86,10 @@
             <button type="momentary" action-off='VolumeStop' action-on='VolumeUpOn' class='btn-success'>Up</button>
           </column>
         </row>
+      </column>
+      <column sm="1">
+        <title>Range</title>
+        <range action='Range' event="Range" type="vertical" height="250"></range>
       </column>
       <column sm="4">
         <row>
