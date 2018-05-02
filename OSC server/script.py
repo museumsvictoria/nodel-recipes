@@ -34,7 +34,7 @@ param_filter = Parameter({ 'title': 'Display non-parameterised messages', 'order
 ### Functions used by this Node
 def default_handler(addr, tags, args, source):
   if param_filter:
-    for pattern in param_patterns:
+    for pattern in param_patterns or []:
       if (addr == pattern['address']):
         return
     print addr, args
