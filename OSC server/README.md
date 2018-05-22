@@ -2,7 +2,7 @@
 
 An implementation of pyOSC used to match patterns and monitor messages.
 
-*OSC overview@ * https://www.music.mcgill.ca/~gary/306/week9/osc.html
+*OSC overview@* https://www.music.mcgill.ca/~gary/306/week9/osc.html
 
 *pyOSC package @* https://pypi.org/project/pyOSC/
 
