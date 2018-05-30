@@ -62,6 +62,8 @@ def connected():
     ping_timer.start()    
     
 def received(data):
+    lastReceive[0] = system_clock()
+  
     local_event_Received.emit(data)
     
     parseMessage(data)
@@ -89,7 +91,16 @@ def local_action_OpenCCport1(arg):
 def local_action_CloseCCport1(arg):
     '{"title":"Close","group":"Contact closure port 1", "order": "2"}}'
     tcp.send('setstate,1:1,1')
-    tcp.send('getstate,1:1')    
+    tcp.send('getstate,1:1')
+
+def local_action_CCport1State(arg):
+    '{"title":"State","group":"Contact closure port 1", "order": "3", "schema": {"type": "boolean"}}'
+    if arg == True:
+      state = 'Close'
+    elif arg == False:
+      state = 'Open'
+    
+    lookup_local_action('%sCCport1' % state).call()
     
 def local_action_OpenCCport2(arg):
     '{"title":"Open","group":"Contact closure port 2", "order": "1"}}'
@@ -99,7 +110,16 @@ def local_action_OpenCCport2(arg):
 def local_action_CloseCCport2(arg):
     '{"title":"Close","group":"Contact closure port 2", "order": "2"}}'
     tcp.send('setstate,1:2,1')
-    tcp.send('getstate,1:2')    
+    tcp.send('getstate,1:2')
+
+def local_action_CCport2State(arg):
+    '{"title":"State","group":"Contact closure port 2", "order": "3", "schema": {"type": "boolean"}}'
+    if arg == True:
+      state = 'Close'
+    elif arg == False:
+      state = 'Open'
+    
+    lookup_local_action('%sCCport2' % state).call()
     
 def local_action_OpenCCport3(arg):
     '{"title":"Open","group":"Contact closure port 3", "order": "1"}}'
@@ -110,7 +130,16 @@ def local_action_CloseCCport3(arg):
     '{"title":"Close","group":"Contact closure port 3", "order": "2"}}'
     tcp.send('setstate,1:3,1')    
     tcp.send('getstate,1:3')
+
+def local_action_CCport3State(arg):
+    '{"title":"State","group":"Contact closure port 3", "order": "3", "schema": {"type": "boolean"}}'
+    if arg == True:
+      state = 'Close'
+    elif arg == False:
+      state = 'Open'
     
+    lookup_local_action('%sCCport3' % state).call()
+
 def syncStates():
     tcp.send('getstate,1:1')
     tcp.send('getstate,1:2')
@@ -189,3 +218,45 @@ def nextSeqNum():
     seqNum[0] += 1
     return seqNum[0]
   
+# status ---
+
+local_event_Status = LocalEvent({'title': 'Status', 'group': 'Status', 'order': 9990, "schema": { 'title': 'Status', 'type': 'object', 'properties': {
+        'level': {'title': 'Level', 'order': next_seq(), 'type': 'integer'},
+        'message': {'title': 'Message', 'order': next_seq(), 'type': 'string'}
+    } } })
+
+# for status checks
+
+lastReceive = [0]
+
+# roughly, the last contact  
+local_event_LastContactDetect = LocalEvent({'group': 'Status', 'title': 'Last contact detect', 'schema': {'type': 'string'}})
+  
+def statusCheck():
+  diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
+  now = date_now()
+  
+  if diff > status_check_interval+15:
+    previousContactValue = local_event_LastContactDetect.getArg()
+    
+    if previousContactValue == None:
+      message = 'Always been missing.'
+      
+    else:
+      previousContact = date_parse(previousContactValue)
+      roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
+      if roughDiff < 60:
+        message = 'Missing for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
+      
+    local_event_Status.emit({'level': 2, 'message': message})
+    
+  else:
+    local_event_LastContactDetect.emit(str(now))
+    local_event_Status.emit({'level': 0, 'message': 'OK'}) 
+  
+status_check_interval = 75
+status_timer = Timer(statusCheck, status_check_interval)
