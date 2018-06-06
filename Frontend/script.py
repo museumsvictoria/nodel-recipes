@@ -16,6 +16,9 @@ param_localOnlyActions = Parameter({'title': 'Local only actions',
                                     'desc': 'No remote bindings are configured for these. Comma-separated list of signals',
                                     'schema': {'type': 'string'}})
 
+local_event_Clock = LocalEvent({"title": "Clock", "group": "General", "schema": {"type": "string" }})
+timer_clock = Timer(lambda: local_event_Clock.emit(date_now()), 1)
+
 localOnlySignals = set()
 localOnlyActions = set()
 

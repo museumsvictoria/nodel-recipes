@@ -9,23 +9,81 @@
   </xsl:template>
   <!-- row -->
   <!-- column -->
-  <xsl:template match="column[not(@sm|md)]">
-    <div class="col-sm-12">
+  <xsl:template match="column[not(@sm|md|xs)]">
+    <div>
+      <xsl:choose>
+        <xsl:when test="@event">
+          <xsl:attribute name="class">
+            <xsl:text>col-sm-12 sect</xsl:text>
+          </xsl:attribute>
+          <xsl:attribute name="data-event">
+            <xsl:value-of select="@event"/>
+          </xsl:attribute>
+          <xsl:if test="@value">
+            <xsl:attribute name="data-sect">
+              <xsl:value-of select="@value"/>
+            </xsl:attribute>
+          </xsl:if>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:attribute name="class">
+            <xsl:text>col-sm-12</xsl:text>
+          </xsl:attribute>
+        </xsl:otherwise>
+      </xsl:choose>
       <xsl:apply-templates/>
     </div>
   </xsl:template>
-  <xsl:template match="column[@sm and not(@md)]">
-    <div class="col-sm-{@sm}">
-      <xsl:apply-templates/>
-    </div>
-  </xsl:template>
-  <xsl:template match="column[@md and not(@sm)]">
-    <div class="col-md-{@md}">
-      <xsl:apply-templates/>
-    </div>
-  </xsl:template>
-  <xsl:template match="column[@md and @sm]">
-    <div class="col-md-{@md} col-sm-{@sm}">
+  <xsl:template match="column[@sm|@md|@xs]">
+    <div>
+      <xsl:choose>
+        <xsl:when test="@event">
+          <xsl:attribute name="class">
+            <xsl:if test="@xs">
+              <xsl:text>col-xs-</xsl:text>
+              <xsl:value-of select="@xs"/>
+              <xsl:text> </xsl:text>
+            </xsl:if>
+            <xsl:if test="@sm">
+              <xsl:text>col-sm-</xsl:text>
+              <xsl:value-of select="@sm"/>
+              <xsl:text> </xsl:text>
+            </xsl:if>
+            <xsl:if test="@md">
+              <xsl:text>col-md-</xsl:text>
+              <xsl:value-of select="@md"/>
+              <xsl:text> </xsl:text>
+            </xsl:if>
+            <xsl:text> sect</xsl:text>
+          </xsl:attribute>
+          <xsl:attribute name="data-event">
+            <xsl:value-of select="@event"/>
+          </xsl:attribute>
+          <xsl:if test="@value">
+            <xsl:attribute name="data-arg">
+              <xsl:value-of select="@value"/>
+            </xsl:attribute>
+          </xsl:if>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:attribute name="class">
+            <xsl:if test="@xs">
+              <xsl:text>col-xs-</xsl:text>
+              <xsl:value-of select="@xs"/>
+              <xsl:text> </xsl:text>
+            </xsl:if>
+            <xsl:if test="@sm">
+              <xsl:text>col-sm-</xsl:text>
+              <xsl:value-of select="@sm"/>
+              <xsl:text> </xsl:text>
+            </xsl:if>
+            <xsl:if test="@md">
+              <xsl:text>col-md-</xsl:text>
+              <xsl:value-of select="@md"/>
+            </xsl:if>
+          </xsl:attribute>
+        </xsl:otherwise>
+      </xsl:choose>
       <xsl:apply-templates/>
     </div>
   </xsl:template>
@@ -37,32 +95,84 @@
   <!-- title -->
   <!-- button -->
   <xsl:template match="button[not(@type)]">
-    <a href="#" class="btn {@class}" data-action="{@action}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
+    <a href="#" data-action="{@action}" type="button">
+      <xsl:attribute name="class">
+        <xsl:choose>
+          <xsl:when test="@class">btn <xsl:value-of select="@class"/></xsl:when>
+          <xsl:otherwise>btn btn-default</xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
+      <xsl:if test="@event">
+        <xsl:attribute name="data-event">
+          <xsl:value-of select="@event"/>
+        </xsl:attribute>
+        <xsl:attribute name="data-class-on">
+          <xsl:choose>
+            <xsl:when test="@class-on"><xsl:value-of select="@class-on"/></xsl:when>
+            <xsl:otherwise>btn-primary</xsl:otherwise>
+          </xsl:choose>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:value-of select="text()"/>
+      <xsl:apply-templates select="badge|icon"/>
+    </a>
   </xsl:template>
   <xsl:template match="button[@type]">
     <xsl:if test="@type='momentary'">
-      <a href="#" class="btn {@class}" data-actionon="{@action-on}" data-actionoff="{@action-off}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
+      <a href="#" data-actionon="{@action-on}" data-actionoff="{@action-off}" type="button">
+        <xsl:attribute name="class">
+          <xsl:choose>
+            <xsl:when test="@class">btn <xsl:value-of select="@class"/></xsl:when>
+            <xsl:otherwise>btn btn-default</xsl:otherwise>
+          </xsl:choose>
+        </xsl:attribute>
+        <xsl:value-of select="text()"/>
+        <xsl:apply-templates select="badge|icon"/>
+      </a>
     </xsl:if>
   </xsl:template>
   <!-- button -->
   <!-- buttongroup -->
   <xsl:template match="buttongroup">
-    <xsl:if test="not(@type)">
-      <div class="btn-group {@class}" role="group">
-        <xsl:for-each select="button">
-          <a href="#" class="btn {@class}" data-action="{@action}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
-        </xsl:for-each>
-      </div>
-    </xsl:if>
-    <xsl:if test="@type='vertical'">
-      <div class="btn-group-vertical btn-block {@class}" role="group">
-        <xsl:for-each select="button">
-          <a href="#" class="btn {@class}" data-action="{@action}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
-        </xsl:for-each>
-      </div>
-    </xsl:if>
+    <div role="group">
+      <xsl:attribute name="class">
+        <xsl:if test="not(@type)">
+          <xsl:choose>
+            <xsl:when test="@class">btn-group <xsl:value-of select="@class"/></xsl:when>
+            <xsl:otherwise>btn-group</xsl:otherwise>
+          </xsl:choose>
+        </xsl:if>
+        <xsl:if test="@type='vertical'">
+          <xsl:choose>
+            <xsl:when test="@class">btn-group-vertical btn-block <xsl:value-of select="@class"/></xsl:when>
+            <xsl:otherwise>btn-group-vertical btn-block</xsl:otherwise>
+          </xsl:choose>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:apply-templates select="button"/>
+    </div>
   </xsl:template>
   <!-- buttongroup -->
+  <!-- icon -->
+  <xsl:template match="icon">
+    <span class="glyphicon glyphicon-{@type}"></span>
+  </xsl:template>
+  <!-- icon -->
+  <!-- grid -->
+  <xsl:template match="grid">
+    <table class="btn-grid">
+      <xsl:for-each select="row">
+        <tr>
+          <xsl:for-each select="cell">
+            <td>
+              <xsl:apply-templates select="button"/>
+            </td>
+          </xsl:for-each>
+        </tr>
+      </xsl:for-each>
+    </table>
+  </xsl:template>
+  <!-- grid -->
   <!-- switch -->
   <xsl:template match="switch">
     <div class="btn-group btn-switch" role="group" data-event="{@event}" data-arg-action="{@action}">
@@ -171,7 +281,20 @@
   <!-- status -->
   <!-- badge -->
   <xsl:template match="badge">
-    <span class="label label-default status" data-status="{@event}"><xsl:value-of select="text()"/></span>
+    <span data-status="{@event}">
+      <xsl:attribute name="class">
+        <xsl:choose>
+          <xsl:when test="@type">
+            <xsl:text>label label-default status </xsl:text>
+            <xsl:value-of select="@type"/>
+          </xsl:when>
+          <xsl:otherwise>
+            <xsl:text>label label-default status</xsl:text>
+          </xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
+      <xsl:value-of select="text()"/>
+    </span>
   </xsl:template>
   <!-- badge -->
   <!-- partialbadge -->
@@ -217,10 +340,10 @@
   <!-- range -->
   <xsl:template match="range">
     <div class="range">
+      <xsl:attribute name="data-type">
+        <xsl:value-of select="@type"/>
+      </xsl:attribute>
       <xsl:if test="@type='vertical'">
-        <xsl:attribute name="data-type">
-          <xsl:value-of select="@type"/>
-        </xsl:attribute>
         <xsl:attribute name="class">
           <xsl:text>range rangeh</xsl:text>
           <xsl:choose>
@@ -255,7 +378,32 @@
               <xsl:otherwise>200</xsl:otherwise>
             </xsl:choose>px;}</style>
         </xsl:if>
-        <form><input data-arg-source="this" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" /><output data-event="{@event}"></output></form>
+        <form>
+          <input data-arg-source="this" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" />
+          <output data-event="{@event}"></output>
+          <xsl:if test="@type='mute'">
+            <div class="btn-switch">
+              <xsl:attribute name="data-arg-action">
+                <xsl:value-of select="@action"/>
+                <xsl:text>Muting</xsl:text>
+              </xsl:attribute>
+              <xsl:attribute name="data-event">
+                <xsl:value-of select="@event"/>
+                <xsl:text>Muting</xsl:text>
+              </xsl:attribute>
+              <xsl:attribute name="class-on">
+                <xsl:choose>
+                  <xsl:when test="@class-on">btn <xsl:value-of select="@class-on"/></xsl:when>
+                  <xsl:otherwise>btn btn-danger</xsl:otherwise>
+                </xsl:choose>
+              </xsl:attribute>
+              <a href="#" class="btn btn-default" data-arg="true">
+                <xsl:text>Mute</xsl:text>
+                <xsl:apply-templates select="badge|icon"/>
+              </a>
+            </div>
+          </xsl:if>
+        </form>
       </div>
     </div>
   </xsl:template>
@@ -268,6 +416,9 @@
   <!-- meter -->
   <xsl:template match="meter">
     <div class="meter" data-event="{@event}">
+      <xsl:attribute name="data-type">
+        <xsl:value-of select="@type"/>
+      </xsl:attribute>
       <xsl:attribute name="data-range">
         <xsl:choose>
           <xsl:when test="@range"><xsl:value-of select="@range"/></xsl:when>

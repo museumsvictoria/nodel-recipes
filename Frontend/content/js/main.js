@@ -57,7 +57,7 @@ var updatemeter = function(ele, arg) {
         var p = $(el).find('p');
         $(el).data('p', p);
       }
-      $(p).text(val);
+      $(p).text(Math.floor(val));
     }, 100));
   }
   $(ele).data('throttle')(ele, arg);
@@ -144,7 +144,7 @@ var setEvents = function(){
     if(!$('body').hasClass('touched')) {
       if(navigator.issmart) $('body').addClass('touched');
       data = getAction(this);
-      callAction(data.action, data.arg);
+      if(data.action) callAction(data.action, data.arg);
     }
   });
   $('body').on('click','*[data-link-event]', function (e) {
@@ -364,6 +364,9 @@ var parseLog = function(log){
               } else if ($(ele).hasClass('scrollbar-inner')) {
                 var arg = converter.makeHtml(log.arg);
                 $(ele).html(arg);
+              } else if ($(ele).hasClass('sect')) {
+                $(".sect[data-event='"+log.alias+"']").hide();
+                $(".sect[data-event='"+log.alias+"'][data-sect='"+log.arg+"']").show();
               } else {
                 if ($(ele).is("span")) $(ele).text(log.arg);
                 // lists
@@ -378,14 +381,20 @@ var parseLog = function(log){
               }
               break;
             case "boolean":
-              if($(ele).hasClass('btn-switch')){
+              if($(ele).hasClass('btn-switch')) {
                 if (log.arg) {
-                  $(ele).children('[data-arg=true]').removeClass('active').addClass($(ele).data('class-on')).removeClass('btn-default');
-                  $(ele).children('[data-arg=false]').addClass('active').addClass('btn-default').removeClass($(ele).data('class-off'));
+                  $(ele).children('[data-arg=true]').addClass($(ele).data('class-on')).removeClass('btn-default');
+                  $(ele).children('[data-arg=false]').addClass('btn-default').removeClass($(ele).data('class-off'));
                 } else {
-                  $(ele).children('[data-arg=false]').removeClass('active').addClass($(ele).data('class-off')).removeClass('btn-default');
-                  $(ele).children('[data-arg=true]').addClass('active').addClass('btn-default').removeClass($(ele).data('class-on'));                  
+                  $(ele).children('[data-arg=false]').addClass($(ele).data('class-off')).removeClass('btn-default');
+                  $(ele).children('[data-arg=true]').addClass('btn-default').removeClass($(ele).data('class-on'));                  
                 }
+              } else if($(ele).is("a.btn")) {
+                if (log.arg) $(ele).addClass($(ele).data('class-on')).removeClass('btn-default');
+                else $(ele).addClass('btn-default').removeClass($(ele).data('class-on'));
+              } else if ($(ele).hasClass('sect')) {
+                if (log.arg) $(".sect[data-event='"+log.alias+"']").show();
+                else $(".sect[data-event='"+log.alias+"']").hide();
               }
               break;
           }
@@ -414,6 +423,9 @@ var parseLog = function(log){
                 ele.removeClass('label-default label-success label-warning label-danger').addClass('label-primary');
                 break;
             }
+          } else if(_.isBoolean(log.arg)) {
+            if (log.arg) $(ele).addClass('label-success').removeClass('label-default');
+            else $(ele).addClass('label-default').removeClass('label-success');
           }
         });
         var eles = $("[data-render='"+log.alias+"']");

@@ -31317,7 +31317,7 @@ module.exports = XRegExp;
 });;/**
  * @license
  * Lodash (Custom Build) <https://lodash.com/>
- * Build: `lodash include="throttle,isFunction,isUndefined,isNumber,isString" --output build/lodash.build.js`
+ * Build: `lodash include="throttle,isFunction,isUndefined,isNumber,isString,isBoolean" --output build/lodash.build.js`
  * Copyright JS Foundation and other contributors <https://js.foundation/>
  * Released under MIT license <https://lodash.com/license>
  * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
@@ -31339,6 +31339,7 @@ module.exports = XRegExp;
 
   /** `Object#toString` result references. */
   var asyncTag = '[object AsyncFunction]',
+      boolTag = '[object Boolean]',
       funcTag = '[object Function]',
       genTag = '[object GeneratorFunction]',
       numberTag = '[object Number]',
@@ -31875,6 +31876,28 @@ module.exports = XRegExp;
   var isArray = Array.isArray;
 
   /**
+   * Checks if `value` is classified as a boolean primitive or object.
+   *
+   * @static
+   * @memberOf _
+   * @since 0.1.0
+   * @category Lang
+   * @param {*} value The value to check.
+   * @returns {boolean} Returns `true` if `value` is a boolean, else `false`.
+   * @example
+   *
+   * _.isBoolean(false);
+   * // => true
+   *
+   * _.isBoolean(null);
+   * // => false
+   */
+  function isBoolean(value) {
+    return value === true || value === false ||
+      (isObjectLike(value) && baseGetTag(value) == boolTag);
+  }
+
+  /**
    * Checks if `value` is classified as a `Function` object.
    *
    * @static
@@ -32109,6 +32132,7 @@ module.exports = XRegExp;
 
   // Add methods that return unwrapped values in chain sequences.
   lodash.isArray = isArray;
+  lodash.isBoolean = isBoolean;
   lodash.isFunction = isFunction;
   lodash.isNumber = isNumber;
   lodash.isObject = isObject;

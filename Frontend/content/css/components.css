@@ -8841,7 +8841,8 @@ body
      -khtml-user-select:      none;
          -o-user-select:      none;
 }
-.page
+.page,
+.sect
 {
     display: none;
 }
@@ -8952,6 +8953,10 @@ body
     border-color: #0048f0;
     background-color: #0048f0;
 }
+.nav-pills span.label.right
+{
+    float: right;
+}
 .btn-select,
 .btn-select > button,
 .btn-select > ul.dropdown-menu
@@ -9038,9 +9043,42 @@ body
 
     border-radius: 0 0 4px 4px;
 }
+.meter[data-type='horizontal']
+{
+    overflow: hidden;
+
+    width: 100px;
+    height: 30px;
+    margin-right: 40px;
+    margin-bottom: 20px;
+}
+.meter[data-type='horizontal'] > div
+{
+    -webkit-transform: rotate(90deg) translateY(-100%);
+        -ms-transform: rotate(90deg) translateY(-100%);
+         -o-transform: rotate(90deg) translateY(-100%);
+            transform: rotate(90deg) translateY(-100%);
+    -webkit-transform-origin: top left;
+        -ms-transform-origin: top left;
+         -o-transform-origin: top left;
+            transform-origin: top left;
+}
+.meter[data-type='horizontal'] p
+{
+    position: absolute;
+    top: 5px;
+    right: -35px;
+
+    width: 30px;
+    margin: 0;
+
+    text-align: left;
+}
 .range form
 {
     position: relative;
+
+    overflow: hidden;
 }
 .range form > output
 {
@@ -9073,6 +9111,17 @@ body
         -ms-transform-origin: center;
          -o-transform-origin: center;
             transform-origin: center;
+}
+.range[data-type='mute'] input[type='range']
+{
+    float: left;
+
+    width: -webkit-calc(100% - 60px);
+    width:         calc(100% - 60px);
+}
+.range[data-type='mute'] .btn-switch
+{
+    float: right;
 }
 input[type=range]
 {
@@ -9173,6 +9222,26 @@ div.row > div > .nav-pills,
 {
     margin-bottom: 15px;
 }
+table.btn-grid
+{
+    width: 100%;
+
+    table-layout: fixed;
+
+    background: transparent;
+}
+table.btn-grid td
+{
+    padding: 3px;
+}
+table.btn-grid td:first-child
+{
+    padding-left: 0;
+}
+table.btn-grid tr:first-child td
+{
+    padding-top: 0;
+}
 @media (min-width: 768px)
 {
     input[type=range]::-ms-thumb
@@ -9186,6 +9255,15 @@ div.row > div > .nav-pills,
     input[type=range]::-webkit-slider-thumb
     {
         width: 30px;
+    }
+}
+@media (max-width: 768px)
+{
+    table.btn-grid td
+    {
+        display: inline-block;
+
+        width: 33%;
     }
 }
 .text-primary,

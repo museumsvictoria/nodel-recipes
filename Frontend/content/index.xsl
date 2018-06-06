@@ -43,25 +43,57 @@
             <div class="collapse navbar-collapse" id="nodel-navbar" role="navigation">
               <ul class="nav navbar-nav">
                 <xsl:for-each select="/pages/page|/pages/pagegroup">
-                <xsl:if test="self::pagegroup">
-                <li class="dropdown">
-                  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><xsl:value-of select="@title"/><span class="caret"></span></a>
-                  <ul class="dropdown-menu">
-                    <xsl:for-each select="page">
-                      <li><a href="#" data-nav="{translate(@title,translate(@title,$allowedSymbols,''),'')}" data-toggle="collapse" data-target="#nodel-navbar.in"><xsl:value-of select="@title"/></a></li>
-                    </xsl:for-each>
-                  </ul>
-                </li>
-                </xsl:if>
-                <xsl:if test="self::page">
-                <li><a href="#" data-nav="{translate(@title,translate(@title,$allowedSymbols,''),'')}" data-toggle="collapse" data-target="#nodel-navbar.in"><xsl:value-of select="@title"/></a></li>
-                </xsl:if>
+                  <xsl:if test="self::pagegroup">
+                  <li class="dropdown">
+                    <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><xsl:value-of select="@title"/><span class="caret"></span></a>
+                    <ul class="dropdown-menu">
+                      <xsl:for-each select="page">
+                        <li>
+                          <a href="#" data-nav="{translate(@title,translate(@title,$allowedSymbols,''),'')}" data-toggle="collapse" data-target="#nodel-navbar.in">
+                            <xsl:if test="@action">
+                              <xsl:attribute name="data-action">
+                                <xsl:value-of select="@action"/>
+                              </xsl:attribute>
+                            </xsl:if>
+                            <xsl:value-of select="@title"/>
+                          </a>
+                        </li>
+                      </xsl:for-each>
+                    </ul>
+                  </li>
+                  </xsl:if>
+                    <xsl:if test="self::page">
+                    <li>
+                      <a href="#" data-nav="{translate(@title,translate(@title,$allowedSymbols,''),'')}" data-toggle="collapse" data-target="#nodel-navbar.in">
+                        <xsl:if test="@action">
+                          <xsl:attribute name="data-action">
+                            <xsl:value-of select="@action"/>
+                          </xsl:attribute>
+                        </xsl:if>
+                        <xsl:value-of select="@title"/>
+                      </a>
+                    </li>
+                  </xsl:if>
                 </xsl:for-each>
               <!--<xsl:for-each select="/pages/page[not(page)]">
                 <li><a href="#" data-nav="{@title}"><xsl:value-of select="@title"/></a></li>
               </xsl:for-each>-->
               </ul>
-              <p class="navbar-text navbar-right" id="clock"></p>
+              <div class="navbar-right">
+                <xsl:for-each select="/pages/header/button">
+                  <a href="#" data-action="{@action}">
+                    <xsl:attribute name="class">
+                      <xsl:choose>
+                        <xsl:when test="@class">btn navbar-btn <xsl:value-of select="@class"/></xsl:when>
+                        <xsl:otherwise>btn btn-default navbar-btn</xsl:otherwise>
+                      </xsl:choose>
+                    </xsl:attribute>
+                    <xsl:value-of select="text()"/>
+                    <xsl:apply-templates select="badge|icon"/>
+                  </a>
+                </xsl:for-each>
+                <p class="navbar-text" id="clock"></p>
+              </div>
             </div><!-- /.navbar-collapse -->
           </div><!-- /.container-fluid -->
         </nav>
@@ -83,8 +115,8 @@
         <!-- pages -->
         <xsl:for-each select="//page">
           <div class="container-fluid page" data-section="{translate(@title,translate(@title,$allowedSymbols,''),'')}">
-          <xsl:apply-templates select="row"/>
-          <xsl:apply-templates select="*[starts-with(name(), 'special_')]"/>
+            <xsl:apply-templates select="row"/>
+            <xsl:apply-templates select="*[starts-with(name(), 'special_')]"/>
           </div>
         </xsl:for-each>
         <!-- end pages -->
