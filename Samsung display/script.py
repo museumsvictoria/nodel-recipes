@@ -38,11 +38,11 @@ INPUT_CODE_TABLE = [ ('1F', 'PC'),
 inputCodeEvent = Event('InputCode', {'group': 'Input code', 'order': next_seq(), 'schema': {'type': 'string'}})
 local_event_DesiredInputCode = LocalEvent({'group': 'Input code', 'order': next_seq(), 'schema': {'type': 'string'}})
 
-def handle_displayStatusTimer():
-  getDisplayStatusAction.call()
+# poll input and power status every 30s
+timer_deviceStatus = Timer(lambda: getDisplayStatusAction.call(), 30)
 
-# poll every 30s
-timer_deviceStatus = Timer(handle_displayStatusTimer, 30)
+# check error status every 45 seconds (first after 15)
+timer_errorStatus = Timer(lambda: getExtendedDisplayStatusAction.call(), 45, 15)
 
 def main(arg = None):
   if param_ipAddress == None or len(param_ipAddress.strip())==0:
@@ -351,6 +351,46 @@ def getDisplayStatus():
   queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), handleResp)
   
 getDisplayStatusAction = Action('GetDisplayStatus', lambda arg: getDisplayStatus(), {'group': 'General', 'order': next_seq()})
+
+
+# <!--- extended (error) status
+
+local_event_ErrorStatusLamp = LocalEvent({'title': 'Lamp?', 'group': 'Error Statuses', 'order': next_seq(), 'schema': {'type': 'boolean'}})
+local_event_ErrorStatusTemp = LocalEvent({'title': 'Temperature?', 'group': 'Error Statuses', 'order': next_seq(), 'schema': {'type': 'boolean'}})
+local_event_ErrorStatusBrightSensor = LocalEvent({'title': 'Bright Sensor?', 'group': 'Error Statuses', 'order': next_seq(), 'schema': {'type': 'boolean'}})
+local_event_ErrorStatusNoSync = LocalEvent({'title': 'No Sync?', 'group': 'Error Statuses', 'order': next_seq(), 'schema': {'type': 'boolean'}})
+local_event_CurrentTemp = LocalEvent({'title': 'Current Temp', 'group': 'Error Statuses', 'desc': 'Unsure what units these are', 'order': next_seq(), 'schema': {'type': 'integer'}})
+local_event_ErrorStatusFan = LocalEvent({'group': 'Fan?', 'group': 'Error Statuses', 'order': next_seq(), 'schema': {'type': 'boolean'}})
+
+def getExtendedDisplayStatus():
+  log('getExtendedDisplayStatus')
+  
+  # e.g. aa:ff:01:08:41:0d:00:00:02:00:36:00:8e
+
+  # aa   ff   01   08      41          0d      | 1:00     2:00      3:02       4:00        5:36     7:00    7:8e
+  # HDR  CMD  ID   length  ACK         R->Cmd  | LampErr  TempErr   BrightSens NoSyncErr   CurTemp  FanErr  CSUM
+  # +0   1    2    8       4           5       | +6       +7        +8         +9          +10      +11     +12
+  
+  CMDCODE = '\x0d'
+  msg = '%s%s\x00' % (CMDCODE, chr(int(param_id)))
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  
+  def handleResp(arg):
+    checkHeader(arg)
+    
+    local_event_ErrorStatusLamp.emit(arg[6] == '\x01')
+    local_event_ErrorStatusTemp.emit(arg[7] == '\x01')
+    local_event_ErrorStatusBrightSensor.emit(arg[8] == '\x01')
+    local_event_ErrorStatusNoSync.emit(arg[9] == '\x01')
+    local_event_CurrentTemp.emit(ord(arg[10]))
+    local_event_ErrorStatusFan.emit(arg[11] == '\x01')
+  
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), handleResp)
+  
+getExtendedDisplayStatusAction = Action('GetExtendedDisplayStatus', lambda arg: getExtendedDisplayStatus(), {'group': 'General', 'order': next_seq()})
+
+# extended status ---!>
+
   
 def local_action_ClearMenu(arg=None):
   """{"group": "General", "desc": "Clears the OSD menu"}"""
@@ -408,6 +448,15 @@ def getSoftwareVersion(arg):
   queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: softwareVersionEvent.emit(resp[6:-1])))
   
 Action('GetSoftwareVersion', getSoftwareVersion, {'title': 'Get', 'group': 'Software Version'})
+
+def setVolume(arg):
+  console.info('setVolume(%s)' % arg)
+  
+  msg = '\x12%s\x01%s' % (chr(int(param_id)), chr(int(arg)))
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: lookup_local_event('volume').emit(arg)))
+
+Action('Volume', setVolume, {'title': 'Set', 'group': 'Audio', 'schema': {'type': 'integer', 'max': 100, 'min': 0}})
 
 # All non-critical informational polling should occur here
 def local_action_PollNonCriticalInfo(arg=None):
@@ -496,9 +545,30 @@ def statusCheck():
     local_event_Status.emit({'level': 2, 'message': message})
     return
   
-  else:
-    local_event_LastContactDetect.emit(str(now))
-    local_event_Status.emit({'level': 0, 'message': 'OK'})
+  # issue warning if check if there's a video-sync issue (only when the power is on)
+  if local_event_ErrorStatusNoSync.getArg() and lookup_local_event('Power').getArg() == 'On':
+    local_event_Status.emit({'level': 1, 'message': 'Display is on but no video signal detected'})
+    return
+
+  # use a different warning for any of the other error status flags
+  errorFlags = list()
+  if local_event_ErrorStatusBrightSensor.getArg(): errorFlags.append('bright-sensor')
+  if local_event_ErrorStatusFan.getArg(): errorFlags.append('fan')
+  if local_event_ErrorStatusLamp.getArg(): errorFlags.append('lamp')
+  if local_event_ErrorStatusTemp.getArg(): errorFlags.append('temperature')
+
+  if len(errorFlags) > 0:
+    if len(errorFlags) == 1:
+      message = 'A %s related fault is being reported by display' % errorFlags[0]
+    else:
+      message = 'Faults are being reported in relation to %s and %s' % (', '.join(errorFlags[:-1]), errorFlags[-1:][0]) # join first item(s) and last one
+
+    local_event_Status.emit({'level': 1, 'message': message})
+    return
+
+  # otherwise, all good!
+  local_event_LastContactDetect.emit(str(now))
+  local_event_Status.emit({'level': 0, 'message': 'OK'})
 
 status_check_interval = 75
 status_timer = Timer(statusCheck, status_check_interval)
