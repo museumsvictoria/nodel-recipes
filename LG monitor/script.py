@@ -1,15 +1,18 @@
-'No direct network port available. Link to manual (see page 71) - http://www.lg.com/us/commercial/documents/MAN_SE3B_SE3KB_SL5B.pdf'
+'No direct network port available. Link to main manual (see page 71) - http://www.lg.com/us/commercial/documents/MAN_SE3B_SE3KB_SL5B.pdf and others (see script)'
+
+# 2nd manual: https://hf-files-oregon.s3.amazonaws.com/hdpjustaddpower_kb_attachments/2016/08-19/536f965c-5e2f-473f-8e3f-aacfac49601f/LG%20Published%20RS232C%20Guide.pdf
+# 3rd manual: http://www.lg.com/us/commercial/documents/SM3C-B_Manual.pdf
 
 DEFAULT_ADMINPORT = 9761
 DEFAULT_BROADCASTIP = '192.168.1.255'
 
 # general device status
 local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'type': 'object', 'title': 'Status', 'properties': {
-        'level': {'type': 'integer', 'title': 'Value'},
-        'message': {'type': 'string', 'title': 'String'}
+        'level': {'type': 'integer'},
+        'message': {'type': 'string'}
       }}})
 
-DEFAULT_SET_ID = '001' # sometime this is 01
+DEFAULT_SET_ID = '001' # sometimes this is 01
 
 param_ipAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string'}})
 param_setID = Parameter({'title': 'Set ID', 'schema': {'type': 'string', 'hint': DEFAULT_SET_ID}})
@@ -283,14 +286,97 @@ Timer(lambda: lookup_local_action('Get Main Power').call(), 15, 5*60)
 
 # Automatic Standy ---
 
-Event('Automatic Standy', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string'}})
-Action('Get Automatic Standy', lambda arg: tcp.request('mn %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Automatic Standy').emit(data))), 
+AUTOSTANDBY_MAP = [
+    ('00', 'Off'),     # 00: Off (Will not turn off after 4/6/8 hours)
+    ('01', '4 Hours'), # 01: 4 hours (Off after 4 hours)
+    ('02', '6 Hours'), # 02: 6 hours (Off after 6 hours)
+    ('03', '8 Hours')  # 03: 8 hours (Off after 8 hours)
+]
+
+AUTOSTANDBY_NAMES = [name for code, name in AUTOSTANDBY_MAP]
+AUTOSTANDBY_NAMES_BY_CODE = dict([(code, name) for code, name in AUTOSTANDBY_MAP])
+AUTOSTANDBY_CODES_BY_NAME = dict([(name, code) for code, name in AUTOSTANDBY_MAP])
+
+automaticStandbySignal = Event('Automatic Standby', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': AUTOSTANDBY_NAMES}})
+getAutomaticStandbyAction = Action('Get Automatic Standby', 
+                                   lambda arg: tcp.request('mn %s ff\r' % setID, 
+                                       lambda resp: checkHeaderAndHandleData(resp, 'n', 
+                                           lambda data: automaticStandbySignal.emit(AUTOSTANDBY_NAMES_BY_CODE.get(data, 'UNKNOWNCODE_%s' % data)))),
+                                   {'group': SETTINGS_GROUP, 'order': next_seq()})
+setAutomaticStandbyAction = Action('Automatic Standy', 
+                                lambda arg: tcp.request('mn %s %s\r' % (setID, AUTOSTANDBY_CODES_BY_NAME[arg]), 
+                                    lambda resp: checkHeaderAndHandleData(resp, 'n', 
+                                        lambda data: automaticStandbySignal.emit(data))), 
+                                {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': AUTOSTANDBY_NAMES}})
+  
+Timer(lambda: getAutomaticStandbyAction.call(), 5*60, 15) # every 5 mins, first after 15
+
+
+# Abnormal state ---
+# (taken from 2nd manual)
+
+ABNORMAL_STATES = [
+   (0, 'Normal'),              # 0  Normal (Power on and signal exist)
+   (1, 'No Signal Power On'),  # 1  No signal (Power on)
+   (2, 'Off by Remote'),       # 2  Turn the monitor off by remote control
+   (3, 'Off by Sleep'),        # 3  Turn the monitor off by sleep time function
+   (4, 'Off by RS-232'),       # 4  Turn the monitor off by RS-232C function
+   (6, 'AC Down'),             # 6  AC down
+   (7, 'Off by Time'),         # 8  Turn the monitor off by off time function
+   (9, 'Off by Auto')          # 9  Turn the monitor off by auto off function
+]
+
+ABNORMAL_STATES_NAMES = [name for code, name in ABNORMAL_STATES]
+ABNORMAL_STATES_NAMES_BY_CODE = dict([(code, name) for code, name in ABNORMAL_STATES])
+
+Event('Abnormal State', {'group': 'Error Status', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ABNORMAL_STATES_NAMES}})
+
+def handle_AbnormalStateData(data):
+  name = ABNORMAL_STATES_NAMES_BY_CODE.get(int(data), 'UNKNOWN_CODE_%s' % data)
+  lookup_local_event('Abnormal State').emit(name)
+
+Action('Get Abnormal State', lambda arg: tcp.request('kz %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'z', handle_AbnormalStateData)), 
+       {'group': 'Error Status', 'order': next_seq()})
+  
+Timer(lambda: lookup_local_action('Get Abnormal State').call(), 30, 10) # get every 30 seconds, first after 10
+
+
+# Wake-On-LAN (WOL) ---
+
+ONOFF_NAMES_BY_CODE = { 0: 'Off', 1: 'On' }
+ONOFF_CODES_BY_NAME = { 'Off': '00', 'On': '01' }
+
+Event('Wake-On-LAN', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+def handle_WOLData(data):
+  lookup_local_event('Wake-On-LAN').emit(ONOFF_NAMES_BY_CODE.get(int(data), 'UNKNOWNCODE_%s' % data))  
+
+Action('Get Wake-On-LAN', lambda arg: tcp.request('fw %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)), 
        {'group': SETTINGS_GROUP, 'order': next_seq()})
 
-Action('Automatic Standy', lambda arg: tcp.request('mn %s %s\r' % (setID, cmd), lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Automatic Standy').emit(data))),
-       {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['00', '01', '02', '03']}})
+Action('Wake-On-LAN', lambda arg: tcp.request('fw %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)),
+       {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
   
-Timer(lambda: lookup_local_action('Get Automatic Standy').call(), 15, 5*60)
+Timer(lambda: lookup_local_action('Get Wake-On-LAN').call(), 5*60, 15) # every 5 mins, first after 15
+
+
+# No Signal Power Off  ---
+# (from 3rd manual)
+NSPO_DESC = 'Sets the monitor to enter Automatic Standby mode if there is no signal for 15 minutes'
+
+Event('No Signal Power Off', {'group': SETTINGS_GROUP, 'desc': NSPO_DESC, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+def handle_NSPOData(data):
+  lookup_local_event('No Signal Power Off').emit(ONOFF_NAMES_BY_CODE.get(int(data), 'UNKNOWNCODE_%s' % data))  
+
+Action('Get No Signal Power Off', lambda arg: tcp.request('fg %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'g', handle_NSPOData)), 
+       {'group': SETTINGS_GROUP, 'desc': NSPO_DESC, 'order': next_seq()})
+
+Action('No Signal Power Off', lambda arg: tcp.request('fg %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'g', handle_NSPOData)),
+       {'group': SETTINGS_GROUP, 'desc': NSPO_DESC, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+  
+Timer(lambda: lookup_local_action('Get No Signal Power Off').call(), 5*60, 15) # every 5 mins, first after 15
+
 
 
 # LG protocol specific
@@ -419,7 +505,14 @@ def statusCheck():
       
     local_event_Status.emit({'level': 2, 'message': message})
     
+  # is online, so check for any internal error conditions
+  
+  elif lookup_local_event('Abnormal State').getArg() == 'No Signal Power On':
+    # on but no video signal
+    local_event_Status.emit({'level': 1, 'message': 'Display is on but no video signal detected'})
+  
   else:
+    # everything is good
     local_event_LastContactDetect.emit(str(now))
     local_event_Status.emit({'level': 0, 'message': 'OK'})
     
