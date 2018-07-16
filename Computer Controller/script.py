@@ -93,6 +93,11 @@ def local_action_Restart(arg = None):
   print 'Action Restart requested'
   restart()
 
+def local_action_Mute(arg = None):
+  """{"title":"Mute","group":"Volume","schema":{"type":"string","enum": ['On', 'Off'], "required": True}}"""
+  print 'Action Mute%s requested' % arg
+  mute() if arg == 'On' else unmute()
+
 def local_action_MuteOn(arg = None):
   """{"title":"MuteOn","desc":"Mute this computer.","group":"Volume"}"""
   print 'Action MuteOn requested'
