@@ -5,6 +5,8 @@ DEFAULT_REPEATS = 3
 param_monitors = Parameter({'title': 'Monitors', 'schema': {'type': 'array', 'items': {'type': 'object', 'properties': {
         'name': {'title': 'Name', 'type': 'string', 'order': next_seq()},
         'url': {'title': 'URL', 'type': 'string', 'order': next_seq()},
+        'username': {'title': 'Username', 'type': 'string', 'order': next_seq()},
+        'password': {'title': 'Password', 'type': 'string', 'order': next_seq()},
         'minThreshold': {'title': 'Min. threshold (ms)', 'type': 'integer', 'order': next_seq(), 'hint': str(DEFAULT_MINTHRESHOLD)},
         'longGap': {'title': 'Long gap (s)', 'type': 'integer', 'order': next_seq(), 'hint': str(DEFAULT_LONGGAP_SECS)},
         'hideLatency': {'title': 'Hide latency?', 'type': 'boolean', 'order': next_seq()},
@@ -26,13 +28,12 @@ def main():
 
 def initMonitorParam(param):
   initPoller(param['name'], 
-             lambda complete: beginCheckURL(param['url'], complete),
+             lambda complete: beginCheckURL(param['url'], complete, username=param.get('username'), password=param.get('password')),
              repeats=param.get('repeats') or DEFAULT_REPEATS,
              minThreshold=param.get('minThreshold') or DEFAULT_MINTHRESHOLD,
              longGapInSec=param.get('longGap') or DEFAULT_LONGGAP_SECS,
              hideLatency=param.get('hideLatency'),
-             valueAsSignal=param.get('valueAsSignal')
-            )
+             valueAsSignal=param.get('valueAsSignal'))
   
 class Stats:
   def __init__(self):
@@ -148,14 +149,14 @@ def initPoller(name, poller,
   # stagger the pollers
   call_safe(poll, (next_seq() % 8)*1.1)
         
-def beginCheckURL(url, complete):
+def beginCheckURL(url, complete, username=None, password=None):
   if url == None:
     complete(None, Exception('URL is empty or missing'))
     return
     
   def get_unsafe():
     try:
-      result = get_url(url)
+      result = get_url(url, username=username, password=password)
       
       call_safe(lambda: complete(result, None))
       
