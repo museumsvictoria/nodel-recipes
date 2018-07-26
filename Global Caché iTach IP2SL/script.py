@@ -1,5 +1,5 @@
 # coding=utf-8
-u"Global Caché iTachIP2CC - to update config, go to config URL address directly."
+u"Global Caché iTachIP2SL - to update config, go to config URL address directly."
 # Handy reference:
 # * http://www.globalcache.com/products/itach/ip2sl-pspecs/
 # * http://www.globalcache.com/files/docs/API-iTach.pdf
@@ -74,6 +74,8 @@ def connected():
     ping_timer.start()    
     
 def received(data):
+    lastReceive[0] = system_clock()
+
     local_event_Received.emit(data)
     
     parseMessage(data)
@@ -181,9 +183,49 @@ ERROR_CODES = {
   'ERR_24': 'Invalid baud rate setting.',
   'ERR_25': 'Invalid flow control setting.',
   'ERR_26': 'Invalid parity setting. ERR_27 Settings are locked.' }    
+  
+# <status and error reporting ---
+
+# for comms drop-out
+lastReceive = [0]
+
+# roughly, the last contact  
+local_event_LastContactDetect = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), 'title': 'Last contact detect', 'schema': {'type': 'string'}})
+
+# node status
+local_event_Status = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), 'schema': {'type': 'object', 'properties': {
+        'level': {'type': 'integer', 'order': 1},
+        'message': {'type': 'string', 'order': 2}}}})
+  
+def statusCheck():
+  diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
+  now = date_now()
+  
+  if diff > status_check_interval+15:
+    previousContactValue = local_event_LastContactDetect.getArg()
     
-seqNum = [0L]
-def nextSeqNum():
-    seqNum[0] += 1
-    return seqNum[0]
+    if previousContactValue == None:
+      message = 'Always been missing.'
+      
+    else:
+      previousContact = date_parse(previousContactValue)
+      roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
+      if roughDiff < 60:
+        message = 'Missing for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
+      
+    local_event_Status.emit({'level': 2, 'message': message})
+    
+  else:
+    # device is online and good
+    local_event_LastContactDetect.emit(str(now))
+    local_event_Status.emit({'level': 0, 'message': 'OK'})
+    
+status_check_interval = 75
+status_timer = Timer(statusCheck, status_check_interval)
+
+# --->  
   
