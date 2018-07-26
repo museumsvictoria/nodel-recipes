@@ -69,7 +69,9 @@ def loadIndexFile(xmlFile):
   
   def explore(group, e):
     eType = e.tag
-    eAction = e.get('action')
+    eActionNormal = e.get('action')
+    eActionOn = e.get('action-on')   # these are for
+    eActionOff = e.get('action-off') # momentary buttons
     eEvent = e.get('event')
     title = e.get('title')
     
@@ -91,21 +93,25 @@ def loadIndexFile(xmlFile):
       
     # the default schema to use if '_action' or '_signal' is not used
     defaultSchema = schemaMap.get(eType)
-    
-    if eAction != None and lookup_local_action(eAction) == None:
-      # an action is specified
-      
-      # is it local only?
-      if SimpleName(eAction) in localOnlyActions:
-        handler = lambda arg: None
+
+    def tryAction(eAction):
+      if eAction != None and lookup_local_action(eAction) == None:
+        # an action is specified
         
-      else:
-        remoteAction = create_remote_action(eAction, suggestedNode=param_suggestedNode)
-        handler = lambda arg: remoteAction.call(arg)
+        # is it local only?
+        if SimpleName(eAction) in localOnlyActions:
+          handler = lambda arg: None
+          
+        else:
+          remoteAction = create_remote_action(eAction, suggestedNode=param_suggestedNode)
+          handler = lambda arg: remoteAction.call(arg)
+        
+        action = Action(eAction, handler, 
+                        {'group': thisGroup, 'order': next_seq(), 'schema': schemaMap.get('%s_action' % eType, defaultSchema)})
       
-      action = Action(eAction, handler, 
-                      {'group': thisGroup, 'order': next_seq(), 'schema': schemaMap.get('%s_action' % eType, defaultSchema)})
-      
+    tryAction(eActionNormal)
+    tryAction(eActionOn)
+    tryAction(eActionOff)
 
     if eEvent != None and lookup_local_event(eEvent) == None:
       # an event is specified
