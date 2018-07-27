@@ -137,6 +137,8 @@ var setEvents = function(){
   $('body').on('touchstart mousedown touchend touchcancel mouseup','*[data-actionon]*[data-actionoff]', function (e) {
     e.stopPropagation(); e.preventDefault();
     data = getAction(this);
+    if($.inArray(e.type, ['touchstart','mousedown']) > -1) $(this).addClass('active');
+    else $(this).removeClass('active');
     callAction(data.action, data.arg);
   });
   $('body').on('click','*[data-arg], *[data-action]', function (e) {
@@ -368,7 +370,7 @@ var parseLog = function(log){
                 $(".sect[data-event='"+log.alias+"']").hide();
                 $(".sect[data-event='"+log.alias+"'][data-sect='"+log.arg+"']").show();
               } else {
-                if ($(ele).is("span")) $(ele).text(log.arg);
+                if ($(ele).is("span, h4, p")) $(ele).text(log.arg);
                 // lists
                 $(ele).children('li').has('a[data-arg]').removeClass('active');
                 $(ele).children('li').has('a[data-arg="' + log.arg + '"]').addClass('active');

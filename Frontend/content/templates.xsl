@@ -90,9 +90,28 @@
   <!-- column -->
   <!-- title -->
   <xsl:template match="title">
-    <h4><xsl:value-of select="current()"/></h4>
+    <h4>
+      <xsl:if test="@event">
+        <xsl:attribute name="data-event">
+          <xsl:value-of select="@event"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:value-of select="current()"/>
+    </h4>
   </xsl:template>
   <!-- title -->
+  <!-- text -->
+  <xsl:template match="text">
+    <p>
+      <xsl:if test="@event">
+        <xsl:attribute name="data-event">
+          <xsl:value-of select="@event"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:value-of select="current()"/>
+    </p>
+  </xsl:template>
+  <!-- text -->
   <!-- button -->
   <xsl:template match="button[not(@type)]">
     <a href="#" data-action="{@action}" type="button">
@@ -114,7 +133,7 @@
         </xsl:attribute>
       </xsl:if>
       <xsl:value-of select="text()"/>
-      <xsl:apply-templates select="badge|icon"/>
+      <xsl:apply-templates select="badge|icon|text|image"/>
     </a>
   </xsl:template>
   <xsl:template match="button[@type]">
@@ -127,7 +146,7 @@
           </xsl:choose>
         </xsl:attribute>
         <xsl:value-of select="text()"/>
-        <xsl:apply-templates select="badge|icon"/>
+        <xsl:apply-templates select="badge|icon|text|image"/>
       </a>
     </xsl:if>
   </xsl:template>
@@ -158,6 +177,11 @@
     <span class="glyphicon glyphicon-{@type}"></span>
   </xsl:template>
   <!-- icon -->
+  <!-- image -->
+  <xsl:template match="image">
+    <img src="{@source}"></img>
+  </xsl:template>
+  <!-- image -->
   <!-- grid -->
   <xsl:template match="grid">
     <table class="btn-grid">

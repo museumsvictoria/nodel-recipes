@@ -8841,6 +8841,14 @@ body
      -khtml-user-select:      none;
          -o-user-select:      none;
 }
+body.hasfooter
+{
+    padding-bottom: 150px;
+}
+footer
+{
+    padding-top: 15px;
+}
 .page,
 .sect
 {
@@ -8880,10 +8888,20 @@ body
     margin-bottom: 5px;
     margin-left: 5px;
 }
+.btn > p
+{
+    display: inline;
+}
 .btn > span.label,
 .nav-pills > li > a > span.label
 {
     margin-left: 5px;
+}
+.btn > img
+{
+    max-height: 26px;
+    margin-top: -4px;
+    margin-bottom: -4px;
 }
 .alert.label-default .btn-default,
 .alert.label-default > span.label.label-default,

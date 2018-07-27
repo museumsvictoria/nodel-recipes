@@ -19,6 +19,11 @@
         <link href="css/main.css" rel="stylesheet"/>
       </head>
       <body>
+        <xsl:if test="//footer">
+          <xsl:attribute name="class">
+            <xsl:text>hasfooter</xsl:text>
+          </xsl:attribute>
+        </xsl:if>
         <!-- main nav -->
         <nav class="navbar navbar-inverse navbar-fixed-top" data-toggle="collapse" data-target=".nav-collapse">
           <div class="container-fluid">
@@ -121,11 +126,15 @@
         </xsl:for-each>
         <!-- end pages -->
         <!-- footer -->
-        <!--<footer class="navbar navbar-default navbar-fixed-bottom">
-          <div class="container-fluid">
-            <h6 style="margin-top: 17px;">For support, please contact Lumicom: (03) 9005 8222</h6>
-          </div>
-        </footer>-->
+        <xsl:if test="//footer">
+          <footer class="navbar navbar-default navbar-fixed-bottom">
+            <div class="container-fluid">
+              <xsl:for-each select="//footer">
+                <xsl:apply-templates select="row"/>
+              </xsl:for-each>
+            </div>
+          </footer>
+        </xsl:if>
         <!-- end footer -->
         <script src="js/components.js"></script>
         <script src="js/main.js"></script>
