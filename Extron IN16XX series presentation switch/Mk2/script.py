@@ -20,10 +20,24 @@ local_event_GreetingFirmwareDate = LocalEvent({'title': 'Firmware date', 'group'
 
 ESC = '\x1b'
 
-@after_main
-def lateBind():
+@before_main
+def initRuntimeParams():
   global INPUT_COUNT
   INPUT_COUNT = param_maxInput or MAX_INPUT
+  
+@before_main
+def initInputLabels():
+  for i in range(1, INPUT_COUNT+1):
+    Event('Input %s Label' % i, {'group': 'Input', 'order': next_seq(), 'schema': {'type': 'string'}})
+
+@before_main
+def bindAfterLastPoll():
+  lookup_local_event('Input %s Label' % INPUT_COUNT).addEmitHandler(lambda arg: lateBindOnce())
+    
+# this is done after the last label is polled
+def lateBindOnce():
+  if lookup_local_event('Video Input') != None: # only do once
+    return
   
   INPUT_LISTS = ['Input %s' % i for i in range(1, INPUT_COUNT + 1)]
   
@@ -47,9 +61,7 @@ def lateBind():
   
   # initialise all inputs
   for i in range(1, INPUT_COUNT+1):
-    label = 'My Input %s' % i
-    bindInput(i, label)
-    
+    bindInput(i)
     
   # signal presence in one hit
   def handleSignalResp(arg):
@@ -93,14 +105,16 @@ def lateBind():
   Timer(pollOutputMuting, 10)
     
   
-def bindInput(inputNum, label):
+def bindInput(inputNum):
   inputName = 'Input %s' % inputNum
   
-  audioSelected = Event('%s Audio' % inputName, {'group': 'Inputs Audio', 'order': next_seq(), 
-                                    'schema': {'type': 'boolean'}})
+  labelSignal = lookup_local_event('Input %s Label' % inputNum)
+  label = labelSignal.getArg() if labelSignal != None else None
+  label = '"%s"' % label if label != None else inputName
   
-  videoSelected = Event('%s Video' % inputName, {'group': 'Inputs Video', 'order': next_seq(), 
-                                    'schema': {'type': 'boolean'}})
+  audioSelected = Event('%s Audio' % inputName, {'title': '%s Audio' % label, 'group': 'Inputs Audio', 'order': next_seq(), 'schema': {'type': 'boolean'}})
+  
+  videoSelected = Event('%s Video' % inputName, {'title': '%s Video' % label, 'group': 'Inputs Video', 'order': next_seq(), 'schema': {'type': 'boolean'}})
   
   def handleResp(resp):
     # e.g. In1 Aud
@@ -126,26 +140,28 @@ def bindInput(inputNum, label):
     
   selectAudio = Action('%s Audio' % inputName, 
                        lambda ignore: tcp.request('%s$' % inputNum, handleResp), 
-                       {'group': 'Input Audio', 'order': next_seq()})
+                       {'title': '%s Audio' % label, 'group': 'Input Audio', 'order': next_seq()})
   
   selectVideo = Action('%s Video' % inputName, 
                        lambda ignore: tcp.request('%s&' % inputNum, handleResp), 
-                       {'group': 'Inputs Video', 'order': next_seq()})
+                       {'title': '%s Video' % label, 'group': 'Inputs Video', 'order': next_seq()})
   
   selectBoth = Action('%s' % inputName, 
                        lambda ignore: tcp.request('%s!' % inputNum, handleResp), 
-                       {'group': 'Input (A & V)', 'order': next_seq()})
+                       {'title': label, 'group': 'Input (A & V)', 'order': next_seq()})
   
-  signal = Event('%s Signal' % inputName, {'group': 'Inputs Signal', 'order': next_seq(), 
-                                           'schema': {'type': 'boolean'}})
+  signal = Event('%s Signal' % inputName, {'title': label, 'group': 'Inputs Signal', 'order': next_seq(), 'schema': {'type': 'boolean'}})
   
 def main():
     address = '%s:%s' % (param_ipAddress , param_port or DEFAULT_PORT)
     console.info('Will connect to "%s"' % address)
     tcp.setDest(address)
+
+# this is called once on TCP connect
+def pollLabel(i):
+  log(1, 'pollLabel %s' % i)
   
-# gets the input label
-# tcp.request(ESC+'%sNI' % i, handle)
+  tcp.request(ESC+'%sNI' % i, lambda arg: lookup_local_event('Input %s Label' % i).emit(arg))
 
 # AUDIO GROUPS:
 # (taken from manual, page 46)
@@ -210,7 +226,7 @@ def bindGroupControl(name, i, typee):
     gainEvent = Event('%s Gain' % name, {'title': 'Gain', 'group': '"%s"' % group, 'order': next_seq(), 'schema': schema})
   
     def parseGainResp(resp):
-      debug('parse_gain_resp: "%s" %s #%s resp:[%s]' % (name, typee, i, resp))
+      log(2, 'parse_gain_resp: "%s" %s #%s resp:[%s]' % (name, typee, i, resp))
       
       # e.g. "GrpmD02*-00293"
       # or   "-00293"
@@ -246,7 +262,7 @@ def bindGroupControl(name, i, typee):
     mutingEvent = Event('%s Muting' % name, {'title': 'Muting', 'group': '"%s"' % group, 'order': next_seq(), 'schema': schema})
   
     def parseMuteResp(resp):
-      debug('parse_mute_resp: "%s" %s #%s resp:[%s]' % (name, typee, i, resp))
+      log(3, 'parse_mute_resp: "%s" %s #%s resp:[%s]' % (name, typee, i, resp))
       # e.g. GrpmD1*+00001
       # or   GrpmD1*+00000
       if resp.startswith('Grpm') or resp.startswith('Dsm'):
@@ -290,6 +306,9 @@ def connected():
   # set verbose mode to get full-duplex feedback (default for RS232 not TCP)
   tcp.request(ESC+'1CV', lambda resp: '' if resp.lower().startswith('vrb1') else console.error('Was not able to set verbose level; driver may not be reliable'))
   
+  for i in range(1, INPUT_COUNT+1):
+    pollLabel(i)
+  
   readyToSend[0] = True
   
 def tcp_request(arg, resp):
@@ -299,11 +318,11 @@ def tcp_request(arg, resp):
   tcp.request(arg, resp)
     
 def received(data):
-  debug('tcp_recv [%s]' % data)
+  log(3, 'tcp_recv [%s]' % data)
   lastReceive[0] = system_clock()
 
 def sent(data):
-  debug('tcp_send [%s]' % data)
+  log(3, 'tcp_send [%s]' % data)
 
 readyToSend = [False]
   
@@ -334,16 +353,7 @@ def parseInt(s):
   '''For Extron responses, parses "+0000" or "-000.1" safely'''
   return int(s[1:]) if s.startswith('+') else int(s)
 
-# DEBUG
 
-local_event_Debug = LocalEvent({'group': 'Debug', 'order': 99999, 'schema': {'type': 'boolean'}})
-
-def debug(msg):
-  if local_event_Debug.getArg():
-    console.log(msg)
-  
-  
-  
 ERROR_CODES = { 
   'E01': 'Invalid input number',
   'E10': 'Invalid command',
@@ -405,3 +415,18 @@ def statusCheck():
   
 status_check_interval = 75
 status_timer = Timer(statusCheck, status_check_interval)
+
+
+# <logging ---
+
+local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 'schema': {'type': 'integer'}})
+
+def warn(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.warn(('  ' * level) + msg)
+
+def log(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.log(('  ' * level) + msg)    
+
+# --->
