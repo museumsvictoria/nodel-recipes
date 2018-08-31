@@ -406,8 +406,8 @@
           <input data-arg-source="this" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" />
           <output data-event="{@event}"></output>
           <xsl:if test="@type='mute'">
-            <div class="btn-switch">
-              <xsl:attribute name="data-arg-action">
+            <a href="#" class="btn btn-default" data-arg-on="true" data-arg-off="false">
+              <xsl:attribute name="data-action">
                 <xsl:value-of select="@action"/>
                 <xsl:text>Muting</xsl:text>
               </xsl:attribute>
@@ -415,17 +415,15 @@
                 <xsl:value-of select="@event"/>
                 <xsl:text>Muting</xsl:text>
               </xsl:attribute>
-              <xsl:attribute name="class-on">
+              <xsl:attribute name="data-class-on">
                 <xsl:choose>
                   <xsl:when test="@class-on">btn <xsl:value-of select="@class-on"/></xsl:when>
-                  <xsl:otherwise>btn btn-danger</xsl:otherwise>
+                  <xsl:otherwise>btn-danger</xsl:otherwise>
                 </xsl:choose>
               </xsl:attribute>
-              <a href="#" class="btn btn-default" data-arg="true">
-                <xsl:text>Mute</xsl:text>
-                <xsl:apply-templates select="badge|icon"/>
-              </a>
-            </div>
+              <xsl:text>Mute</xsl:text>
+              <xsl:apply-templates select="badge|icon"/>
+            </a>
           </xsl:if>
         </form>
       </div>

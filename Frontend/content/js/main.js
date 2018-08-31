@@ -392,8 +392,8 @@ var parseLog = function(log){
                   $(ele).children('[data-arg=true]').addClass('btn-default').removeClass($(ele).data('class-on'));                  
                 }
               } else if($(ele).is("a.btn")) {
-                if (log.arg) $(ele).addClass($(ele).data('class-on')).removeClass('btn-default');
-                else $(ele).addClass('btn-default').removeClass($(ele).data('class-on'));
+                if (log.arg) $(ele).addClass($(ele).data('class-on')).addClass('active').removeClass('btn-default');
+                else $(ele).addClass('btn-default').removeClass('active').removeClass($(ele).data('class-on'));
               } else if ($(ele).hasClass('sect')) {
                 if (log.arg) $(".sect[data-event='"+log.alias+"']").show();
                 else $(".sect[data-event='"+log.alias+"']").hide();

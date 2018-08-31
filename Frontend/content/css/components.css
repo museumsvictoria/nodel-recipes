@@ -9137,7 +9137,7 @@ footer
     width: -webkit-calc(100% - 60px);
     width:         calc(100% - 60px);
 }
-.range[data-type='mute'] .btn-switch
+.range[data-type='mute'] .btn
 {
     float: right;
 }

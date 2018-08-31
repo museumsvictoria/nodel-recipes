@@ -75,6 +75,12 @@
           </column>
         </row>
         <row>
+          <column sm="12">
+            <title>Range</title>
+            <range action='Range' event="Range" type="mute"></range>
+          </column>
+        </row>
+        <row>
           <column sm="6">
             <title>Volume</title>
             <button action='VolumeDown' class='btn-success'>Down</button>
