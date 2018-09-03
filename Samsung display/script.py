@@ -9,16 +9,16 @@ param_id = Parameter({"title": "Set ID", "order": 0, "schema": {"type":"integer"
 
 param_mainInputCode = Parameter({'title': 'Main Input Code', 'desc': 'The input (source) for the "ensure" actions and events', 'schema': {'type': 'string'}})
 
-local_event_DebugShowLogging = LocalEvent({'group': 'Debug', 'order': 9999, 'schema': {'type': 'boolean'}})
-
 # general device status
 local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'type': 'object', 'title': '...', 'properties': {
         'level': {'type': 'integer', 'title': 'Value'},
         'message': {'type': 'string', 'title': 'String'}
       }}})
 
-powerEvent = Event('Power', {'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+local_event_RawPower = LocalEvent({'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+local_event_Power = LocalEvent({'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Partially On', 'Partially Off', 'Off']}})
 local_event_DesiredPower = LocalEvent({'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+# (also see initPowerEvaluation)
 
 local_event_Volume = LocalEvent({'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'integer'}})
 local_event_Mute = LocalEvent({'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['Mute', 'Unmute']}})
@@ -49,6 +49,7 @@ def main(arg = None):
     console.warn('No IP address set!')
     timer_deviceStatus.stop()
     timer_nonCritical.stop()
+    timer_errorStatus.stop()
     return
   
   print 'Nodel script started.'
@@ -85,7 +86,7 @@ recvBuffer = list()
   
 def received(data):
   lastReceive[0] = system_clock()
-  log('RECV: [%s]' % data.encode('hex'))
+  log(3, 'tcp_recv [%s]' % data.encode('hex'))
     
   # aa-ff-00-09-41-00-01-00-00-14-10-00-00-6e
   #
@@ -118,7 +119,7 @@ def processBuffer():
       message = ''.join(recvBuffer[:fullLen])
       del recvBuffer[:fullLen]
       
-      log('Pushing buffer [%s]' % message.encode('hex'))
+      log(2, 'recv_samsung [%s]' % message.encode('hex'))
       
       queue.handle(message)
       
@@ -128,8 +129,7 @@ def processBuffer():
       return
   
 def sent(data):
-  if local_event_DebugShowLogging.getArg():
-    print 'SENT: [%s]' % data.encode('hex')
+  log(3, 'tcp_sent [%s]' % data.encode('hex'))
   
 def disconnected():
   console.warn('TCP disconnected')
@@ -155,10 +155,10 @@ def protocolTimeout():
 
 queue = request_queue(timeout=protocolTimeout)
 
-# power ----
+# <!-- power
 
 def quickPowerCheck():
-  current = powerEvent.getArg()
+  current = local_event_RawPower.getArg()
   desired = local_event_DesiredPower.getArg()  
   ok = False
   
@@ -217,7 +217,19 @@ def setPower(state):
     power_timer.start()
     
 powerAction = Action('Power', lambda arg: setPower(arg), {'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+# added 'Partially X' power conventions for Power signal/event
+@after_main
+def initPowerEvaluation():
+  def handler(ignore):
+    raw, desired = local_event_RawPower.getArg(), local_event_DesiredPower.getArg()
+    local_event_Power.emit(raw if desired == raw else 'Partially %s' % desired)
   
+  local_event_RawPower.addEmitHandler(handler)
+  local_event_DesiredPower.addEmitHandler(handler)
+  
+# power --!>
+
 # input code ----
 
 def quickInputCodeCheck():
@@ -251,7 +263,7 @@ def enforceInputCode():
     inputCode_timer.stop()
     return
   
-  power = powerEvent.getArg()
+  power = local_event_RawPower.getArg()
   if power != 'On':
     console.info('inputCode: power is not on, turning on so input code can be chosen')
     powerAction.call('On')
@@ -290,7 +302,7 @@ local_event_State = LocalEvent({'general': 'State', 'order': next_seq(), 'schema
   
 def checkState(arg=None):
   inputCode = inputCodeEvent.getArg()
-  power = powerEvent.getArg()
+  power = local_event_RawPower.getArg()
   
   if power == 'Off':
     local_event_State.emit('Off')
@@ -303,9 +315,11 @@ def checkState(arg=None):
       
   else:
     local_event_State.emit('Unknown')
-  
-inputCodeEvent.addEmitHandler(checkState)
-powerEvent.addEmitHandler(checkState)
+
+@after_main
+def attachHandlers():
+  inputCodeEvent.addEmitHandler(checkState)
+  local_event_RawPower.addEmitHandler(checkState)
 
 def local_action_EnsureState(arg=None):
   '{"group": "State", "schema": {"type": "string", "enum": ["On", "Off"]}}'
@@ -321,7 +335,7 @@ def local_action_EnsureState(arg=None):
     powerAction.call('Off')
   
 def getDisplayStatus():
-  log('getDisplayStatus')
+  log(1, 'getDisplayStatus')
   
   # example response: aaff00094100010000141000006e
 
@@ -338,7 +352,7 @@ def getDisplayStatus():
   def handleResp(arg):
     checkHeader(arg)
     
-    powerEvent.emit('On' if ord(arg[6]) == 1 else 'Off')
+    local_event_RawPower.emit('On' if ord(arg[6]) == 1 else 'Off')
     
     local_event_Volume.emit(ord(arg[7]))
     local_event_Mute.emit('Mute' if ord(arg[8]) == 1 else 'Unmute')
@@ -363,7 +377,7 @@ local_event_CurrentTemp = LocalEvent({'title': 'Current Temp', 'group': 'Error S
 local_event_ErrorStatusFan = LocalEvent({'group': 'Fan?', 'group': 'Error Statuses', 'order': next_seq(), 'schema': {'type': 'boolean'}})
 
 def getExtendedDisplayStatus():
-  log('getExtendedDisplayStatus')
+  log(1, 'getExtendedDisplayStatus')
   
   # e.g. aa:ff:01:08:41:0d:00:00:02:00:36:00:8e
 
@@ -401,7 +415,7 @@ def local_action_ClearMenu(arg=None):
   
   
 def getIRRemoteControl(arg):
-  log('getIRRemoteControl')
+  log(1, 'getIRRemoteControl')
 
   # eg. 'aa ff 00 03 41 36 01 7a
   
@@ -430,7 +444,7 @@ Action('IR Remote Control', setIRRemoteControl, {'title': 'Set', 'group': 'IR Re
 serialNumberEvent = Event('Serial Number', {'group': 'Serial Number', 'schema': {'type': 'string'}})
 
 def getSerialNumber(arg):
-  log('getSerialNumber')
+  log(1, 'getSerialNumber')
   
   msg = '\x0b%s\x00' % chr(int(param_id))
   checksum = sum([ord(c) for c in msg]) & 0xff
@@ -441,7 +455,7 @@ Action('GetSerialNumber', getSerialNumber, {'title': 'Get', 'group': 'Serial Num
 softwareVersionEvent = Event('Software Version', {'group': 'Software Version', 'schema': {'type': 'string'}})
 
 def getSoftwareVersion(arg):
-  log('getSoftwareVersion')
+  log(1, 'getSoftwareVersion')
   
   msg = '\x0e%s\x00' % chr(int(param_id))
   checksum = sum([ord(c) for c in msg]) & 0xff
@@ -573,6 +587,17 @@ def statusCheck():
 status_check_interval = 75
 status_timer = Timer(statusCheck, status_check_interval)
     
-def log(msg):
-  if local_event_DebugShowLogging.getArg():
-    print msg
+# <!-- logging
+
+local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 'desc': 'Use this to ramp up the logging (with indentation)',  
+                                   'schema': {'type': 'integer'}})
+
+def warn(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.warn(('  ' * level) + msg)
+
+def log(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.log(('  ' * level) + msg)
+
+# --!>    
