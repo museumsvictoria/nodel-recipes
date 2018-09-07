@@ -28,6 +28,11 @@ navigator.issmart = (function(){
   return x;
 })();
 
+var updatepadding = function() {
+  $('body').css('padding-top',  $('nav.navbar-fixed-top').outerHeight() + 20);
+  $('body.hasfooter').css('padding-bottom',  $('footer.navbar-fixed-bottom').outerHeight() + 50);
+};
+
 var updatemeter = function(ele, arg) {
   if(!_.isFunction($(ele).data('throttle'))) {
     $(ele).data('throttle', _.throttle(function(el, val) {
@@ -61,7 +66,7 @@ var updatemeter = function(ele, arg) {
     }, 100));
   }
   $(ele).data('throttle')(ele, arg);
-}
+};
 
 var node = host = opts = '';
 var converter = new Markdown.Converter();
@@ -73,8 +78,9 @@ $(function() {
   if(navigator.issmart){
     $('head').append('<style>.fixed-table-body{overflow-y: hidden;} body{zoom: 140%}</style>');
   };
+  updatepadding();
   // get the node name
-  if (window.location.pathname.split( '/' )[1]=="nodes") node = decodeURIComponent(window.location.pathname.split( '/' )[2].replace(/\+/g, '%20'));
+  if(window.location.pathname.split( '/' )[1]=="nodes") node = decodeURIComponent(window.location.pathname.split( '/' )[2].replace(/\+/g, '%20'));
   if(node) {
     convertNames();
     setEvents();
@@ -117,6 +123,9 @@ var convertNames = function(){
 }
 
 var setEvents = function(){
+  $(window).resize(function () {
+    updatepadding();
+  });
   $('body').on('touchend touchcancel',':not(input)', function (e) {
     if(navigator.issmart) $('body').removeClass('touched');
   });
