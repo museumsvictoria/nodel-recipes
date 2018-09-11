@@ -158,7 +158,7 @@ def applyStateList(states, force=False):
       # if member is an edge, propagation is safe, otherwise request no propagation
     
       actionName = '%s Propagate %s' % (name, signalName)
-      arg = {'state': state, 'noPropagation': not memberInfo['isEdge']}
+      arg = {'state': state, 'noPropagate': not memberInfo['isEdge']}
       
       print '%s... "%s": %s' % ('Reverting' if reverting else 'Forcing', actionName, arg)
 
