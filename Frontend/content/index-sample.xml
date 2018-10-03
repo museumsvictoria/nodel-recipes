@@ -80,18 +80,6 @@
             <range action='Range' event="Range" type="mute"></range>
           </column>
         </row>
-        <row>
-          <column sm="6">
-            <title>Volume</title>
-            <button action='VolumeDown' class='btn-success'>Down</button>
-            <button action='VolumeUp' class='btn-success'>Up</button>
-          </column>
-          <column sm="6">
-            <title>Volume momentary</title>
-            <button type="momentary" action-off='VolumeStop' action-on='VolumeDownOn' class='btn-success'>Down</button>
-            <button type="momentary" action-off='VolumeStop' action-on='VolumeUpOn' class='btn-success'>Up</button>
-          </column>
-        </row>
       </column>
       <column sm="1">
         <title>Range</title>
@@ -110,6 +98,22 @@
             <field event="Field"></field>
           </column>
         </row>
+      </column>
+    </row>
+    <row>
+      <column sm="4">
+        <title>Multiple Actions</title>
+        <button action='["Action1","Action2","Action3"]' class='btn-warning'>Trigger</button>
+      </column>
+      <column sm="4">
+        <title>Volume</title>
+        <button action='VolumeDown' class='btn-success'>Down</button>
+        <button action='VolumeUp' class='btn-success'>Up</button>
+      </column>
+      <column sm="4">
+        <title>Volume momentary</title>
+        <button type="momentary" action-off='VolumeStop' action-on='VolumeDownOn' class='btn-success'>Down</button>
+        <button type="momentary" action-off='VolumeStop' action-on='VolumeUpOn' class='btn-success'>Up</button>
       </column>
     </row>
   </page>

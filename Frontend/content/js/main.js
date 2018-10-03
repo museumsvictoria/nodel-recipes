@@ -134,14 +134,13 @@ var setEvents = function(){
   });
   $('body').on('input','input[type=range]input[data-action]', function (e){
     var ele = $(this);
-    var action = $(ele).data('action');
-    var arg = "{'arg':"+stringify($(this).val())+"}";
+    data = getAction(this);
     if(!_.isFunction($(this).data('throttle'))) {
       $(ele).data('throttle', _.throttle(function(act, ar) {
         callAction(act, ar);
       }, 250));
     }
-    $(ele).data('throttle')(action, arg);
+    $(ele).data('throttle')(data.action, data.arg);
   });
   $('body').on('touchstart mousedown touchend touchcancel mouseup','*[data-actionon]*[data-actionoff]', function (e) {
     e.stopPropagation(); e.preventDefault();
@@ -220,12 +219,15 @@ var getAction = function(ele){
 }
 
 var callAction = function(action, arg) {
-  $.postJSON('http://' + host + '/REST/nodes/' + node + '/actions/' + encodeURIComponent(action) + '/call', arg, function () {
-    console.log(action + " - Success");
-  }).fail(function (e, s) {
-    errtxt = s;
-    if (e.responseText) errtxt = s + "\n" + e.responseText;
-    console.log("exec - Error:\n" + errtxt, "error");
+  $.each($.isArray(action) ? action : [action], function(i, act){
+    ar = $.isArray(arg) ? arg[i] : arg;
+    $.postJSON('http://' + host + '/REST/nodes/' + node + '/actions/' + encodeURIComponent(act) + '/call', ar, function () {
+      console.log(act + " - Success");
+    }).fail(function (e, s) {
+      errtxt = s;
+      if (e.responseText) errtxt = s + "\n" + e.responseText;
+      console.log("exec - Error:\n" + errtxt, "error");
+    });
   });
 };
 
