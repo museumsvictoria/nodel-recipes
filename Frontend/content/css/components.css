@@ -8849,8 +8849,7 @@ footer
 {
     padding-top: 15px;
 }
-.page,
-.sect
+.page
 {
     display: none;
 }

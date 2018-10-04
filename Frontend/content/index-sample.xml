@@ -7,7 +7,7 @@
         <title>Source</title>
         <pills event="Preset" action="Preset">
           <pill value="PresetChromecast">Chromecast</pill>
-          <pill value="PresetTV">TV</pill>
+          <pill showevent="Show" showvalue="Off" value="PresetTV">TV</pill>
           <pill value="PresetButler">Signage</pill>
           <pill value="PresetSpare1"><badge event="Status2"/>HDMI 1</pill>
           <pill value="PresetSpare2"><badge event="Status2"/>HDMI 2</pill>
@@ -19,7 +19,7 @@
             <title>Source select</title>
             <select class="btn-default" event="Preset" action="Preset">
               <item value="PresetChromecast">Chromecast</item>
-              <item value="PresetTV">TV</item>
+              <item showevent="Show" showvalue="Off" value="PresetTV">TV</item>
               <item value="PresetButler">Signage</item>
               <item value="PresetSpare1">HDMI 1</item>
               <item value="PresetSpare2">HDMI 2</item>
@@ -58,8 +58,8 @@
       <column sm="7">
         <row>
           <column sm="12">
-            <title>Testing button groups</title>
-            <buttongroup>
+            <title showevent="Show" showvalue="On">Testing button groups</title>
+            <buttongroup showevent="Show" showvalue="On">
               <button action='PresetChromecast' class='btn-default'>Chromecast</button>
               <button action='PresetTV' class='btn-default'>TV</button>
               <button action='PresetButler' class='btn-default'>Signage</button>
@@ -102,15 +102,15 @@
     </row>
     <row>
       <column sm="4">
-        <title>Multiple Actions</title>
-        <button action='["Action1","Action2","Action3"]' class='btn-warning'>Trigger</button>
+        <title showevent="Show" showvalue="On">Multiple Actions</title>
+        <button showevent="Show" showvalue="On" action='["Action1","Action2","Action3"]' class='btn-warning'>Trigger</button>
       </column>
-      <column sm="4">
+      <column sm="4" event="Show" value="On">
         <title>Volume</title>
         <button action='VolumeDown' class='btn-success'>Down</button>
         <button action='VolumeUp' class='btn-success'>Up</button>
       </column>
-      <column sm="4">
+      <column sm="4" showevent="Show" showvalue="Off">
         <title>Volume momentary</title>
         <button type="momentary" action-off='VolumeStop' action-on='VolumeDownOn' class='btn-success'>Down</button>
         <button type="momentary" action-off='VolumeStop' action-on='VolumeUpOn' class='btn-success'>Up</button>

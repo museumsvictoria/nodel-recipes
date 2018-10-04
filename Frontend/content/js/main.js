@@ -91,6 +91,8 @@ $(function() {
   $('*[data-nav]').first().trigger('click');
   // init scrollable divs
   $('.scrollbar-inner').scrollbar();
+  // hide sects by default
+  $(".sect").hide();
 });
 
 var checkReload = function(){
@@ -220,8 +222,7 @@ var getAction = function(ele){
 
 var callAction = function(action, arg) {
   $.each($.isArray(action) ? action : [action], function(i, act){
-    ar = $.isArray(arg) ? arg[i] : arg;
-    $.postJSON('http://' + host + '/REST/nodes/' + node + '/actions/' + encodeURIComponent(act) + '/call', ar, function () {
+    $.postJSON('http://' + host + '/REST/nodes/' + node + '/actions/' + encodeURIComponent(act) + '/call', arg, function () {
       console.log(act + " - Success");
     }).fail(function (e, s) {
       errtxt = s;
@@ -313,6 +314,27 @@ var parseLog = function(log){
         $('#clock').data('time',time).text(time.format('h:mm:ss a'));
         break;
       default:
+        var eles = $("[data-showevent='"+log.alias+"']");
+        $.each(eles, function (i, ele) {
+          if($.type(log.arg)== "object") log.arg = log.arg[$(ele).data('event-arg')];
+          if($(ele).hasClass('dynamic')) {
+            $(ele).data('dynamic',log);
+          }
+          switch ($.type(log.arg)) {
+            case "string":
+              if ($(ele).hasClass('sect')) {
+                $(".sect[data-showevent='"+log.alias+"']").hide();
+                $(".sect[data-showevent='"+log.alias+"'][data-showarg='"+log.arg+"']").show();
+              };
+              break;
+            case "boolean":
+              if ($(ele).hasClass('sect')) {
+                if (log.arg) $(".sect[data-showevent='"+log.alias+"']").show();
+                else $(".sect[data-showevent='"+log.alias+"']").hide();
+              };
+              break;
+          };
+        });
         var eles = $("[data-event='"+log.alias+"']");
         $.each(eles, function (i, ele) {
           if($.type(log.arg)== "object") log.arg = log.arg[$(ele).data('event-arg')];
@@ -377,9 +399,6 @@ var parseLog = function(log){
               } else if ($(ele).hasClass('scrollbar-inner')) {
                 var arg = converter.makeHtml(log.arg);
                 $(ele).html(arg);
-              } else if ($(ele).hasClass('sect')) {
-                $(".sect[data-event='"+log.alias+"']").hide();
-                $(".sect[data-event='"+log.alias+"'][data-sect='"+log.arg+"']").show();
               } else {
                 if ($(ele).is("span, h4, p")) $(ele).text(log.arg);
                 // lists
@@ -405,9 +424,6 @@ var parseLog = function(log){
               } else if($(ele).is("a.btn")) {
                 if (log.arg) $(ele).addClass($(ele).data('class-on')).addClass('active').removeClass('btn-default');
                 else $(ele).addClass('btn-default').removeClass('active').removeClass($(ele).data('class-on'));
-              } else if ($(ele).hasClass('sect')) {
-                if (log.arg) $(".sect[data-event='"+log.alias+"']").show();
-                else $(".sect[data-event='"+log.alias+"']").hide();
               }
               break;
           }

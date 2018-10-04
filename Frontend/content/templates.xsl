@@ -12,16 +12,30 @@
   <xsl:template match="column[not(@sm|md|xs)]">
     <div>
       <xsl:choose>
-        <xsl:when test="@event">
+        <xsl:when test="@event or @showevent">
           <xsl:attribute name="class">
             <xsl:text>col-sm-12 sect</xsl:text>
           </xsl:attribute>
-          <xsl:attribute name="data-event">
-            <xsl:value-of select="@event"/>
+          <xsl:attribute name="data-showevent">
+            <xsl:choose>
+              <xsl:when test="@event">
+                <xsl:value-of select="@event"/>
+              </xsl:when>
+              <xsl:otherwise>
+                <xsl:value-of select="@showevent"/>
+              </xsl:otherwise>
+            </xsl:choose>
           </xsl:attribute>
-          <xsl:if test="@value">
-            <xsl:attribute name="data-sect">
-              <xsl:value-of select="@value"/>
+          <xsl:if test="@value or @showvalue">
+            <xsl:attribute name="data-showarg">
+              <xsl:choose>
+                <xsl:when test="@value">
+                  <xsl:value-of select="@value"/>
+                </xsl:when>
+                <xsl:otherwise>
+                  <xsl:value-of select="@showvalue"/>
+                </xsl:otherwise>
+              </xsl:choose>
             </xsl:attribute>
           </xsl:if>
         </xsl:when>
@@ -37,7 +51,7 @@
   <xsl:template match="column[@sm|@md|@xs]">
     <div>
       <xsl:choose>
-        <xsl:when test="@event">
+        <xsl:when test="@event or @showevent">
           <xsl:attribute name="class">
             <xsl:if test="@xs">
               <xsl:text>col-xs-</xsl:text>
@@ -56,12 +70,26 @@
             </xsl:if>
             <xsl:text> sect</xsl:text>
           </xsl:attribute>
-          <xsl:attribute name="data-event">
-            <xsl:value-of select="@event"/>
+          <xsl:attribute name="data-showevent">
+            <xsl:choose>
+              <xsl:when test="@event">
+                <xsl:value-of select="@event"/>
+              </xsl:when>
+              <xsl:otherwise>
+                <xsl:value-of select="@showevent"/>
+              </xsl:otherwise>
+            </xsl:choose>
           </xsl:attribute>
-          <xsl:if test="@value">
-            <xsl:attribute name="data-arg">
-              <xsl:value-of select="@value"/>
+          <xsl:if test="@value or @showvalue">
+            <xsl:attribute name="data-showarg">
+              <xsl:choose>
+                <xsl:when test="@value">
+                  <xsl:value-of select="@value"/>
+                </xsl:when>
+                <xsl:otherwise>
+                  <xsl:value-of select="@showvalue"/>
+                </xsl:otherwise>
+              </xsl:choose>
             </xsl:attribute>
           </xsl:if>
         </xsl:when>
@@ -91,6 +119,19 @@
   <!-- title -->
   <xsl:template match="title">
     <h4>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="class">
+          <xsl:text>sect</xsl:text>
+        </xsl:attribute>
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
       <xsl:if test="@event">
         <xsl:attribute name="data-event">
           <xsl:value-of select="@event"/>
@@ -103,6 +144,19 @@
   <!-- text -->
   <xsl:template match="text">
     <p>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="class">
+          <xsl:text>sect</xsl:text>
+        </xsl:attribute>
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
       <xsl:if test="@event">
         <xsl:attribute name="data-event">
           <xsl:value-of select="@event"/>
@@ -120,6 +174,9 @@
           <xsl:when test="@class">btn <xsl:value-of select="@class"/></xsl:when>
           <xsl:otherwise>btn btn-default</xsl:otherwise>
         </xsl:choose>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
       </xsl:attribute>
       <xsl:if test="@event">
         <xsl:attribute name="data-event">
@@ -131,6 +188,16 @@
             <xsl:otherwise>btn-primary</xsl:otherwise>
           </xsl:choose>
         </xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
       </xsl:if>
       <xsl:value-of select="text()"/>
       <xsl:apply-templates select="badge|icon|text|image"/>
@@ -167,7 +234,20 @@
             <xsl:otherwise>btn-group-vertical btn-block</xsl:otherwise>
           </xsl:choose>
         </xsl:if>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
       </xsl:attribute>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
       <xsl:apply-templates select="button"/>
     </div>
   </xsl:template>
@@ -199,7 +279,23 @@
   <!-- grid -->
   <!-- switch -->
   <xsl:template match="switch">
-    <div class="btn-group btn-switch" role="group" data-event="{@event}" data-arg-action="{@action}">
+    <div role="group" data-event="{@event}" data-arg-action="{@action}">
+      <xsl:attribute name="class">
+        <xsl:text>btn-group btn-switch</xsl:text>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
       <xsl:attribute name="data-class-off">
         <xsl:choose>
           <xsl:when test="@class-off"><xsl:value-of select="@class-off"/></xsl:when>
@@ -229,7 +325,23 @@
   <!-- switch -->
   <!-- partialswitch -->
   <xsl:template match="partialswitch">
-    <div class="btn-group btn-pswitch" role="group" data-event="{@event}" data-arg-action="{@action}">
+    <div role="group" data-event="{@event}" data-arg-action="{@action}">
+      <xsl:attribute name="class">
+        <xsl:text>btn-group btn-pswitch</xsl:text>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
       <xsl:attribute name="data-class-off">
         <xsl:choose>
           <xsl:when test="@class-off"><xsl:value-of select="@class-off"/></xsl:when>
@@ -260,9 +372,24 @@
   <!-- pills -->
   <xsl:template match="pills">
     <ul class="nav nav-pills nav-stacked" data-event="{@event}" data-arg-action="{@action}">
-    <xsl:for-each select="pill">
-      <li><a href="#" data-arg="{@value}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a></li>
-    </xsl:for-each>
+      <xsl:for-each select="pill">
+        <li>
+          <xsl:if test="@showevent">
+            <xsl:attribute name="class">
+              <xsl:text>sect</xsl:text>
+            </xsl:attribute>
+            <xsl:attribute name="data-showevent">
+              <xsl:value-of select="@showevent"/>
+            </xsl:attribute>
+            <xsl:if test="@showvalue">
+              <xsl:attribute name="data-showarg">
+                <xsl:value-of select="@showvalue"/>
+              </xsl:attribute>
+            </xsl:if>
+          </xsl:if>
+          <a href="#" data-arg="{@value}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
+        </li>
+      </xsl:for-each>
     </ul>
   </xsl:template>
   <!-- pills -->
@@ -273,9 +400,24 @@
         <span>&#160;</span>&#160;<span class="caret"></span>
       </button>
       <ul class="dropdown-menu" data-event="{@event}" data-arg-action="{@action}">
-      <xsl:for-each select="item">
-        <li><a href="#" data-arg="{@value}"><xsl:value-of select="text()"/></a></li>
-      </xsl:for-each>
+        <xsl:for-each select="item">
+          <li>
+            <xsl:if test="@showevent">
+              <xsl:attribute name="class">
+                <xsl:text>sect</xsl:text>
+              </xsl:attribute>
+              <xsl:attribute name="data-showevent">
+                <xsl:value-of select="@showevent"/>
+              </xsl:attribute>
+              <xsl:if test="@showvalue">
+                <xsl:attribute name="data-showarg">
+                  <xsl:value-of select="@showvalue"/>
+                </xsl:attribute>
+              </xsl:if>
+            </xsl:if>
+            <a href="#" data-arg="{@value}"><xsl:value-of select="text()"/></a>
+          </li>
+        </xsl:for-each>
       </ul>
     </div>
   </xsl:template>
