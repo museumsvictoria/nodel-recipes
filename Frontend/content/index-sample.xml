@@ -17,9 +17,9 @@
         <row>
           <column sm="12">
             <title>Source select</title>
-            <select class="btn-default" event="Preset" action="Preset">
+            <select class="btn-default" event="Preset" action="Preset" showevent="Show" showvalue="Off">
               <item value="PresetChromecast">Chromecast</item>
-              <item showevent="Show" showvalue="Off" value="PresetTV">TV</item>
+              <item value="PresetTV">TV</item>
               <item value="PresetButler">Signage</item>
               <item value="PresetSpare1">HDMI 1</item>
               <item value="PresetSpare2">HDMI 2</item>

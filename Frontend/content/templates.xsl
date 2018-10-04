@@ -371,7 +371,23 @@
   <!-- partialswitch -->
   <!-- pills -->
   <xsl:template match="pills">
-    <ul class="nav nav-pills nav-stacked" data-event="{@event}" data-arg-action="{@action}">
+    <ul data-event="{@event}" data-arg-action="{@action}">
+      <xsl:attribute name="class">
+        <xsl:text>nav nav-pills nav-stacked</xsl:text>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
       <xsl:for-each select="pill">
         <li>
           <xsl:if test="@showevent">
@@ -395,7 +411,23 @@
   <!-- pills -->
   <!-- select -->
   <xsl:template match="select">
-    <div class="btn-group btn-select">
+    <div>
+      <xsl:attribute name="class">
+        <xsl:text>btn-group btn-select</xsl:text>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
       <button type="button" class="btn {@class} dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
         <span>&#160;</span>&#160;<span class="caret"></span>
       </button>
