@@ -314,6 +314,7 @@ var parseLog = function(log){
         $('#clock').data('time',time).text(time.format('h:mm:ss a'));
         break;
       default:
+        // handle show-hide events
         var eles = $("[data-showevent='"+log.alias+"']");
         $.each(eles, function (i, ele) {
           if($.type(log.arg)== "object") log.arg = log.arg[$(ele).data('event-arg')];
@@ -324,7 +325,9 @@ var parseLog = function(log){
             case "string":
               if ($(ele).hasClass('sect')) {
                 $(".sect[data-showevent='"+log.alias+"']").hide();
-                $(".sect[data-showevent='"+log.alias+"'][data-showarg='"+log.arg+"']").show();
+                $(".sect[data-showevent='"+log.alias+"']").filter(function() {
+                  return $.inArray(log.arg, $.isArray($(this).data('showarg')) ? $(this).data('showarg') : [$(this).data('showarg')]) >= 0;
+                }).show();
               };
               break;
             case "boolean":
@@ -335,6 +338,7 @@ var parseLog = function(log){
               break;
           };
         });
+        // handle event data updates
         var eles = $("[data-event='"+log.alias+"']");
         $.each(eles, function (i, ele) {
           if($.type(log.arg)== "object") log.arg = log.arg[$(ele).data('event-arg')];

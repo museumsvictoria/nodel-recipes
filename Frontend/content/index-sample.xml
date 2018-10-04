@@ -7,7 +7,7 @@
         <title>Source</title>
         <pills event="Preset" action="Preset">
           <pill value="PresetChromecast">Chromecast</pill>
-          <pill showevent="Show" showvalue="Off" value="PresetTV">TV</pill>
+          <pill showevent="Show" showvalue='["Off","Half"]' value="PresetTV">TV</pill>
           <pill value="PresetButler">Signage</pill>
           <pill value="PresetSpare1"><badge event="Status2"/>HDMI 1</pill>
           <pill value="PresetSpare2"><badge event="Status2"/>HDMI 2</pill>
