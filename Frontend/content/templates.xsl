@@ -633,4 +633,16 @@
     </div>
   </xsl:template>
   <!-- meter -->
+  <!-- gap -->
+  <xsl:template match="gap">
+    <div>
+      <xsl:attribute name="style">
+        <xsl:choose>
+          <xsl:when test="@value">min-height:<xsl:value-of select="@value"/>px;</xsl:when>
+          <xsl:otherwise>min-height:20px;</xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
+    </div>
+  </xsl:template>
+  <!-- gap -->
 </xsl:stylesheet>
