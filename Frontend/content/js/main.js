@@ -347,8 +347,7 @@ var parseLog = function(log){
           }
           switch ($.type(log.arg)) {
             case "number":
-              if ($(ele).is("span") || $(ele).is("output")) $(ele).text(log.arg);
-              else if ($(ele).not('.meter').is("div")) {
+              if ($(ele).not('.meter').is("div")) {
                 $(ele).children().filter(function () {
                   return $(this).attr("data-arg") > log.arg;
                 }).removeClass('btn-success').addClass('btn-default');
@@ -357,7 +356,20 @@ var parseLog = function(log){
                 }).removeClass('btn-default').addClass('btn-success');
               } else if ($(ele).is("div.meter")) {
                 updatemeter(ele, log.arg);
-              } else if($(ele).is("input")) $(ele).not(':active').val(log.arg);
+              } else if($(ele).is("input")) {
+                $(ele).not(':active').val(log.arg);
+              } else {
+                if ($(ele).is("output, span, h4, p")) $(ele).text(log.arg);
+                // lists
+                $(ele).children('li').has('a[data-arg]').removeClass('active');
+                $(ele).children('li').has('a[data-arg="' + log.arg + '"]').addClass('active');
+                // button select
+                $(ele).parents('.btn-select').children('button').children('span:first-child').text($(ele).children('li').has('a[data-arg="' + log.arg + '"]').text());
+                // pages
+                $("[data-page]").hide();
+                $('[data-page="' + log.arg + '"]').show();
+                if($(ele).is("input")) $(ele).not(':active').val(log.arg);
+              }
               break;
             case "string":
               if($(ele).hasClass('btn-pswitch')){
