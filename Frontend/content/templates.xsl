@@ -467,13 +467,29 @@
   <!-- select -->
   <!-- status -->
   <xsl:template match="status">
-    <div class="alert alert-mini label-default" data-status="{@event}">
-    <xsl:if test="@page">
-      <xsl:attribute name="data-nav">
-        <xsl:value-of select="translate(@page,translate(@page,$allowedSymbols,''),'')"/>
+    <div data-status="{@event}">
+      <xsl:attribute name="class">
+        <xsl:text>alert alert-mini label-default</xsl:text>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
       </xsl:attribute>
-    </xsl:if>
-    <xsl:apply-templates select="link"/><xsl:apply-templates select="swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
+      <xsl:if test="@page">
+        <xsl:attribute name="data-nav">
+          <xsl:value-of select="translate(@page,translate(@page,$allowedSymbols,''),'')"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:apply-templates select="link"/><xsl:apply-templates select="swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
     </div>
   </xsl:template>
   <!-- status -->
