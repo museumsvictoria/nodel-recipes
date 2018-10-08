@@ -156,8 +156,24 @@ var setEvents = function(){
     if(!$('body').hasClass('touched')) {
       if(navigator.issmart) $('body').addClass('touched');
       data = getAction(this);
-      if(data.action) callAction(data.action, data.arg);
+      if(data.action) {
+        if(data.confirm){
+          $('#confirmlabel').text(data.confirmtitle);
+          $('#confirmtext').text(data.confirmtext);
+          $('#confirmaction').data('confirmaction', data.action);
+          $('#confirmaction').data('arg', data.arg); 
+          $('#confirm').modal('show');
+        } else callAction(data.action, data.arg);
+      }
     }
+  });
+  $('body').on('click','#confirmaction', function (e) {
+    e.stopPropagation(); e.preventDefault();
+    if(!$('body').hasClass('touched')) {
+      if(navigator.issmart) $('body').addClass('touched');
+      callAction($(this).data('confirmaction'), $(this).data('arg'));
+      $('#confirm').modal('hide');
+    };
   });
   $('body').on('click','*[data-link-event]', function (e) {
     e.stopPropagation(); e.preventDefault();
@@ -192,14 +208,34 @@ var setEvents = function(){
 var getAction = function(ele){
   var arg = '';
   var action = '';
+  var confirm = false;
+  var confirmtitle = 'Confirm';
+  var confirmtext = 'Are you sure you would like to continue?';
   if (!_.isUndefined($(ele).data('arg-type'))) var type = $(ele).data('arg-type')
   else type = false;
   if (!_.isUndefined($(ele).data('actionon')) && !_.isUndefined($(ele).data('actionoff'))) {
     if ($(ele).hasClass('active')) action = $(ele).data('actionoff');
     else action = $(ele).data('actionon');
+    if(!_.isUndefined($(ele).data('confirm'))) {
+      confirm = true;
+      if(!_.isUndefined($(ele).data('confirmtitle'))) confirmtitle = $(ele).data('confirmtitle');
+      if(!_.isUndefined($(ele).data('confirmtext'))) confirmtext = $(ele).data('confirmtext');
+    }
   }
-  else if (!_.isUndefined($(ele).data('action'))) action = $(ele).data('action');
-  else if (!_.isUndefined($(ele).closest('[data-arg-action]').data('arg-action'))) action = $(ele).closest('[data-arg-action]').data('arg-action');
+  else if (!_.isUndefined($(ele).data('action'))) {
+    action = $(ele).data('action');
+    if(!_.isUndefined($(ele).data('confirm'))) {
+      confirm = true;
+      if(!_.isUndefined($(ele).data('confirmtitle'))) confirmtitle = $(ele).data('confirmtitle');
+      if(!_.isUndefined($(ele).data('confirmtext'))) confirmtext = $(ele).data('confirmtext');
+    }
+  }
+  else if (!_.isUndefined($(ele).closest('[data-arg-action]').data('arg-action'))) {
+    action = $(ele).closest('[data-arg-action]').data('arg-action');
+    if(!_.isUndefined($(ele).closest('[data-arg-action]').data('confirm'))) confirm = true;
+    if(!_.isUndefined($(ele).closest('[data-arg-action]').data('confirmtitle'))) confirmtitle = $(ele).closest('[data-arg-action]').data('confirmtitle');
+    if(!_.isUndefined($(ele).closest('[data-arg-action]').data('confirmtext'))) confirmtext = $(ele).closest('[data-arg-action]').data('confirmtext');
+  }
   if (!_.isUndefined($(ele).data('arg-on')) && !_.isUndefined($(ele).data('arg-off'))) {
     if ($(ele).hasClass('active')) arg = "{'arg':" + stringify($(ele).data('arg-off'), type) + "}";
     else arg = "{'arg':" + stringify($(ele).data('arg-on'), type) + "}";
@@ -217,7 +253,7 @@ var getAction = function(ele){
       } else arg = "{'arg':"+stringify(val)+"}";
     } else arg = "{}";
   }
-  return {'action': action, 'arg': arg};
+  return {'action': action, 'arg': arg, 'confirm': confirm, 'confirmtitle': confirmtitle, 'confirmtext': confirmtext};
 }
 
 var callAction = function(action, arg) {

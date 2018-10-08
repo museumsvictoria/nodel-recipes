@@ -169,6 +169,19 @@
   <!-- button -->
   <xsl:template match="button[not(@type)]">
     <a href="#" data-action="{@action}" type="button">
+      <xsl:if test="@confirm">
+        <xsl:attribute name="data-confirm"></xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@confirmtitle">
+        <xsl:attribute name="data-confirmtitle">
+          <xsl:value-of select="@confirmtitle"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@confirmtext">
+        <xsl:attribute name="data-confirmtext">
+          <xsl:value-of select="@confirmtext"/>
+        </xsl:attribute>
+      </xsl:if>
       <xsl:attribute name="class">
         <xsl:choose>
           <xsl:when test="@class">btn <xsl:value-of select="@class"/></xsl:when>
@@ -206,6 +219,19 @@
   <xsl:template match="button[@type]">
     <xsl:if test="@type='momentary'">
       <a href="#" data-actionon="{@action-on}" data-actionoff="{@action-off}" type="button">
+        <xsl:if test="@confirm">
+          <xsl:attribute name="data-confirm"></xsl:attribute>
+        </xsl:if>
+        <xsl:if test="@confirmtitle">
+          <xsl:attribute name="data-confirmtitle">
+            <xsl:value-of select="@confirmtitle"/>
+          </xsl:attribute>
+        </xsl:if>
+        <xsl:if test="@confirmtext">
+          <xsl:attribute name="data-confirmtext">
+            <xsl:value-of select="@confirmtext"/>
+          </xsl:attribute>
+        </xsl:if>
         <xsl:attribute name="class">
           <xsl:choose>
             <xsl:when test="@class">btn <xsl:value-of select="@class"/></xsl:when>
@@ -280,6 +306,21 @@
   <!-- switch -->
   <xsl:template match="switch">
     <div role="group" data-event="{@event}" data-arg-action="{@action}">
+      <xsl:if test="@confirm">
+        <xsl:attribute name="data-confirm">
+          <xsl:value-of select="@confirm"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@confirmtitle">
+        <xsl:attribute name="data-confirmtitle">
+          <xsl:value-of select="@confirmtitle"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@confirmtext">
+        <xsl:attribute name="data-confirmtext">
+          <xsl:value-of select="@confirmtext"/>
+        </xsl:attribute>
+      </xsl:if>
       <xsl:attribute name="class">
         <xsl:text>btn-group btn-switch</xsl:text>
         <xsl:if test="@showevent">
@@ -326,6 +367,21 @@
   <!-- partialswitch -->
   <xsl:template match="partialswitch">
     <div role="group" data-event="{@event}" data-arg-action="{@action}">
+      <xsl:if test="@confirm">
+        <xsl:attribute name="data-confirm">
+          <xsl:value-of select="@confirm"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@confirmtitle">
+        <xsl:attribute name="data-confirmtitle">
+          <xsl:value-of select="@confirmtitle"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@confirmtext">
+        <xsl:attribute name="data-confirmtext">
+          <xsl:value-of select="@confirmtext"/>
+        </xsl:attribute>
+      </xsl:if>
       <xsl:attribute name="class">
         <xsl:text>btn-group btn-pswitch</xsl:text>
         <xsl:if test="@showevent">
@@ -372,6 +428,19 @@
   <!-- pills -->
   <xsl:template match="pills">
     <ul data-event="{@event}" data-arg-action="{@action}">
+      <xsl:if test="@confirm">
+        <xsl:attribute name="data-confirm"></xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@confirmtitle">
+        <xsl:attribute name="data-confirmtitle">
+          <xsl:value-of select="@confirmtitle"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@confirmtext">
+        <xsl:attribute name="data-confirmtext">
+          <xsl:value-of select="@confirmtext"/>
+        </xsl:attribute>
+      </xsl:if>
       <xsl:attribute name="class">
         <xsl:text>nav nav-pills nav-stacked</xsl:text>
         <xsl:if test="@showevent">
@@ -432,6 +501,19 @@
         <span>&#160;</span>&#160;<span class="caret"></span>
       </button>
       <ul class="dropdown-menu" data-event="{@event}" data-arg-action="{@action}">
+        <xsl:if test="@confirm">
+          <xsl:attribute name="data-confirm"></xsl:attribute>
+        </xsl:if>
+        <xsl:if test="@confirmtitle">
+          <xsl:attribute name="data-confirmtitle">
+            <xsl:value-of select="@confirmtitle"/>
+          </xsl:attribute>
+        </xsl:if>
+        <xsl:if test="@confirmtext">
+          <xsl:attribute name="data-confirmtext">
+            <xsl:value-of select="@confirmtext"/>
+          </xsl:attribute>
+        </xsl:if>
         <xsl:for-each select="item">
           <li>
             <xsl:if test="@showevent">
@@ -461,6 +543,19 @@
         <span>&#160;</span>&#160;<span class="caret"></span>
       </button>
       <ul class="dropdown-menu dynamic" data-event="{@event}" data-arg-action="{@action}" data-render="{@data}" data-render-template="#dynamicSelect">
+        <xsl:if test="@confirm">
+          <xsl:attribute name="data-confirm"></xsl:attribute>
+        </xsl:if>
+        <xsl:if test="@confirmtitle">
+          <xsl:attribute name="data-confirmtitle">
+            <xsl:value-of select="@confirmtitle"/>
+          </xsl:attribute>
+        </xsl:if>
+        <xsl:if test="@confirmtext">
+          <xsl:attribute name="data-confirmtext">
+            <xsl:value-of select="@confirmtext"/>
+          </xsl:attribute>
+        </xsl:if>
       </ul>
     </div>
   </xsl:template>

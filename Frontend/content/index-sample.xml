@@ -5,7 +5,7 @@
     <row>
       <column sm="3">
         <title>Source</title>
-        <pills event="Preset" action="Preset">
+        <pills event="Preset" action="Preset" confirm="true">
           <pill value="PresetChromecast">Chromecast</pill>
           <pill showevent="Show" showvalue='["Off","Half"]' value="PresetTV">TV</pill>
           <pill value="PresetButler">Signage</pill>
@@ -38,7 +38,7 @@
         </row>
         <row>
           <column sm="12">
-            <partialswitch class="btn-default" event="PartialSwitch" action="PartialSwitch"/>
+            <partialswitch confirm="true" confirmtext="Are you sure?" class="btn-default" event="PartialSwitch" action="PartialSwitch"/>
           </column>
         </row>
       </column>

@@ -104,7 +104,7 @@
         </nav>
         <!-- end main nav -->
         <!-- offline modal -->
-        <div class="modal" id="offline" tabindex="-1" role="dialog" aria-labelledby="offlinelabel" data-backdrop="static" aria-hidden="true">
+        <div class="modal" id="offline" tabindex="-1" role="dialog" aria-labelledby="offlinelabel" data-backdrop="static" data-keyboard="false" aria-hidden="true">
           <div class="modal-dialog">
             <div class="modal-content">
               <div class="modal-header">
@@ -112,6 +112,25 @@
               </div>
               <div class="modal-body">
                 <p>The system is currently offline. Please wait...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- end offline modal -->
+        <!-- confirm modal -->
+        <div class="modal" id="confirm" tabindex="-1" role="dialog" aria-labelledby="confirmlabel" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&#215;</button>
+                <h4 class="modal-title" id="confirmlabel"></h4>
+              </div>
+              <div class="modal-body">
+                <p id="confirmtext"></p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <a id="confirmaction" class="btn btn-danger btn-ok">Ok</a>
               </div>
             </div>
           </div>
