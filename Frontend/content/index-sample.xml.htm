@@ -1,197 +1,274 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<meta charset="utf-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="theme-color" content="#000000">
-<title></title>
-<link href="css/components.css" rel="stylesheet">
-<link href="css/main.css" rel="stylesheet">
-</head>
-<body>
-<nav class="navbar navbar-inverse navbar-fixed-top" data-toggle="collapse" data-target=".nav-collapse"><div class="container-fluid">
-<div class="navbar-header">
-<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#nodel-navbar" aria-expanded="false"><span class="sr-only">Toggle navigation</span><span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span></button><a class="navbar-brand" id="title" href="#"><img src="img/logo.png">Status Page</a>
-</div>
-<div class="collapse navbar-collapse" id="nodel-navbar" role="navigation">
-<ul class="nav navbar-nav"><li><a href="#" data-nav="MyControl" data-toggle="collapse" data-target="#nodel-navbar.in">My Control</a></li></ul>
-<div class="navbar-right"><p class="navbar-text" id="clock"></p></div>
-</div>
-</div></nav><div class="modal" id="offline" tabindex="-1" role="dialog" aria-labelledby="offlinelabel" data-backdrop="static" data-keyboard="false" aria-hidden="true"><div class="modal-dialog"><div class="modal-content">
-<div class="modal-header"><h4 class="modal-title" id="offlinelabel">Offline</h4></div>
-<div class="modal-body"><p>The system is currently offline. Please wait...</p></div>
-</div></div></div>
-<div class="modal" id="confirm" tabindex="-1" role="dialog" aria-labelledby="confirmlabel" aria-hidden="true"><div class="modal-dialog"><div class="modal-content">
-<div class="modal-header">
-<button type="button" class="close" data-dismiss="modal">×</button><h4 class="modal-title" id="confirmlabel"></h4>
-</div>
-<div class="modal-body"><p id="confirmtext"></p></div>
-<div class="modal-footer">
-<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button><a id="confirmaction" class="btn btn-danger btn-ok">Ok</a>
-</div>
-</div></div></div>
-<div class="container-fluid page" data-section="MyControl">
-<div class="row ">
-<div class="col-sm-3 ">
-        <h4>Source</h4>
-        <ul data-event="Preset" data-arg-action="Preset" data-confirm="" class="nav nav-pills nav-stacked">
-<li><a href="#" data-arg="PresetChromecast">Chromecast</a></li>
-<li class="sect" data-showevent="Show" data-showarg='["Off","Half"]'><a href="#" data-arg="PresetTV">TV</a></li>
-<li><a href="#" data-arg="PresetButler">Signage</a></li>
-<li><a href="#" data-arg="PresetSpare1">HDMI 1<span data-status="Status2" class="label label-default status"></span></a></li>
-<li><a href="#" data-arg="PresetSpare2">HDMI 2<span data-status="Status2" class="label label-default status"></span></a></li>
-</ul>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="theme-color" content="#000000">
+    <title></title>
+    <link href="css/components.css" rel="stylesheet">
+    <link href="css/main.css" rel="stylesheet">
+  </head>
+  <body>
+    <nav class="navbar navbar-inverse navbar-fixed-top" data-toggle="collapse" data-target=".nav-collapse">
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#nodel-navbar" aria-expanded="false"><span class="sr-only">Toggle navigation</span><span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span></button>
+          <a class="navbar-brand" id="title" href="#"><img src="img/logo.png">Status Page</a>
+        </div>
+        <div class="collapse navbar-collapse" id="nodel-navbar" role="navigation">
+          <ul class="nav navbar-nav">
+            <li><a href="#" data-nav="MyControl" data-toggle="collapse" data-target="#nodel-navbar.in">My Control</a></li>
+          </ul>
+          <div class="navbar-right">
+            <p class="navbar-text" id="clock"></p>
+          </div>
+        </div>
       </div>
-<div class="col-sm-3 ">
-        <div class="row "><div class="col-sm-12 ">
-            <h4>Source select</h4>
-            <div class="btn-group btn-select sect" data-showevent="Show" data-showarg="Off">
-<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span> </span> <span class="caret"></span></button><ul class="dropdown-menu" data-event="Preset" data-arg-action="Preset">
-<li><a href="#" data-arg="PresetChromecast">Chromecast</a></li>
-<li><a href="#" data-arg="PresetTV">TV</a></li>
-<li><a href="#" data-arg="PresetButler">Signage</a></li>
-<li><a href="#" data-arg="PresetSpare1">HDMI 1</a></li>
-<li><a href="#" data-arg="PresetSpare2">HDMI 2</a></li>
-</ul>
-</div>
-          </div></div>
-        <div class="row "><div class="col-sm-12 ">
-            <div class="btn-group btn-select">
-<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span> </span> <span class="caret"></span></button><ul class="dropdown-menu dynamic" data-event="Dynamic" data-arg-action="Dynamic" data-render="DynamicList" data-render-template="#dynamicSelect"></ul>
-</div>
-          </div></div>
-        <div class="row "><div class="col-sm-12 ">
-            <div role="group" data-event="Switch" data-arg-action="Switch" class="btn-group btn-switch" data-class-off="btn-danger" data-class-on="btn-success">
-<a href="#" class="btn btn-default" data-arg="false">Off</a><a href="#" class="btn btn-default" data-arg="true">On</a>
-</div>
-          </div></div>
-        <div class="row "><div class="col-sm-12 ">
-            <div role="group" data-event="PartialSwitch" data-arg-action="PartialSwitch" data-confirm="true" data-confirmtext="Are you sure?" class="btn-group btn-pswitch" data-class-off="btn-danger" data-class-on="btn-success">
-<a href="#" class="btn btn-default" data-arg="Off">Off</a><a href="#" class="btn btn-default" data-arg="On">On</a>
-</div>
-          </div></div>
+    </nav>
+    <div class="modal" id="offline" tabindex="-1" role="dialog" aria-labelledby="offlinelabel" data-backdrop="static" data-keyboard="false" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h4 class="modal-title" id="offlinelabel">Offline</h4></div>
+          <div class="modal-body">
+            <p>The system is currently offline. Please wait...</p>
+          </div>
+        </div>
       </div>
-<div class="col-sm-4 ">
-        <h4>Testing status</h4>
-        <div data-status="Status1" class="alert alert-mini label-default">
-<a href="#" class="btn btn-outline" data-link-url="http://nodel.io"><span class="glyphicon glyphicon-new-window"></span><span></span></a><span data-status="Status2" class="label label-default status"></span><span class="label label-default label-pbadge" data-event="PartialSwitch" data-class-off="label-danger" data-class-on="label-success" data-off="Off" data-on="On"></span><strong>Example status box with badge and partialbadge</strong><br><span class="status">Unknown</span>
-</div>
-        <div data-status="Status2" class="alert alert-mini label-default" data-nav="Testing">
-<a href="#" class="btn btn-outline" data-link-url="http://nodel.io"><span class="glyphicon glyphicon-new-window"></span><span>Nodel</span></a><div role="group" data-event="PartialSwitch" data-arg-action="PartialSwitch" class="btn-group btn-pswitch" data-class-off="btn-danger" data-class-on="btn-success">
-<a href="#" class="btn btn-default" data-arg="Off">Off</a><a href="#" class="btn btn-default" data-arg="On">On</a>
-</div>
-<strong>Example status box with a long title</strong><br><span class="status">Unknown</span>
-</div>
+    </div>
+    <div class="modal" id="confirm" tabindex="-1" role="dialog" aria-labelledby="confirmlabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal">×</button>
+            <h4 class="modal-title" id="confirmlabel"></h4>
+          </div>
+          <div class="modal-body">
+            <p id="confirmtext"></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button><a id="confirmaction" class="btn btn-danger btn-ok">Ok</a>
+          </div>
+        </div>
       </div>
-<div class="col-sm-2 ">
-        <h4>Meters</h4>
-        <div class="meter" data-event="Meter1" data-type="" data-range="perc">
-<div>
-<div data-toggle="tooltip" class="base label-default"></div>
-<div class="bar">
-<div class="label-danger"></div>
-<div class="label-warning"></div>
-<div class="label-success"></div>
-</div>
-</div>
-<p>0</p>
-</div>
-        <div class="meter" data-event="Meter2" data-type="" data-range="perc">
-<div>
-<div data-toggle="tooltip" class="base label-default"></div>
-<div class="bar">
-<div class="label-danger"></div>
-<div class="label-warning"></div>
-<div class="label-success"></div>
-</div>
-</div>
-<p>0</p>
-</div>
-        <div class="meter" data-event="Meter3" data-type="" data-range="db">
-<div>
-<div data-toggle="tooltip" class="base label-default"></div>
-<div class="bar">
-<div class="label-danger"></div>
-<div class="label-warning"></div>
-<div class="label-success"></div>
-</div>
-</div>
-<p>0</p>
-</div>
+    </div>
+    <div class="container-fluid page" data-section="MyControl">
+      <div class="row">
+        <div class="col-sm-3 ">
+          <h4>Source</h4>
+          <ul data-event="Preset" data-arg-action="Preset" data-confirm="" class="nav nav-pills nav-stacked">
+            <li><a href="#" data-arg="PresetChromecast">Chromecast</a></li>
+            <li class="sect" data-showevent="Show" data-showarg='["Off","Half"]'><a href="#" data-arg="PresetTV">TV</a></li>
+            <li><a href="#" data-arg="PresetButler">Signage</a></li>
+            <li class="haschild"><a href="#" data-arg="PresetSpare1">HDMI 1<span data-status="Status2" class="label label-default status"></span></a></li>
+            <li class="haschild"><a href="#" data-arg="PresetSpare2">HDMI 2<span data-status="Status2" class="label label-default status"></span></a></li>
+          </ul>
+        </div>
+        <div class="col-sm-3 ">
+          <div class="row">
+            <div class="col-sm-12 ">
+              <h4>Source select</h4>
+              <div class="btn-group btn-select sect" data-showevent="Show" data-showarg="Off">
+                <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span> </span> <span class="caret"></span></button>
+                <ul class="dropdown-menu" data-event="Preset" data-arg-action="Preset">
+                  <li><a href="#" data-arg="PresetChromecast">Chromecast</a></li>
+                  <li><a href="#" data-arg="PresetTV">TV</a></li>
+                  <li><a href="#" data-arg="PresetButler">Signage</a></li>
+                  <li><a href="#" data-arg="PresetSpare1">HDMI 1</a></li>
+                  <li><a href="#" data-arg="PresetSpare2">HDMI 2</a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-12 ">
+              <div class="btn-group btn-select">
+                <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span> </span> <span class="caret"></span></button>
+                <ul class="dropdown-menu dynamic" data-event="Dynamic" data-arg-action="Dynamic" data-render="DynamicList" data-render-template="#dynamicSelect"></ul>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-12 ">
+              <div role="group" data-event="Switch" data-arg-action="Switch" class="btn-group btn-switch" data-class-off="btn-danger" data-class-on="btn-success">
+                <a href="#" class="btn btn-default" data-arg="false">Off</a><a href="#" class="btn btn-default" data-arg="true">On</a>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-12 ">
+              <div role="group" data-event="PartialSwitch" data-arg-action="PartialSwitch" data-confirm="true" data-confirmtext="Are you sure?" class="btn-group btn-pswitch" data-class-off="btn-danger" data-class-on="btn-success">
+                <a href="#" class="btn btn-default" data-arg="Off">Off</a><a href="#" class="btn btn-default" data-arg="On">On</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-4 ">
+          <h4>Testing status</h4>
+          <div data-status="Status1" class="alert alert-mini label-default">
+            <a href="#" class="btn btn-outline" data-link-url="http://nodel.io"><span class="glyphicon glyphicon-new-window"></span><span></span></a><span data-status="Status2" class="label label-default status"></span><span class="label label-default label-pbadge" data-event="PartialSwitch" data-class-off="label-danger" data-class-on="label-success" data-off="Off" data-on="On"></span><strong>Example status box with badge and partialbadge</strong>
+            <br><span class="status">Unknown</span>
+          </div>
+          <div data-status="Status2" class="alert alert-mini label-default" data-nav="Testing">
+            <a href="#" class="btn btn-outline" data-link-url="http://nodel.io"><span class="glyphicon glyphicon-new-window"></span><span>Nodel</span></a>
+            <div role="group" data-event="PartialSwitch" data-arg-action="PartialSwitch" class="btn-group btn-pswitch" data-class-off="btn-danger" data-class-on="btn-success">
+              <a href="#" class="btn btn-default" data-arg="Off">Off</a><a href="#" class="btn btn-default" data-arg="On">On</a>
+            </div>
+            <strong>Example status box with a long title</strong>
+            <br><span class="status">Unknown</span>
+          </div>
+        </div>
+        <div class="col-sm-2 ">
+          <h4>Meters</h4>
+          <div class="meter" data-event="Meter1" data-type="" data-range="perc">
+            <div>
+              <div data-toggle="tooltip" class="base label-default"></div>
+              <div class="bar">
+                <div class="label-danger"></div>
+                <div class="label-warning"></div>
+                <div class="label-success"></div>
+              </div>
+            </div>
+            <p>0</p>
+          </div>
+          <div class="meter" data-event="Meter2" data-type="" data-range="perc">
+            <div>
+              <div data-toggle="tooltip" class="base label-default"></div>
+              <div class="bar">
+                <div class="label-danger"></div>
+                <div class="label-warning"></div>
+                <div class="label-success"></div>
+              </div>
+            </div>
+            <p>0</p>
+          </div>
+          <div class="meter" data-event="Meter3" data-type="" data-range="db">
+            <div>
+              <div data-toggle="tooltip" class="base label-default"></div>
+              <div class="bar">
+                <div class="label-danger"></div>
+                <div class="label-warning"></div>
+                <div class="label-success"></div>
+              </div>
+            </div>
+            <p>0</p>
+          </div>
+        </div>
       </div>
-</div>
-<div class="row ">
-<div class="col-sm-7 ">
-        <div class="row "><div class="col-sm-12 ">
-            <h4 class="sect" data-showevent="Show" data-showarg="On">Testing button groups</h4>
-            <div role="group" class="btn-group sect" data-showevent="Show" data-showarg="On">
-<a href="#" data-action="PresetChromecast" type="button" class="btn btn-default">Chromecast</a><a href="#" data-action="PresetTV" type="button" class="btn btn-default">TV</a><a href="#" data-action="PresetButler" type="button" class="btn btn-default">Signage</a><a href="#" data-action="PresetSpare1" type="button" class="btn btn-default haschild">HDMI 1<span data-status="Status2" class="label label-default status"></span></a><a href="#" data-action="PresetSpare2" type="button" class="btn btn-default haschild">HDMI 2<span data-status="Status2" class="label label-default status"></span></a>
-</div>
-          </div></div>
-        <div class="row "><div class="col-sm-12 ">
-            <h4>Range</h4>
-            <div class="range" data-type=""><div><form>
-<input data-arg-source="this" data-action="Range" data-event="Range" type="range" min="" max="" step="1"><output data-event="Range"></output>
-</form></div></div>
-          </div></div>
-        <div class="row "><div class="col-sm-12 ">
-            <h4>Range</h4>
-            <div class="range" data-type="mute"><div><form>
-<input data-arg-source="this" data-action="Range" data-event="Range" type="range" min="" max="" step="1"><output data-event="Range"></output><a href="#" class="btn btn-default" data-arg-on="true" data-arg-off="false" data-action="RangeMuting" data-event="RangeMuting" data-class-on="btn-danger">Mute</a>
-</form></div></div>
-          </div></div>
+      <div class="row">
+        <div class="col-sm-7 ">
+          <div class="row">
+            <div class="col-sm-12 ">
+              <h4 class="sect" data-showevent="Show" data-showarg="On">Testing button groups</h4>
+              <div role="group" class="btn-group sect" data-showevent="Show" data-showarg="On">
+                <a href="#" data-action="PresetChromecast" type="button" class="btn btn-default">Chromecast</a><a href="#" data-action="PresetTV" type="button" class="btn btn-default">TV</a><a href="#" data-action="PresetButler" type="button" class="btn btn-default">Signage</a><a href="#" data-action="PresetSpare1" type="button" class="btn btn-default haschild">HDMI 1<span data-status="Status2" class="label label-default status"></span></a><a href="#" data-action="PresetSpare2" type="button" class="btn btn-default haschild">HDMI 2<span data-status="Status2" class="label label-default status"></span></a>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-12 ">
+              <h4>Range</h4>
+              <div class="range" data-type="">
+                <div>
+                  <form>
+                    <input data-arg-source="this" data-action="Range" data-event="Range" type="range" min="" max="" step="1">
+                    <output data-event="Range"></output>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-12 ">
+              <h4>Range</h4>
+              <div class="range" data-type="mute">
+                <div>
+                  <form>
+                    <input data-arg-source="this" data-action="Range" data-event="Range" type="range" min="" max="" step="1">
+                    <output data-event="Range"></output><a href="#" class="btn btn-default" data-arg-on="true" data-arg-off="false" data-action="RangeMuting" data-event="RangeMuting" data-class-on="btn-danger">Mute</a>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-1 ">
+          <h4>Range</h4>
+          <div class="range rangeh250px" data-type="vertical">
+            <style>
+            .rangeh250px {
+              height: 250px;
+            }
+            </style>
+            <div class="rangew250px">
+              <style>
+              .rangew250px {
+                width: 250px;
+              }
+              </style>
+              <form>
+                <input data-arg-source="this" data-action="Range" data-event="Range" type="range" min="" max="" step="1">
+                <output data-event="Range"></output>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-4 ">
+          <div class="row">
+            <div class="col-sm-12 ">
+              <h4>Testing panel</h4>
+              <div class="panel panel-default">
+                <div class="panel-body">
+                  <div data-event="Panel" class="panel100px scrollbar-inner"></div>
+                </div>
+              </div>
+              <style>
+              .panel100px {
+                height: 100px;
+                overflow: hidden;
+              }
+              </style>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-12 ">
+              <h4>Testing field</h4>
+              <div>
+                <form>
+                  <input class="form-control" data-arg-source="this" data-event="Field" readonly>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-<div class="col-sm-1 ">
-        <h4>Range</h4>
-        <div class="range rangeh250px" data-type="vertical">
-<style>.rangeh250px {height: 250px;}</style>
-<div class="rangew250px">
-<style>.rangew250px {width: 250px;}</style>
-<form>
-<input data-arg-source="this" data-action="Range" data-event="Range" type="range" min="" max="" step="1"><output data-event="Range"></output>
-</form>
-</div>
-</div>
+      <div class="row">
+        <div class="col-sm-4 ">
+          <h4 class="sect" data-showevent="Show" data-showarg="On">Multiple Actions</h4>
+          <a href="#" data-action='["Action1","Action2","Action3"]' type="button" class="btn btn-warning sect" data-showevent="Show" data-showarg="On">Trigger</a>
+        </div>
+        <div class="col-sm-4  sect" data-showevent="Show" data-showarg="On">
+          <h4>Volume</h4>
+          <a href="#" data-action="VolumeDown" type="button" class="btn btn-success">Down</a>
+          <a href="#" data-action="VolumeUp" type="button" class="btn btn-success">Up</a>
+        </div>
+        <div class="col-sm-4  sect" data-showevent="Show" data-showarg="Off">
+          <h4>Volume momentary</h4>
+          <a href="#" data-actionon="VolumeDownOn" data-actionoff="VolumeStop" type="button" class="btn btn-success">Down</a>
+          <a href="#" data-actionon="VolumeUpOn" data-actionoff="VolumeStop" type="button" class="btn btn-success">Up</a>
+        </div>
       </div>
-<div class="col-sm-4 ">
-        <div class="row "><div class="col-sm-12 ">
-            <h4>Testing panel</h4>
-            <div class="panel panel-default"><div class="panel-body"><div data-event="Panel" class="panel100px scrollbar-inner"></div></div></div>
-<style>.panel100px {height: 100px; overflow: hidden;}</style>
-          </div></div>
-        <div class="row "><div class="col-sm-12 ">
-            <h4>Testing field</h4>
-            <div><form><input class="form-control" data-arg-source="this" data-event="Field" readonly></form></div>
-          </div></div>
-      </div>
-</div>
-<div class="row ">
-<div class="col-sm-4 ">
-        <h4 class="sect" data-showevent="Show" data-showarg="On">Multiple Actions</h4>
-        <a href="#" data-action='["Action1","Action2","Action3"]' type="button" class="btn btn-warning sect" data-showevent="Show" data-showarg="On">Trigger</a>
-      </div>
-<div class="col-sm-4  sect" data-showevent="Show" data-showarg="On">
-        <h4>Volume</h4>
-        <a href="#" data-action="VolumeDown" type="button" class="btn btn-success">Down</a>
-        <a href="#" data-action="VolumeUp" type="button" class="btn btn-success">Up</a>
-      </div>
-<div class="col-sm-4  sect" data-showevent="Show" data-showarg="Off">
-        <h4>Volume momentary</h4>
-        <a href="#" data-actionon="VolumeDownOn" data-actionoff="VolumeStop" type="button" class="btn btn-success">Down</a>
-        <a href="#" data-actionon="VolumeUpOn" data-actionoff="VolumeStop" type="button" class="btn btn-success">Up</a>
-      </div>
-</div>
-</div>
-<script src="js/components.js"></script><script src="js/main.js"></script><script id="dynamicSelect" type="text/x-jsrender">
-        
-          {{for arg}}
-            <li><a href="#" data-arg="{{>value}}">{{>value}}</a></li>
-          {{/for}}
-        
-        </script>
-</body>
+    </div>
+    <script src="js/components.js"></script>
+    <script src="js/main.js"></script>
+    <script id="dynamicSelect" type="text/x-jsrender">
+      {{for arg}}
+      <li><a href="#" data-arg="{{>value}}">{{>value}}</a></li>
+      {{/for}}
+    </script>
+  </body>
 </html>

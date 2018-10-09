@@ -3,8 +3,15 @@
   <!-- templates -->
   <!-- row -->
   <xsl:template match="row">
-    <div class="row {@class}">
-    <xsl:apply-templates select="column"/>
+    <div>
+      <xsl:attribute name="class">
+        <xsl:text>row</xsl:text>
+        <xsl:if test="@class">
+          <xsl:text> </xsl:text>
+          <xsl:value-of select="@class"/>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:apply-templates select="column"/>
     </div>
   </xsl:template>
   <!-- row -->
