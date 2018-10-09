@@ -110,17 +110,25 @@ var checkReload = function(){
 };
 
 var convertNames = function(){
-  var eles = $("[data-event]");
-  $.each(eles, function () {
-    $(this).attr('data-event', $(this).data('event').replace(unicodematch,''));
+  $.each($("[data-showevent]"), function () {
+    $(this).data('showevent', $.map($.isArray($(this).data('showevent')) ? $(this).data('showevent') : [$(this).data('showevent')], function(at){
+      return at.replace(unicodematch,'');
+    }));
   });
-  var eles = $("[data-status]");
-  $.each(eles, function () {
-    $(this).attr('data-status', $(this).data('status').replace(unicodematch,''));
+  $.each($("[data-event]"), function () {
+    $(this).data('event', $.map($.isArray($(this).data('event')) ? $(this).data('event') : [$(this).data('event')], function(at){
+      return at.replace(unicodematch,'');
+    }));
   });
-  var eles = $("[data-render]");
-  $.each(eles, function () {
-    $(this).attr('data-render', $(this).data('render').replace(unicodematch,''));
+  $.each($("[data-status]"), function () {
+    $(this).data('status', $.map($.isArray($(this).data('status')) ? $(this).data('status') : [$(this).data('status')], function(at){
+      return at.replace(unicodematch,'');
+    }));
+  });
+  $.each($("[data-render]"), function () {
+    $(this).data('render', $.map($.isArray($(this).data('render')) ? $(this).data('render') : [$(this).data('render')], function(at){
+      return at.replace(unicodematch,'');
+    }));
   });
 }
 
@@ -479,7 +487,9 @@ var parseLog = function(log){
               break;
           }
         });
-        var eles = $("[data-status='"+log.alias+"']");
+        var eles = $("[data-status]").filter(function() {
+          return $.inArray(log.alias, $.isArray($(this).data('status')) ? $(this).data('status') : [$(this).data('status')]) >= 0;
+        });
         $.each(eles, function (i, ele) {
           var ele = $(ele);
           if(!_.isUndefined(log.arg) && !_.isUndefined(log.arg['level']) && _.isNumber(log.arg['level'])){
@@ -508,7 +518,9 @@ var parseLog = function(log){
             else $(ele).addClass('label-default').removeClass('label-success');
           }
         });
-        var eles = $("[data-render='"+log.alias+"']");
+        var eles = $("[data-render]").filter(function() {
+          return $.inArray(log.alias, $.isArray($(this).data('render')) ? $(this).data('render') : [$(this).data('render')]) >= 0;
+        });
         $.each(eles, function (i, ele) {
           if($(ele).data('render-template')) {
             try {
