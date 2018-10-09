@@ -8887,20 +8887,29 @@ footer
     margin-bottom: 5px;
     margin-left: 5px;
 }
+.btn-group-vertical .btn.haschild
+{
+    text-align: left;
+}
+.btn-group-vertical .btn.haschild > span.label
+{
+    position: absolute;
+    top: 9px;
+    right: 12px;
+}
 .btn > p
 {
     display: inline;
-}
-.btn > span.label,
-.nav-pills > li > a > span.label
-{
-    margin-left: 5px;
 }
 .btn > img
 {
     max-height: 26px;
     margin-top: -4px;
     margin-bottom: -4px;
+}
+.btn > span.label
+{
+    margin-left: 5px;
 }
 .alert.label-default .btn-default,
 .alert.label-default > span.label.label-default,
@@ -8970,9 +8979,15 @@ footer
     border-color: #0048f0;
     background-color: #0048f0;
 }
-.nav-pills span.label.right
+.nav-pills > li.haschild > a
 {
-    float: right;
+    padding-left: 50px;
+}
+.nav-pills > li.haschild > a > span.label
+{
+    position: absolute;
+    top: 12px;
+    left: 12px;
 }
 .btn-select,
 .btn-select > button,

@@ -190,6 +190,9 @@
         <xsl:if test="@showevent">
           <xsl:text> sect</xsl:text>
         </xsl:if>
+        <xsl:if test="badge">
+          <xsl:text> haschild</xsl:text>
+        </xsl:if>
       </xsl:attribute>
       <xsl:if test="@event">
         <xsl:attribute name="data-event">
@@ -459,6 +462,21 @@
       </xsl:if>
       <xsl:for-each select="pill">
         <li>
+          <xsl:if test="badge or @showevent">
+            <xsl:attribute name="class">
+              <xsl:choose>
+                <xsl:when test="badge and @showevent">
+                  <xsl:text>haschild sect</xsl:text>
+                </xsl:when>
+                <xsl:when test="badge and not(@showevent)">
+                  <xsl:text>haschild</xsl:text>
+                </xsl:when>
+                <xsl:when test="@showevent and not(badge)">
+                  <xsl:text>sect</xsl:text>
+                </xsl:when>
+              </xsl:choose>
+            </xsl:attribute>
+          </xsl:if>
           <xsl:if test="@showevent">
             <xsl:attribute name="class">
               <xsl:text>sect</xsl:text>
