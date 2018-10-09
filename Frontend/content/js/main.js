@@ -351,31 +351,30 @@ var parseLog = function(log){
         break;
       default:
         // handle show-hide events
-        var eles = $("[data-showevent='"+log.alias+"']");
+        var eles = $("[data-showevent]").filter(function() {
+          return $.inArray(log.alias, $.isArray($(this).data('showevent')) ? $(this).data('showevent') : [$(this).data('showevent')]) >= 0;
+        });
         $.each(eles, function (i, ele) {
-          if($.type(log.arg)== "object") log.arg = log.arg[$(ele).data('event-arg')];
-          if($(ele).hasClass('dynamic')) {
-            $(ele).data('dynamic',log);
-          }
-          switch ($.type(log.arg)) {
-            case "string":
-              if ($(ele).hasClass('sect')) {
-                $(".sect[data-showevent='"+log.alias+"']").hide();
-                $(".sect[data-showevent='"+log.alias+"']").filter(function() {
+          if ($(ele).hasClass('sect')) {
+            if($.type(log.arg)== "object") log.arg = log.arg[$(ele).data('showevent-arg')];
+            switch ($.type(log.arg)) {
+              case "string":
+                $(ele).hide();
+                $(ele).filter(function() {
                   return $.inArray(log.arg, $.isArray($(this).data('showarg')) ? $(this).data('showarg') : [$(this).data('showarg')]) >= 0;
                 }).show();
-              };
-              break;
-            case "boolean":
-              if ($(ele).hasClass('sect')) {
-                if (log.arg) $(".sect[data-showevent='"+log.alias+"']").show();
-                else $(".sect[data-showevent='"+log.alias+"']").hide();
-              };
-              break;
-          };
+                break;
+              case "boolean":
+                if (log.arg) $(ele).show();
+                else $(ele).hide();
+                break;
+            };
+          }
         });
         // handle event data updates
-        var eles = $("[data-event='"+log.alias+"']");
+        var eles = $("[data-event]").filter(function() {
+          return $.inArray(log.alias, $.isArray($(this).data('event')) ? $(this).data('event') : [$(this).data('event')]) >= 0;
+        });
         $.each(eles, function (i, ele) {
           if($.type(log.arg)== "object") log.arg = log.arg[$(ele).data('event-arg')];
           if($(ele).hasClass('dynamic')) {

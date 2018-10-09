@@ -295,7 +295,7 @@
         <tr>
           <xsl:for-each select="cell">
             <td>
-              <xsl:apply-templates select="button"/>
+              <xsl:apply-templates />
             </td>
           </xsl:for-each>
         </tr>
