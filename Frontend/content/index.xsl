@@ -37,10 +37,10 @@
               </button>
               <xsl:choose>
               <xsl:when test="/pages/@logo">
-                <a class="navbar-brand" id="title" href="#"><img src="{/pages/@logo}"/><xsl:value-of select="/pages/@title"/></a>
+                <a class="navbar-brand" href="#"><img src="{/pages/@logo}"/><span id="title"><xsl:value-of select="/pages/@title"/></span></a>
               </xsl:when>
               <xsl:otherwise>
-                <a class="navbar-brand" id="title" href="#"><img src="img/logo.png"/><xsl:value-of select="/pages/@title"/></a>
+                <a class="navbar-brand" href="#"><img src="img/logo.png"/><span id="title"><xsl:value-of select="/pages/@title"/></span></a>
               </xsl:otherwise>
               </xsl:choose>
             </div>
