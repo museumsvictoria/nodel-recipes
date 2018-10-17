@@ -160,7 +160,7 @@
         <script id="dynamicSelect" type="text/x-jsrender">
         <![CDATA[
           {{for arg}}
-            <li><a href="#" data-arg="{{>value}}">{{>value}}</a></li>
+            <li><a href="#" data-arg="{{if key}}{{>key}}{{else}}{{>value}}{{/if}}">{{>value}}</a></li>
           {{/for}}
         ]]>
         </script>
