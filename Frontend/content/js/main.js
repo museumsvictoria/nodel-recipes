@@ -172,6 +172,7 @@ var setEvents = function(){
           $('#confirmaction').data('arg', data.arg); 
           $('#confirm').modal('show');
         } else callAction(data.action, data.arg);
+        $(this).parents('.btn-select.open').find('.dropdown-toggle').dropdown('toggle');
       }
     }
   });
