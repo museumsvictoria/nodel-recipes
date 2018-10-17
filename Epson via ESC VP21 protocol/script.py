@@ -1,6 +1,19 @@
-'''Epson (see script for links to manual, etc.)'''
+'''Epson (see script for links to manual, and considerations for special models, etc.)'''
 
 # -  http://download.epson.com.sg/manuals/User%20manual-EB-GG6170-G6070W-G6270W-G6450WU-G6570WU-G6770WU.pdf
+
+@after_main
+def dump_message():
+  console.info('''
+  NOTE:
+  Some models do not natively support "Signal Presence" polling via this VP21 protocol recipe.
+
+  A clunky work-around action is used instead called 'Poll Signal Presence Fallback Via Web' which will
+  require the WebPassword to be specified if it's not "admin".
+  
+  It is not guarenteed to work on all models. Please ensure the "Signal Presence" signal is accurate when
+  Power is On and signal is definitely present.
+''')
 
 SOURCES_BY_CODE = { 
   '1F': 'Computer (Auto)',
@@ -115,14 +128,15 @@ def handlePowerSignals(ignore):
   desired = local_event_DesiredPower.getArg()
   raw = local_event_RawPower.getArg()
   
-  if desired == 'On' and raw == 'Off':
-      local_event_Power.emit('Warming')
+  local_event_Power.emit(raw if raw == desired or desired == None else 'Partially %s' % desired)
       
-  elif desired == 'Off' and raw == 'On':
-      local_event_Power.emit('Cooling')
-      
-  else:
-      local_event_Power.emit(raw)
+@local_action({'title': 'On', 'group': 'Power', 'order': next_seq()})
+def PowerOn():
+  lookup_local_action('Power').call('On')
+  
+@local_action({'title': 'Off', 'group': 'Power', 'order': next_seq()})
+def PowerOff():
+  lookup_local_action('Power').call('Off')
 
 # ---- desired power ]  
 
@@ -337,6 +351,72 @@ poller_lampHours = Timer(lambda: lookup_local_action('PollLampUseHours').call(),
   
 # --- lamp hours status ]
 
+
+# [ general info
+
+# signal presence
+
+DEFAULT_WEBPASSWORD = 'admin'
+
+local_event_SignalPresence = LocalEvent({'group': 'Info', 'schema': {'type': 'boolean', 'order': next_seq()}})
+
+def local_action_PollSignalPresence(ignore=None):
+  '''{"group": "Info", "order": 2.1}'''
+  tcp.request('SIGNAL?', lambda resp: handleValueReq(resp, 'SIGNAL', lambda value: local_event_SignalPresence.emit(value == '01'), errorHandler=lambda: lookup_local_action('PollSignalPresenceFallbackViaWeb').call()))
+
+param_WebPassword = Parameter({'title': 'Web Password (optional, for Signal Presence workaround for some models)', 'schema': {'type': 'string', 'hint': '%s (default)' % DEFAULT_WEBPASSWORD}})  
+
+
+# signal presence 'HACK' by polling the HTML website
+def local_action_PollSignalPresenceFallbackViaWeb():
+  '''{"title": "Poll Signal Presence (fallback via Web)", "group": "Info", "order": 2.2, "desc": "Fallback used when model does not support function via VP21 protocol"}'''
+  # only poll if power is on
+  if lookup_local_event('Power').getArg() != 'On':
+    return
+  
+  URL = 'http://%s/cgi-bin/webconf.exe?page=05'
+  
+  if local_event_ShowLog.getArg():
+    print 'HTTP: polling URL [%s]' % URL
+  
+  infoHTMLPage = get_url(URL % param_ipAddress, username='EPSONWEB', password=param_WebPassword or DEFAULT_WEBPASSWORD,
+                         headers={'Cookie': 'value=971F9C4BAB285D19B7F8437D6AB01B61A9083BDE1F2F4643',
+                           'Referer': 'http://%s/webconf/index2.html' % param_ipAddress})
+  
+  if '&#45;&nbsp;x' in infoHTMLPage:
+    signalPresence = False
+    
+  elif 'The projector is currently on standby.' in infoHTMLPage:
+    signalPresence = False
+    
+  else:
+    signalPresence = True
+    
+  if local_event_ShowLog.getArg():    
+    print 'signal presence parsed was [%s]' % signalPresence
+    
+  local_event_SignalPresence.emit(signalPresence)
+  
+  
+# poll every 10 seconds, 30s first time.
+Timer(lambda: lookup_local_action('PollSignalPresence').call(), 10, 10)
+
+
+# serial number
+
+local_event_SerialNumber = LocalEvent({'group': 'Info', 'schema': {'type': 'string', 'order': next_seq()}})
+
+def local_action_PollSerialNumber(ignore=None):
+  '''{"group": "Info", "order": 2.1}'''
+  tcp.request('SNO?', lambda resp: handleValueReq(resp, 'SNO', lambda value: local_event_SerialNumber.emit(value)))
+  
+# poll every 24 hours, 30s first time.
+Timer(lambda: lookup_local_action('PollSerialNumber').call(), 24*3600, 30)
+
+
+
+# --- general info ]
+
   
 # [ TCP ----
 
@@ -414,7 +494,11 @@ def queue(tcpOp, minPostDelay=200):
 # given a response, splits out the value ensuring the name is a match
 # e.g. 'PWR=01'
 #      handleValueReq(resp, 'PWR', lambda value: console.info(value))
-def handleValueReq(resp, name, handler):
+def handleValueReq(resp, name, handler, errorHandler=None):
+  # if optional 
+  if errorHandler != None and resp == 'ERR':
+    errorHandler()
+    return
   
   parts = resp.split('=')
   if len(parts) != 2:
@@ -425,7 +509,6 @@ def handleValueReq(resp, name, handler):
   
   if handler:
     handler(parts[1])
-  
 
 # status ---
 
@@ -467,15 +550,23 @@ def statusCheck():
     else:
       previousContact = date_parse(previousContactValue)
       roughDiff = (now.getMillis() - previousContact.getMillis())/1000/60
-      message = 'Off the network for approx. %s minutes' % roughDiff
+      if roughDiff < 60:
+        message = 'Missing for approx. %s mins' % roughDiff
+      elif roughDiff < (60*24):
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+      else:
+        message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
       
     local_event_Status.emit({'level': 2, 'message': message})
     return
+
+  elif local_event_Power.getArg() == 'On' and local_event_SignalPresence.getArg() != True:
+    local_event_Status.emit({'level': 1, 'message': 'Is on but no video signal detected'})  
   
   elif lampUseHours >= lampUseHoursThreshold:
     local_event_Status.emit({'level': 1, 
-                             'message': 'Lamp usage is high (%s hours above threshold of %s). A replacement may be needed soon.' % 
-                               (1+lampUseHours-lampUseHoursThreshold, lampUseHoursThreshold)})
+                             'message': 'Lamp usage is high (%s hours above threshold of %s). It may need replacement soon.' % 
+                             (1+lampUseHours-lampUseHoursThreshold, lampUseHoursThreshold)})
     
   else:
     local_event_Status.emit({'level': 0, 'message': 'OK'})
