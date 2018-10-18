@@ -1,18 +1,23 @@
+# -*- coding: utf-8 -*-
+
 '''Epson (see script for links to manual, and considerations for special models, etc.)'''
 
 # -  http://download.epson.com.sg/manuals/User%20manual-EB-GG6170-G6070W-G6270W-G6450WU-G6570WU-G6770WU.pdf
 
-@after_main
 def dump_message():
   console.info('''
-  NOTE:
-  Some models do not natively support "Signal Presence" polling via this VP21 protocol recipe.
-
-  A clunky work-around action is used instead called 'Poll Signal Presence Fallback Via Web' which will
-  require the WebPassword to be specified if it's not "admin".
   
-  It is not guarenteed to work on all models. Please ensure the "Signal Presence" signal is accurate when
-  Power is On and signal is definitely present.
+  > NOTE:
+  > Some models do not natively support "Signal Presence" polling via this VP21 protocol recipe.
+  >
+  > A clunky work-around action is used instead called 'Poll Signal Presence Fallback Via Web' which will
+  > require the WebPassword to be specified if it's not "admin".
+  > 
+  > It is not guarenteed to work on all models. Please ensure the "Signal Presence" signal is accurate when
+  > Power is On and signal is definitely present.
+  >
+  > If serial control is in use, there the web-fallback is obviously not available.
+  
 ''')
 
 SOURCES_BY_CODE = { 
@@ -36,6 +41,7 @@ MAX_VOL = 243
 
 param_disabled = Parameter({ "title":"Disabled?", "order": next_seq(), "schema": { "type":"boolean" }})
 param_ipAddress = Parameter({ "title":"IP address", "order": next_seq(), "schema": { "type":"string" }})
+param_TCPPortForSerial = Parameter({'title': 'TCP Port if using Serial Bridge', 'schema': {'type': 'integer', 'hint': u'0 (default not in use or e.g. 4999 for Global Caché)'}})
 
 DEFAULT_LAMPHOURUSE = 1800
 param_warningThresholds = Parameter({'title': 'Warning thresholds', 'schema': {'type': 'object', 'properties': {
@@ -65,7 +71,17 @@ def main(arg = None):
   global lampUseHoursThreshold
   lampUseHoursThreshold = (param_warningThresholds or {}).get('lampUseHours') or lampUseHoursThreshold
   
-  tcp.setDest('%s:%s'% (param_ipAddress, TCP_PORT))
+  dump_message()
+  
+  if param_TCPPortForSerial: # using Serial Bridge?
+    tcpAddress = '%s:%s'% (param_ipAddress, param_TCPPortForSerial)
+    console.info('Will connect via Serial Bridge on [%s]' % tcpAddress)
+    
+  else:                      # direct
+    tcpAddress = '%s:%s'% (param_ipAddress, TCP_PORT)
+    console.info('Will connect directly to projector at [%s]' % tcpAddress)
+    
+  tcp.setDest(tcpAddress)
 
 # [ desired power ----
 
@@ -362,7 +378,15 @@ local_event_SignalPresence = LocalEvent({'group': 'Info', 'schema': {'type': 'bo
 
 def local_action_PollSignalPresence(ignore=None):
   '''{"group": "Info", "order": 2.1}'''
-  tcp.request('SIGNAL?', lambda resp: handleValueReq(resp, 'SIGNAL', lambda value: local_event_SignalPresence.emit(value == '01'), errorHandler=lambda: lookup_local_action('PollSignalPresenceFallbackViaWeb').call()))
+  def errorHandler():
+    if param_TCPPortForSerial:
+      if local_event_ShowLog.getArg():
+        print 'Using serial bridge, cannot use SignalPresence-fallback-via-web'
+        return
+      
+    lookup_local_action('PollSignalPresenceFallbackViaWeb').call()
+    
+  tcp.request('SIGNAL?', lambda resp: handleValueReq(resp, 'SIGNAL', lambda value: local_event_SignalPresence.emit(value == '01'), errorHandler))
 
 param_WebPassword = Parameter({'title': 'Web Password (optional, for Signal Presence workaround for some models)', 'schema': {'type': 'string', 'hint': '%s (default)' % DEFAULT_WEBPASSWORD}})  
 
