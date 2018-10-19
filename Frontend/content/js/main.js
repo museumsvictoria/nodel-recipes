@@ -169,7 +169,14 @@ var setEvents = function(){
           $('#confirmlabel').text(data.confirmtitle);
           $('#confirmtext').text(data.confirmtext);
           $('#confirmaction').data('confirmaction', data.action);
-          $('#confirmaction').data('arg', data.arg); 
+          $('#confirmaction').data('arg', data.arg);
+          if((data.confirm == 'code') && ($('#confirmcodesrc').val().length)) {
+            $('#confirmkeypad').show();
+            $('#confirmaction').attr('disabled','disabled');
+          } else {
+            $('#confirmkeypad').hide();
+            $('#confirmaction').removeAttr('disabled');
+          }
           $('#confirm').modal('show');
         } else callAction(data.action, data.arg);
         $(this).parents('.btn-select.open').find('.dropdown-toggle').dropdown('toggle');
@@ -212,6 +219,23 @@ var setEvents = function(){
     $("[data-section]").hide();
     $("[data-section="+$(this).data('nav')+"]").show();
   });
+  $('body').on('click', '#confirmkeypad *[data-keypad]', function () {
+    var number = $(this).data('keypad');
+    if(number==-1){
+      $("#confirmcode").val(function() {
+        return this.value.slice(0, -1);
+      });
+    } else {
+      $("#confirmcode").val(function() {
+          return this.value + number;
+      });
+    }
+    if($("#confirmcode").val() == $("#confirmcodesrc").val()) $('#confirmaction').removeAttr('disabled');
+    else $('#confirmaction').attr('disabled','disabled');
+  });
+  $('#confirm').on('hidden.bs.modal', function () {
+    $("#confirmcode").val('');
+  });
 };
 
 var getAction = function(ele){
@@ -226,7 +250,7 @@ var getAction = function(ele){
     if ($(ele).hasClass('active')) action = $(ele).data('actionoff');
     else action = $(ele).data('actionon');
     if(!_.isUndefined($(ele).data('confirm'))) {
-      confirm = true;
+      confirm = $(ele).data('confirm');
       if(!_.isUndefined($(ele).data('confirmtitle'))) confirmtitle = $(ele).data('confirmtitle');
       if(!_.isUndefined($(ele).data('confirmtext'))) confirmtext = $(ele).data('confirmtext');
     }
@@ -234,14 +258,14 @@ var getAction = function(ele){
   else if (!_.isUndefined($(ele).data('action'))) {
     action = $(ele).data('action');
     if(!_.isUndefined($(ele).data('confirm'))) {
-      confirm = true;
+      confirm = $(ele).data('confirm');
       if(!_.isUndefined($(ele).data('confirmtitle'))) confirmtitle = $(ele).data('confirmtitle');
       if(!_.isUndefined($(ele).data('confirmtext'))) confirmtext = $(ele).data('confirmtext');
     }
   }
   else if (!_.isUndefined($(ele).closest('[data-arg-action]').data('arg-action'))) {
     action = $(ele).closest('[data-arg-action]').data('arg-action');
-    if(!_.isUndefined($(ele).closest('[data-arg-action]').data('confirm'))) confirm = true;
+    if(!_.isUndefined($(ele).closest('[data-arg-action]').data('confirm'))) confirm = $(ele).closest('[data-arg-action]').data('confirm');
     if(!_.isUndefined($(ele).closest('[data-arg-action]').data('confirmtitle'))) confirmtitle = $(ele).closest('[data-arg-action]').data('confirmtitle');
     if(!_.isUndefined($(ele).closest('[data-arg-action]').data('confirmtext'))) confirmtext = $(ele).closest('[data-arg-action]').data('confirmtext');
   }
@@ -485,6 +509,10 @@ var parseLog = function(log){
                 if (log.arg) $(ele).addClass($(ele).data('class-on')).addClass('active').removeClass('btn-default');
                 else $(ele).addClass('btn-default').removeClass('active').removeClass($(ele).data('class-on'));
               }
+              break;
+            case "undefined":
+              if($(ele).is("span, h4, p, output")) $(ele).text('');
+              else if($(ele).is("input")) $(ele).not(':active').val('');
               break;
           }
         });

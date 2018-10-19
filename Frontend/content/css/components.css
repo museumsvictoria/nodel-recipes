@@ -9274,6 +9274,22 @@ table.btn-grid tr:first-child td
 {
     padding-top: 0;
 }
+#confirmkeypad
+{
+    max-width: 300px;
+    margin: 40px auto 20px;
+}
+#confirmkeypad .row
+{
+    margin-right: 5px;
+    margin-left: 5px;
+}
+#confirmkeypad .col-xs-4,
+#confirmkeypad .col-xs-12
+{
+    padding-right: 5px;
+    padding-left: 5px;
+}
 @media (min-width: 768px)
 {
     input[type=range]::-ms-thumb

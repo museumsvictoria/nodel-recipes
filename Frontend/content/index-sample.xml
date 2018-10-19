@@ -38,7 +38,7 @@
         </row>
         <row>
           <column sm="12">
-            <partialswitch confirm="true" confirmtext="Are you sure?" class="btn-default" event="PartialSwitch" action="PartialSwitch"/>
+            <partialswitch confirm="code" confirmtext="Are you sure?" class="btn-default" event="PartialSwitch" action="PartialSwitch"/>
           </column>
         </row>
       </column>

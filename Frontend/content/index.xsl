@@ -127,10 +127,37 @@
               </div>
               <div class="modal-body">
                 <p id="confirmtext"></p>
+                <div id="confirmkeypad">
+                  <div class="row">
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="1">1</a></div>
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="2">2</a></div>
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="3">3</a></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="4">4</a></div>
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="5">5</a></div>
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="6">6</a></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="7">7</a></div>
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="8">8</a></div>
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="9">9</a></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-xs-4 col-xs-offset-4"><a href="#" class="btn btn-block btn-default" data-keypad="0">0</a></div>
+                    <div class="col-xs-4"><a href="#" class="btn btn-block btn-default" data-keypad="-1">&#x232b;</a></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-xs-12">
+                      <input id="confirmcodesrc" type="hidden" data-event="ConfirmCode"/>
+                      <input id="confirmcode" class="form-control" type="password" readonly="true"/>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                <a id="confirmaction" class="btn btn-danger btn-ok">Ok</a>
+                <button id="confirmaction" class="btn btn-danger btn-ok">Ok</button>
               </div>
             </div>
           </div>
