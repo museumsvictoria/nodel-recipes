@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="index.xsl" ?>
+<pages title='Digital Radio' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="index.xsd">
+  <page title='Main'>
+    <row>
+      <column sm="4"><partialswitch class="btn-default" event="RadioPower" action="RadioPower"/></column>
+    </row>
+    <row>
+      <column sm="3">
+        <title>Mode</title>
+        <dummy event='RadioModes'/>
+        <dynamicselect class="btn-default" data="RadioModes" event="RadioMode" action="RadioMode"/>  
+      </column>
+      <column sm="8">
+        <field event="RadioPlayStatus"/>
+        <field event="RadioPlayInfoName"/>
+        <field event="RadioPlayInfoText"/>
+      </column>
+    </row>
+    <row>
+      <column>
+        <gap/>
+      </column>
+    </row>
+    <row>
+      <column sm="4"><button class="btn-default btn-block" action="RadioPreset1 Select" event="RadioPreset1Selected"><text event="RadioPreset1 Name">͏</text></button></column>
+      <column sm="4"><button class="btn-default btn-block" action="RadioPreset2 Select" event="RadioPreset2Selected"><text event="RadioPreset2 Name">͏</text></button></column>
+      <column sm="4"><button class="btn-default btn-block" action="RadioPreset3 Select" event="RadioPreset3Selected"><text event="RadioPreset3 Name">͏</text></button></column>
+    </row>
+    <row>
+      <column sm="4"><button class="btn-default btn-block" action="RadioPreset4 Select" event="RadioPreset4Selected"><text event="RadioPreset4 Name">͏</text></button></column>
+      <column sm="4"><button class="btn-default btn-block" action="RadioPreset5 Select" event="RadioPreset5Selected"><text event="RadioPreset5 Name">͏</text></button></column>
+      <column sm="4"><button class="btn-default btn-block" action="RadioPreset6 Select" event="RadioPreset6Selected"><text event="RadioPreset6 Name">͏</text></button></column>
+    </row>
+    <row>
+      <column sm="4"><button class="btn-default btn-block" action="RadioPreset7 Select" event="RadioPreset7Selected"><text event="RadioPreset7 Name">͏</text></button></column>
+      <column sm="4"><button class="btn-default btn-block" action="RadioPreset8 Select" event="RadioPreset8Selected"><text event="RadioPreset8 Name">͏</text></button></column>
+      <column sm="4"><button class="btn-default btn-block" action="RadioPreset9 Select" event="RadioPreset9Selected"><text event="RadioPreset9 Name">͏</text></button></column>
+    </row>
+    <row>
+       <column sm="3"><button class="btn-default btn-block" action="RadioPreset10 Select" event="RadioPreset10Selected">Other...</button></column>
+    </row>
+    <row>
+      <column sm="8" showevent='RadioPreset10Selected'>
+        <title>Manual Selection</title>
+        <dummy event='RadioSelectionList'/>
+        <dynamicselect class="btn-default" data="RadioSelectionList" action="RadioSelectItem"/>  
+        Folder Navigation
+      </column>
+    </row>
+    <row>
+      <column sm='7' showevent='RadioPreset10Selected'>
+        <dummy event='RadioSelectionFolders'/>
+        <dynamicselect class="btn-default" data="RadioSelectionFolders" action="RadioNavigateTo"/>
+      </column>
+      <column sm='2' showevent='RadioPreset10Selected'>
+        <button action="RadioBack">Back</button>
+      </column>
+    </row>
+    
+    <row>
+      <column sm="8"><gap/></column>
+    </row>
+    
+    <row>
+      <column sm="1" showevent='RadioPreset10Selected'><button action="RadioPreset1 Store">͏Store 1</button></column>
+      <column sm="1" showevent='RadioPreset10Selected'><button action="RadioPreset2 Store">͏Store 2</button></column>
+      <column sm="1" showevent='RadioPreset10Selected'><button action="RadioPreset3 Store">͏Store 3</button></column>
+    </row>
+    <row>
+      <column sm="1" showevent='RadioPreset10Selected'><button action="RadioPreset4 Store">͏Store 4</button></column>
+      <column sm="1" showevent='RadioPreset10Selected'><button action="RadioPreset5 Store">͏Store 5</button></column>
+      <column sm="1" showevent='RadioPreset10Selected'><button action="RadioPreset6 Store">͏Store 6</button></column>
+    </row>
+    <row>
+      <column sm="1" showevent='RadioPreset10Selected'><button action="RadioPreset7 Store">͏Store 7</button></column>
+      <column sm="1" showevent='RadioPreset10Selected'><button action="RadioPreset8 Store">͏Store 8</button></column>
+      <column sm="1" showevent='RadioPreset10Selected'><button action="RadioPreset9 Store">͏Store 9</button></column>
+    </row>
+    </page>
+  </pages>
