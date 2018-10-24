@@ -8853,6 +8853,12 @@ footer
 {
     display: none;
 }
+.dropdown-menu
+{
+    overflow-y: auto;
+
+    max-height: 220px;
+}
 .dropdown-menu > li > a
 {
     line-height: 35px;
