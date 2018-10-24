@@ -273,7 +273,7 @@ var getAction = function(ele){
     if ($(ele).hasClass('active')) arg = "{'arg':" + stringify($(ele).data('arg-off'), type) + "}";
     else arg = "{'arg':" + stringify($(ele).data('arg-on'), type) + "}";
   } else {
-    if (!_.isUndefined($(ele).data('arg'))) arg = "{'arg':" + stringify($(ele).data('arg'), type) + "}";
+    if (!_.isUndefined($(ele).data('arg'))) arg = stringify({'arg':$(ele).data('arg'), type});
     else if(!_.isUndefined($(ele).data('arg-source'))) {
       if($(ele).data('arg-source') == 'this') val = $(ele).val();
       else val = $($(ele).data('arg-source')).data('arg');
@@ -283,7 +283,7 @@ var getAction = function(ele){
         arg['arg'][$(ele).data('arg-sourcekey')] = val;
         if(!_.isUndefined($(ele).data('arg-add'))) arg = $.extend(true, arg, {'arg':$(ele).data('arg-add')});
         arg = stringify(arg);
-      } else arg = "{'arg':"+stringify(val)+"}";
+      } else arg = stringify({'arg':val});
     } else arg = "{}";
   }
   return {'action': action, 'arg': arg, 'confirm': confirm, 'confirmtitle': confirmtitle, 'confirmtext': confirmtext};
