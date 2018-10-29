@@ -1,3 +1,4 @@
+
 '''Extron USB Switcher - see https://www.extron.com/download/files/userman/68-1517-01_F_SW_USB_UG_f.pdf'''
 
 # <!-- parameters
@@ -11,6 +12,11 @@ param_port = Parameter({'schema': {'type': 'integer', 'hint': '%s (default)' % D
 
 # -->
 
+InputCount_byPartNum = { 
+  '60-954-02': 4,    # SW4 USB Plus
+  '60-952-02': 2,    # SW2
+  '60-953-02': 4,    # SW4
+}
 
 # <!-- main entry-point
 
@@ -66,6 +72,58 @@ def pollInput():
   tcp.request('I', lambda raw: checkForErrors(raw, handleSwitchResp))
   
 poller = Timer(lambda: pollInput.call(), 10, 5)
+
+
+local_event_PartNumber = LocalEvent({'group': 'Device Info', 'order': next_seq(), 'schema': {'type': 'string'}})
+
+@local_action({'group': 'Device Info', 'order': next_seq()})
+def pollPartNumber():
+  def handler(arg):
+    local_event_PartNumber.emit(arg)
+  
+  tcp.request('N', lambda raw: checkForErrors(raw, handler))
+  
+part_poller = Timer(lambda: pollPartNumber.call(), 60, 6)
+
+
+# dynamically created discrete input switching actions and signals 
+
+@after_main
+def handleDynamicConfig():
+  def handler(value):
+    # check if already completed
+    if lookup_local_action('Input 1'):
+      return
+    
+    inCount = InputCount_byPartNum.get(value)
+    
+    if not inCount:
+      console.warn('Unknown model; assuming has 4 inputs')
+      inCount = 4
+      
+    for i in range(1, inCount+1):
+      bindDynamicInput(i)
+  
+  local_event_PartNumber.addEmitHandler(handler)
+  
+def bindDynamicInput(i):
+  switchAction = Action('Input %s' % i, lambda ignore: selectInput.call(i), {'title': 'Input %s' % i, 'group': 'Switching', 'order': next_seq()})
+  
+  switchedSignal = Event('Input %s' % i, {'group': 'Switching', 'order': next_seq(), 'schema': {'type': 'boolean'}})
+  
+  def onSwitch(switchedInput):
+    switchedSignal.emitIfDifferent(i == switchedInput)
+    
+  local_event_Input.addEmitHandler(onSwitch)
+  
+  def slaveSwitch(arg):
+    if arg == None or arg: # handle both state and stateless arg
+      switchAction.call()
+  
+  # optional slave switching
+  remoteSwitching = create_remote_event('Slave Switch Input %s' % i, 
+                                        slaveSwitch, 
+                                        {'group': 'Switching', 'order': next_seq()})
   
 # -->
 
