@@ -760,7 +760,7 @@
             </xsl:choose>px;}</style>
         </xsl:if>
         <form>
-          <input data-arg-source="this" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" />
+          <input data-arg-source="this" data-arg-type="number" data-action="{@action}" data-event="{@event}" type="range" min="{@min}" max="{@max}" step="1" />
           <output data-event="{@event}"></output>
           <xsl:if test="@type='mute'">
             <a href="#" class="btn btn-default" data-arg-on="true" data-arg-off="false">

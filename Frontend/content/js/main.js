@@ -16,6 +16,18 @@ $.postJSON = function(url, data, callback) {
   });
 };
 
+var parseType = function(val, type) {
+  switch(type){
+    case "number":
+      return parseFloat(val);
+    case "string":
+      return String(val);
+    case "boolean":
+      return Boolean(val);
+  };
+  return val;
+}
+
 var stringify = function(arg, type) {
   if($.isPlainObject(arg)) return JSON.stringify(arg);
   else if(type=="string") return '"'+arg+'"';
@@ -270,18 +282,18 @@ var getAction = function(ele){
     if(!_.isUndefined($(ele).closest('[data-arg-action]').data('confirmtext'))) confirmtext = $(ele).closest('[data-arg-action]').data('confirmtext');
   }
   if (!_.isUndefined($(ele).data('arg-on')) && !_.isUndefined($(ele).data('arg-off'))) {
-    if ($(ele).hasClass('active')) arg = "{'arg':" + stringify($(ele).data('arg-off'), type) + "}";
-    else arg = "{'arg':" + stringify($(ele).data('arg-on'), type) + "}";
+    if ($(ele).hasClass('active')) stringify({'arg': parseType($(ele).data('arg-off'), type)});
+    else arg = stringify({'arg': parseType($(ele).data('arg-on'), type)});
   } else {
-    if (!_.isUndefined($(ele).data('arg'))) arg = stringify({'arg':$(ele).data('arg'), type});
+    if (!_.isUndefined($(ele).data('arg'))) arg = stringify({'arg':parseType($(ele).data('arg'), type)});
     else if(!_.isUndefined($(ele).data('arg-source'))) {
-      if($(ele).data('arg-source') == 'this') val = $(ele).val();
-      else val = $($(ele).data('arg-source')).data('arg');
+      if($(ele).data('arg-source') == 'this') val = parseType($(ele).val(), type);
+      else val = parseType($($(ele).data('arg-source')).data('arg'), type);
       if(_.isUndefined(val)) val = {};
       if(!_.isUndefined($(ele).data('arg-sourcekey'))) {
         arg = {"arg":{}};
         arg['arg'][$(ele).data('arg-sourcekey')] = val;
-        if(!_.isUndefined($(ele).data('arg-add'))) arg = $.extend(true, arg, {'arg':$(ele).data('arg-add')});
+        if(!_.isUndefined($(ele).data('arg-add'))) arg = $.extend(true, arg, {'arg': parseType($(ele).data('arg-add'), type)});
         arg = stringify(arg);
       } else arg = stringify({'arg':val});
     } else arg = "{}";
