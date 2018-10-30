@@ -410,8 +410,14 @@ var parseLog = function(log){
                 }).show();
                 break;
               case "boolean":
-                if (log.arg) $(ele).show();
-                else $(ele).hide();
+                $(ele).hide();
+                if(_.isUndefined($(ele).data('showeventdata'))) $(ele).data('showeventdata', {});
+                var val = $(ele).data('showeventdata');
+                val[log.alias] = log.arg;
+                $(ele).data('showeventdata', val);
+                $.each($(ele).data('showeventdata'), function(i, e){
+                  if(e == true) $(ele).show();
+                });
                 break;
             };
           }
