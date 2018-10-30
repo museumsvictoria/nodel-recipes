@@ -282,7 +282,7 @@ var getAction = function(ele){
     if(!_.isUndefined($(ele).closest('[data-arg-action]').data('confirmtext'))) confirmtext = $(ele).closest('[data-arg-action]').data('confirmtext');
   }
   if (!_.isUndefined($(ele).data('arg-on')) && !_.isUndefined($(ele).data('arg-off'))) {
-    if ($(ele).hasClass('active')) stringify({'arg': parseType($(ele).data('arg-off'), type)});
+    if ($(ele).hasClass('active')) arg = stringify({'arg': parseType($(ele).data('arg-off'), type)});
     else arg = stringify({'arg': parseType($(ele).data('arg-on'), type)});
   } else {
     if (!_.isUndefined($(ele).data('arg'))) arg = stringify({'arg':parseType($(ele).data('arg'), type)});
