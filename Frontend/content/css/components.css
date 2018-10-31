@@ -8893,9 +8893,25 @@ footer
     margin-bottom: 5px;
     margin-left: 5px;
 }
+.btn.haschild > div
+{
+    display: inline;
+}
+.btn-group-vertical .btn > div
+{
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
 .btn-group-vertical .btn.haschild
 {
     text-align: left;
+}
+.btn-group-vertical .btn.haschild > div
+{
+    display: block;
+
+    margin-right: 30px;
 }
 .btn-group-vertical .btn.haschild > span.label
 {
