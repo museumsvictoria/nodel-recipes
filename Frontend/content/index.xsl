@@ -115,7 +115,7 @@
                     <xsl:apply-templates select="badge|icon"/>
                   </a>
                 </xsl:for-each>
-                <p class="navbar-text" id="clock"></p>
+                <p class="navbar-text" id="clock">00:00:00 am</p>
               </div>
             </div><!-- /.navbar-collapse -->
           </div><!-- /.container-fluid -->

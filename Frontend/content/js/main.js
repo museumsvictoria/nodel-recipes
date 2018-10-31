@@ -145,7 +145,7 @@ var convertNames = function(){
 }
 
 var setEvents = function(){
-  $(window).resize(function () {
+  $(window).on('resize orientationchange', function () {
     updatepadding();
   });
   $('body').on('touchend touchcancel',':not(input)', function (e) {
