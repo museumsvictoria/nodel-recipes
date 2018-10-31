@@ -422,6 +422,7 @@ var parseLog = function(log){
             };
           }
         });
+        if(eles.length) updatepadding();
         // handle event data updates
         var eles = $("[data-event]").filter(function() {
           return $.inArray(log.alias, $.isArray($(this).data('event')) ? $(this).data('event') : [$(this).data('event')]) >= 0;
