@@ -145,8 +145,13 @@ var convertNames = function(){
 }
 
 var setEvents = function(){
-  $(window).on('resize orientationchange', function () {
+  $(window).on('resize', function () {
     updatepadding();
+  });
+  $(window).on('orientationchange', function () {
+    if(!_.isUndefined(window.navigator.standalone) && window.navigator.standalone){
+      setTimeout(function(){ updatepadding(); }, 200);
+    }
   });
   $('body').on('touchend touchcancel',':not(input)', function (e) {
     if(navigator.issmart) $('body').removeClass('touched');
