@@ -9128,6 +9128,10 @@ footer
 
     text-align: left;
 }
+.status.label:empty
+{
+    display: initial;
+}
 .range form
 {
     position: relative;
