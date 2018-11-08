@@ -454,7 +454,7 @@ var parseLog = function(log){
           }
           switch ($.type(log.arg)) {
             case "number":
-              if ($(ele).not('.meter .signal').is("div")) {
+              if ($(ele).not('.meter, .signal').is("div")) {
                 $(ele).children().filter(function () {
                   return $(this).attr("data-arg") > log.arg;
                 }).removeClass('btn-success').addClass('btn-default');
