@@ -202,7 +202,7 @@
         <xsl:if test="@showevent">
           <xsl:text> sect</xsl:text>
         </xsl:if>
-        <xsl:if test="badge">
+        <xsl:if test="badge|partialbadge|signal">
           <xsl:text> haschild</xsl:text>
         </xsl:if>
       </xsl:attribute>
@@ -228,7 +228,7 @@
         </xsl:if>
       </xsl:if>
       <div><xsl:value-of select="text()"/></div>
-      <xsl:apply-templates select="badge|icon|text|image"/>
+      <xsl:apply-templates select="badge|partialbadge|signal|icon|text|image"/>
     </a>
   </xsl:template>
   <xsl:template match="button[@type]">
@@ -259,7 +259,7 @@
           </xsl:choose>
         </xsl:attribute>
         <div><xsl:value-of select="text()"/></div>
-        <xsl:apply-templates select="badge|icon|text|image"/>
+        <xsl:apply-templates select="badge|partialbadge|signal|icon|text|image"/>
       </a>
     </xsl:if>
   </xsl:template>
@@ -490,16 +490,16 @@
       </xsl:if>
       <xsl:for-each select="pill">
         <li>
-          <xsl:if test="badge or @showevent">
+          <xsl:if test="badge|partialbadge|signal or @showevent">
             <xsl:attribute name="class">
               <xsl:choose>
-                <xsl:when test="badge and @showevent">
+                <xsl:when test="badge|partialbadge|signal and @showevent">
                   <xsl:text>haschild sect</xsl:text>
                 </xsl:when>
-                <xsl:when test="badge and not(@showevent)">
+                <xsl:when test="badge|partialbadge|signal and not(@showevent)">
                   <xsl:text>haschild</xsl:text>
                 </xsl:when>
-                <xsl:when test="@showevent and not(badge)">
+                <xsl:when test="@showevent and not(badge|partialbadge|signal)">
                   <xsl:text>sect</xsl:text>
                 </xsl:when>
               </xsl:choose>
@@ -518,7 +518,7 @@
               </xsl:attribute>
             </xsl:if>
           </xsl:if>
-          <a href="#" data-arg="{@value}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge"/></a>
+          <a href="#" data-arg="{@value}"><xsl:value-of select="text()"/><xsl:apply-templates select="badge|partialbadge|signal"/></a>
         </li>
       </xsl:for-each>
     </ul>
@@ -640,7 +640,7 @@
           <xsl:value-of select="translate(@page,translate(@page,$allowedSymbols,''),'')"/>
         </xsl:attribute>
       </xsl:if>
-      <xsl:apply-templates select="link"/><xsl:apply-templates select="swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
+      <xsl:apply-templates select="link"/><xsl:apply-templates select="swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge|signal"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
     </div>
   </xsl:template>
   <!-- status -->
@@ -816,6 +816,19 @@
     </div>
   </xsl:template>
   <!-- meter -->
+  <!-- signal -->
+  <xsl:template match="signal">
+    <span data-event="{@event}" class="label signal meter-colour-0">
+      <xsl:attribute name="data-range">
+        <xsl:choose>
+          <xsl:when test="@range"><xsl:value-of select="@range"/></xsl:when>
+          <xsl:otherwise>perc</xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
+      <xsl:value-of select="text()"/>
+    </span>
+  </xsl:template>
+  <!-- signal -->
   <!-- gap -->
   <xsl:template match="gap">
     <div>

@@ -80,6 +80,21 @@ var updatemeter = function(ele, arg) {
   $(ele).data('throttle')(ele, arg);
 };
 
+var updatesignal = function(ele, arg) {
+  if(!_.isFunction($(ele).data('throttle'))) {
+    $(ele).data('throttle', _.throttle(function(el, val) {
+      var range = $(el).data('range');
+      if(range=='db') var vl = 88*Math.pow(10,val/40);
+      else var vl = val;
+      if(vl > 100) vl = 100;
+      if(vl < 0) vl = 0;
+      $(ele).attr('class', function(i, c){
+        return c && c.replace(/\bmeter-colour-\S+/g, 'meter-colour-'+Math.round(vl));
+      });
+    }, 100));
+  }
+  $(ele).data('throttle')(ele, arg);
+};
 var node = host = opts = '';
 var converter = new Markdown.Converter();
 var unicodematch = new XRegExp("[^\\p{L}\\p{N}]", "gi");
@@ -439,15 +454,17 @@ var parseLog = function(log){
           }
           switch ($.type(log.arg)) {
             case "number":
-              if ($(ele).not('.meter').is("div")) {
+              if ($(ele).not('.meter .signal').is("div")) {
                 $(ele).children().filter(function () {
                   return $(this).attr("data-arg") > log.arg;
                 }).removeClass('btn-success').addClass('btn-default');
                 $(ele).children().filter(function () {
                   return $(this).attr("data-arg") <= log.arg;
                 }).removeClass('btn-default').addClass('btn-success');
-              } else if ($(ele).is("div.meter")) {
+              } else if ($(ele).is(".meter")) {
                 updatemeter(ele, log.arg);
+              } else if ($(ele).is(".signal")) {
+                updatesignal(ele, log.arg);
               } else if($(ele).is("input")) {
                 $(ele).not(':active').val(log.arg);
               } else {
