@@ -683,13 +683,67 @@
   <!-- partialbadge -->
   <!-- link -->
   <xsl:template match="link[@node and not(@url)]">
-    <a href="#" class="btn btn-outline" data-link-node="{@node}"><span class="glyphicon glyphicon-new-window"></span><span><xsl:value-of select="text()"/></span></a>
+    <a href="#" data-link-node="{@node}">
+      <xsl:attribute name="class">
+        <xsl:text>btn btn-outline</xsl:text>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
+      <span class="glyphicon glyphicon-new-window"></span><span><xsl:value-of select="text()"/></span>
+    </a>
   </xsl:template>
   <xsl:template match="link[@url and not(@node)]">
-    <a href="#" class="btn btn-outline" data-link-url="{@url}"><span class="glyphicon glyphicon-new-window"></span><span><xsl:value-of select="text()"/></span></a>
+    <a href="#" data-link-url="{@url}">
+      <xsl:attribute name="class">
+        <xsl:text>btn btn-outline</xsl:text>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
+      <span class="glyphicon glyphicon-new-window"></span><span><xsl:value-of select="text()"/></span>
+    </a>
   </xsl:template>
   <xsl:template match="link[not(@url) and not(@node)]">
-    <a href="#" class="btn btn-outline" data-link-event="{../@event}"><span class="glyphicon glyphicon-new-window"></span><span><xsl:value-of select="text()"/></span></a>
+    <a href="#" data-link-event="{../@event}">
+      <xsl:attribute name="class">
+        <xsl:text>btn btn-outline</xsl:text>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
+      <span class="glyphicon glyphicon-new-window"></span><span><xsl:value-of select="text()"/></span>
+    </a>
   </xsl:template>
   <!-- link -->
   <!-- panel -->
