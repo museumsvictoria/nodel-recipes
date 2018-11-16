@@ -535,6 +535,8 @@ var parseLog = function(log){
                 $("[data-page]").hide();
                 $('[data-page="' + log.arg + '"]').show();
                 if($(ele).is("input")) $(ele).not(':active').val(log.arg);
+                // image
+                if ($(ele).is("img")) $(ele).attr("src", log.arg);
               }
               break;
             case "boolean":

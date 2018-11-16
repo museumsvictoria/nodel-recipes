@@ -305,7 +305,40 @@
   <!-- icon -->
   <!-- image -->
   <xsl:template match="image">
-    <img src="{@source}"></img>
+    <img src="{@source}">
+      <xsl:if test="@showevent">
+        <xsl:attribute name="class">
+          <xsl:text>sect</xsl:text>
+        </xsl:attribute>
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
+      <xsl:if test="@event">
+        <xsl:attribute name="data-event">
+          <xsl:value-of select="@event"/>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:if test="@height|@width">
+        <xsl:attribute name="style">
+          <xsl:if test="@height">
+            <xsl:text>max-height:</xsl:text>
+            <xsl:value-of select="@height"/>
+            <xsl:text>px;</xsl:text>
+          </xsl:if>
+          <xsl:if test="@width">
+            <xsl:text>max-width:</xsl:text>
+            <xsl:value-of select="@width"/>
+            <xsl:text>px;</xsl:text>
+          </xsl:if>
+        </xsl:attribute>
+      </xsl:if>
+    </img>
   </xsl:template>
   <!-- image -->
   <!-- grid -->
@@ -640,7 +673,7 @@
           <xsl:value-of select="translate(@page,translate(@page,$allowedSymbols,''),'')"/>
         </xsl:attribute>
       </xsl:if>
-      <xsl:apply-templates select="link"/><xsl:apply-templates select="button|swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge|signal"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
+      <xsl:apply-templates select="link"/><xsl:apply-templates select="image"/><xsl:apply-templates select="button|swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge|signal"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
     </div>
   </xsl:template>
   <!-- status -->

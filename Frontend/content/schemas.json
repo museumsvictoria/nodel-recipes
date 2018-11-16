@@ -53,6 +53,10 @@
   "field": {
     "type": "string"
   },
+
+  "image": {
+    "type": "string"
+  },
   
   "badge": { 
     "type": "object", 

@@ -8987,6 +8987,15 @@ footer
     margin-bottom: 5px;
     margin-left: 15px;
 }
+.alert > img
+{
+    float: right;
+
+    max-width: 100px;
+    max-height: 80px;
+    margin-bottom: 5px;
+    margin-left: 15px;
+}
 .alert-mini
 {
     min-height: 55px;
