@@ -640,7 +640,7 @@
           <xsl:value-of select="translate(@page,translate(@page,$allowedSymbols,''),'')"/>
         </xsl:attribute>
       </xsl:if>
-      <xsl:apply-templates select="link"/><xsl:apply-templates select="swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge|signal"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
+      <xsl:apply-templates select="link"/><xsl:apply-templates select="button|swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge|signal"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
     </div>
   </xsl:template>
   <!-- status -->
