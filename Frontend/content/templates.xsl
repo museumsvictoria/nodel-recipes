@@ -620,7 +620,7 @@
   <xsl:template match="status">
     <div data-status="{@event}">
       <xsl:attribute name="class">
-        <xsl:text>alert alert-mini label-default</xsl:text>
+        <xsl:text>alert alert-mini label-default clearfix</xsl:text>
         <xsl:if test="@showevent">
           <xsl:text> sect</xsl:text>
         </xsl:if>
