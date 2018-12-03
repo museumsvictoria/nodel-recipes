@@ -8886,13 +8886,6 @@ footer
 {
     margin-top: 20px;
 }
-.alert > span.label
-{
-    float: right;
-
-    margin-bottom: 5px;
-    margin-left: 5px;
-}
 .btn.haschild > div
 {
     display: inline;
@@ -8933,61 +8926,63 @@ footer
 {
     margin-left: 5px;
 }
-.alert.label-default .btn-default,
-.alert.label-default > span.label.label-default,
+.panel.panel-default > .panel-body .btn-default,
+.panel.panel-default > .panel-body span.label.label-default,
 .btn.btn-default > span.label.label-default
 {
     border-color: #342b2b;
     background-color: #342b2b;
 }
-.alert.label-primary .btn-primary,
-.alert.label-primary > span.label.label-primary,
+.panel.panel-primary > .panel-body .btn-primary,
+.panel.panel-primary > .panel-body span.label.label-primary,
 .btn.btn-primary > span.label.label-primary
 {
     border-color: #0048f0;
     background-color: #0048f0;
 }
-.alert.label-success .btn-success,
-.alert.label-success > span.label.label-success,
+.panel.panel-success > .panel-body .btn-success,
+.panel.panel-success > .panel-body span.label.label-success,
 .btn.btn-success > span.label.label-success
 {
     border-color: #1e9111;
     background-color: #1e9111;
 }
-.alert.label-info .btn-info,
-.alert.label-info > span.label.label-info,
+.panel.panel-info > .panel-body .btn-info,
+.panel.panel-info > .panel-body span.label.label-info,
 .btn.btn-info > span.label.label-info
 {
     border-color: #098db4;
     background-color: #098db4;
 }
-.alert.label-warning .btn-warning,
-.alert.label-warning > span.label.label-warning,
+.panel.panel-warning > .panel-body .btn-warning,
+.panel.panel-warning > .panel-body span.label.label-warning,
 .btn.btn-warning > span.label.label-warning
 {
     border-color: #ba7900;
     background-color: #ba7900;
 }
-.alert.label-danger .btn-danger,
-.alert.label-danger > span.label.label-danger,
+.panel.panel-danger > .panel-body .btn-danger,
+.panel.panel-danger > .panel-body span.label.label-danger,
 .btn.btn-danger > span.label.label-danger
 {
     border-color: #c11600;
     background-color: #c11600;
 }
-.alert a.btn
+.statusgroup a.btn
 {
     text-decoration: none;
+
+    color: #fff;
 }
-.alert > .btn,
-.alert > .btn-group
+.statusgroup .panel-body > .btn,
+.statusgroup .panel-body > .btn-group
 {
     float: right;
 
     margin-bottom: 5px;
     margin-left: 15px;
 }
-.alert > img
+.statusgroup .panel-body > img
 {
     float: right;
 
@@ -8996,14 +8991,36 @@ footer
     margin-bottom: 5px;
     margin-left: 15px;
 }
-.alert-mini
+.statusgroup .panel-body > span.label
 {
-    min-height: 55px;
-    margin-bottom: 20px;
+    float: right;
+
+    margin-bottom: 5px;
+    margin-left: 5px;
 }
-.alert-mini[data-nav]
+.statusgroup.panel-default .panel-body
 {
-    cursor: pointer;
+    background: #424242;
+}
+.statusgroup.panel-primary .panel-body
+{
+    background: #155bff;
+}
+.statusgroup.panel-success .panel-body
+{
+    background: #2ca71e;
+}
+.statusgroup.panel-info .panel-body
+{
+    background: #16a2cb;
+}
+.statusgroup.panel-warning .panel-body
+{
+    background: #dc8f02;
+}
+.statusgroup.panel-danger .panel-body
+{
+    background: #e41a00;
 }
 .nav-pills > li > a.active > span.label.label-primary
 {

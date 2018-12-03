@@ -571,23 +571,23 @@ var parseLog = function(log){
             if(ele.hasClass('status')) ele.text(msg);
             switch(log.arg['level']) {
               case 0:
-                ele.removeClass('label-default label-warning label-danger label-primary').addClass('label-success');
+                ele.removeClass('panel-default panel-warning panel-danger panel-primary').addClass('panel-success');
                 break;
               case 1:
-                ele.removeClass('label-default label-success label-danger label-primary').addClass('label-warning');
+                ele.removeClass('panel-default panel-success panel-danger panel-primary').addClass('panel-warning');
                 break;
               case 2:
               case 3:
               case 4:
-                ele.removeClass('label-default label-success label-warning label-primary').addClass('label-danger');
+                ele.removeClass('panel-default panel-success panel-warning panel-primary').addClass('panel-danger');
                 break;
               case 5:
-                ele.removeClass('label-default label-success label-warning label-danger').addClass('label-primary');
+                ele.removeClass('panel-default panel-success panel-warning panel-danger').addClass('panel-primary');
                 break;
             }
           } else if(_.isBoolean(log.arg)) {
-            if (log.arg) $(ele).addClass('label-success').removeClass('label-default');
-            else $(ele).addClass('label-default').removeClass('label-success');
+            if (log.arg) $(ele).addClass('panel-success').removeClass('panel-default');
+            else $(ele).addClass('panel-default').removeClass('panel-success');
           }
         });
         var eles = $("[data-render]").filter(function() {

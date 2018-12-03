@@ -653,7 +653,7 @@
   <xsl:template match="status">
     <div data-status="{@event}">
       <xsl:attribute name="class">
-        <xsl:text>alert alert-mini label-default clearfix</xsl:text>
+        <xsl:text>panel panel-default statusgroup clearfix</xsl:text>
         <xsl:if test="@showevent">
           <xsl:text> sect</xsl:text>
         </xsl:if>
@@ -673,10 +673,29 @@
           <xsl:value-of select="translate(@page,translate(@page,$allowedSymbols,''),'')"/>
         </xsl:attribute>
       </xsl:if>
-      <xsl:apply-templates select="image"/><xsl:apply-templates select="link"/><xsl:apply-templates select="button|swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge|signal"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
+      <div class="panel-body">
+        <xsl:apply-templates select="image"/><xsl:apply-templates select="link"/><xsl:apply-templates select="button|swich|partialswitch"/><xsl:apply-templates select="badge|partialbadge|signal"/><strong><xsl:value-of select="text()"/></strong><br/><span class="status">Unknown</span>
+      </div>
+      <xsl:apply-templates select="statussleep"/>
     </div>
   </xsl:template>
   <!-- status -->
+  <!-- statussleep -->
+  <xsl:template match="statussleep">
+    <div class="panel-footer clearfix sect">
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
+      <a href="#" data-action="{@action}" class="btn btn-danger" type="button">Sleep</a>
+    </div>
+  </xsl:template>
   <!-- badge -->
   <xsl:template match="badge">
     <span data-status="{@event}">
