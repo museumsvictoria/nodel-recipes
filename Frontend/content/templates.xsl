@@ -947,4 +947,27 @@
     </div>
   </xsl:template>
   <!-- gap -->
+  <!-- group -->
+  <xsl:template match="group">
+    <div>
+      <xsl:attribute name="class">
+        <xsl:text>well</xsl:text>
+        <xsl:if test="@showevent">
+          <xsl:text> sect</xsl:text>
+        </xsl:if>
+      </xsl:attribute>
+      <xsl:if test="@showevent">
+        <xsl:attribute name="data-showevent">
+          <xsl:value-of select="@showevent"/>
+        </xsl:attribute>
+        <xsl:if test="@showvalue">
+          <xsl:attribute name="data-showarg">
+            <xsl:value-of select="@showvalue"/>
+          </xsl:attribute>
+        </xsl:if>
+      </xsl:if>
+      <xsl:apply-templates/>
+    </div>
+  </xsl:template>
+  <!-- group -->
 </xsl:stylesheet>

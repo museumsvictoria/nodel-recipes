@@ -101,19 +101,25 @@
       </column>
     </row>
     <row>
-      <column sm="4">
-        <title showevent="Show" showvalue="On">Multiple Actions</title>
-        <button showevent="Show" showvalue="On" action='["Action1","Action2","Action3"]' class='btn-warning'>Trigger</button>
-      </column>
-      <column sm="4" event="Show" value="On">
-        <title>Volume</title>
-        <button action='VolumeDown' class='btn-success'>Down</button>
-        <button action='VolumeUp' class='btn-success'>Up</button>
-      </column>
-      <column sm="4" showevent="Show" showvalue="Off">
-        <title>Volume momentary</title>
-        <button type="momentary" action-off='VolumeStop' action-on='VolumeDownOn' class='btn-success'>Down</button>
-        <button type="momentary" action-off='VolumeStop' action-on='VolumeUpOn' class='btn-success'>Up</button>
+      <column>
+        <group>
+          <row>
+            <column sm="4">
+              <title showevent="Show" showvalue="On">Multiple Actions</title>
+              <button showevent="Show" showvalue="On" action='["Action1","Action2","Action3"]' class='btn-warning'>Trigger</button>
+            </column>
+            <column sm="4" event="Show" value="On">
+              <title>Volume</title>
+              <button action='VolumeDown' class='btn-success'>Down</button>
+              <button action='VolumeUp' class='btn-success'>Up</button>
+            </column>
+            <column sm="4" showevent="Show" showvalue="Off">
+              <title>Volume momentary</title>
+              <button type="momentary" action-off='VolumeStop' action-on='VolumeDownOn' class='btn-success'>Down</button>
+              <button type="momentary" action-off='VolumeStop' action-on='VolumeUpOn' class='btn-success'>Up</button>
+            </column>
+          </row>
+        </group>
       </column>
     </row>
   </page>
