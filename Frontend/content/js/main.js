@@ -564,6 +564,7 @@ var parseLog = function(log){
         });
         $.each(eles, function (i, ele) {
           var ele = $(ele);
+          var clstype = ele.hasClass('panel') ? 'panel' : 'label';
           if(!_.isUndefined(log.arg) && !_.isUndefined(log.arg['level']) && _.isNumber(log.arg['level'])){
             var msg = '';
             if(!_.isUndefined(log.arg['message']) && _.isString(log.arg['message'])) msg = log.arg['message'];
@@ -571,23 +572,23 @@ var parseLog = function(log){
             if(ele.hasClass('status')) ele.text(msg);
             switch(log.arg['level']) {
               case 0:
-                ele.removeClass('panel-default panel-warning panel-danger panel-primary').addClass('panel-success');
+                ele.removeClass(clstype+'-default '+clstype+'-warning '+clstype+'-danger '+clstype+'-primary').addClass(clstype+'-success');
                 break;
               case 1:
-                ele.removeClass('panel-default panel-success panel-danger panel-primary').addClass('panel-warning');
+                ele.removeClass(clstype+'-default '+clstype+'-success '+clstype+'-danger '+clstype+'-primary').addClass(clstype+'-warning');
                 break;
               case 2:
               case 3:
               case 4:
-                ele.removeClass('panel-default panel-success panel-warning panel-primary').addClass('panel-danger');
+                ele.removeClass(clstype+'-default '+clstype+'-success '+clstype+'-warning '+clstype+'-primary').addClass(clstype+'-danger');
                 break;
               case 5:
-                ele.removeClass('panel-default panel-success panel-warning panel-danger').addClass('panel-primary');
+                ele.removeClass(clstype+'-default '+clstype+'-success '+clstype+'-warning '+clstype+'-danger').addClass(clstype+'-primary');
                 break;
             }
           } else if(_.isBoolean(log.arg)) {
-            if (log.arg) $(ele).addClass('panel-success').removeClass('panel-default');
-            else $(ele).addClass('panel-default').removeClass('panel-success');
+            if (log.arg) $(ele).addClass(clstype+'-success').removeClass(clstype+'-default');
+            else $(ele).addClass(clstype+'-default').removeClass(clstype+'-success');
           }
         });
         var eles = $("[data-render]").filter(function() {
