@@ -5,13 +5,11 @@ import java.lang.System
 import subprocess
 
 
-
 ### Parameters used by this Node
 system = java.lang.System.getProperty('os.name')
 arch = java.lang.System.getProperty('sun.arch.data.model').lower()
 
 windows = [ "Windows 7", "Windows 8", "Windows 10" ]
-
 
 
 ### Functions used by this Node
@@ -23,8 +21,27 @@ def shutdown():
     # shutdown OSX
     # nodel process must have sudo rights to shutdown command
     returncode = subprocess.call("sudo shutdown -h -u now", shell=True)
+  elif(system=="Linux"):
+    # shutdown Linux
+    # nodel process must have sudo rights to shutdown command
+    returncode = subprocess.call("sudo shutdown -h now", shell=True)  
   else:
-    print 'unknown system: ' + system
+	print 'unknown system: ' + system
+
+def restart():
+  if system in windows:
+    # shutdown WIN
+    returncode = subprocess.call("shutdown -s -f -t 0", shell=True)
+  elif(system=="Mac OS X"):
+    # shutdown OSX
+    # nodel process must have sudo rights to shutdown command
+    returncode = subprocess.call("sudo shutdown -h -u now", shell=True)
+  elif(system=="Linux"):
+    # shutdown Linux
+    # nodel process must have sudo rights to shutdown command
+    returncode = subprocess.call("sudo shutdown -r now", shell=True)
+  else:
+	print 'unknown system: ' + system
 
 def suspend():
   if system in windows:
@@ -37,21 +54,13 @@ def suspend():
   else:
     print 'unknown system: ' + system
 
-def restart():
-  if system in windows:
-    # restart WIN
-    returncode = subprocess.call("shutdown -r -f -t 0", shell=True)
-  elif(system=="Mac OS X"):
-    # restart OSX
-    returncode = subprocess.call("sudo shutdown -r now", shell=True)
-  else:
-    print 'unknown system: ' + system
-
 def mute():
   if system in windows:
     returncode = subprocess.call("nircmd"+arch+".exe mutesysvolume 1", shell=True)
   elif(system=="Mac OS X"):
     returncode = subprocess.call("osascript -e 'set volume output muted true'", shell=True)
+  elif(system=="Linux"):
+    returncode = subprocess.call("amixer -q -D pulse sset Master mute", shell=True)
   else:
     print 'unknown system: ' + system
 
@@ -61,6 +70,8 @@ def unmute():
     print returncode
   elif(system=="Mac OS X"):
     returncode = subprocess.call("osascript -e 'set volume output muted false'", shell=True)
+  elif(system=="Linux"):
+    returncode = subprocess.call("amixer -q -D pulse sset Master unmute", shell=True)
   else:
     print 'unknown system: ' + system
 
@@ -70,8 +81,10 @@ def set_volume(vol):
     returncode = subprocess.call("nircmd"+arch+".exe setsysvolume "+str(winvol), shell=True)
   elif(system=="Mac OS X"):
     returncode = subprocess.call("osascript -e 'set volume output volume "+str(vol)+"'", shell=True)
+  elif(system=="Linux"):
+    returncode = subprocess.call("amixer -q -D pulse sset Master "+str(vol)+"% unmute", shell=True)
     # raspberry pi volume: "amixer cset numid=1 -- 20%"
-    # returncode = subprocess.call("amixer cset numid=1 -- "+str(vol)+"%", shell=True)
+    #returncode = subprocess.call("amixer cset numid=1 -- "+str(vol)+"%", shell=True)
   else:
     print 'unknown system: ' + system
 
