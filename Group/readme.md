@@ -57,3 +57,21 @@ The signal flow looks like this:
  ┌─ PC Node ─┐    ┌──────────            This Group Node                ──────────┐   ┌─ parent group or dashboard ─┐
     Status     ->   Disappearing Status -> Member Assumed Status -> Member Status   ->    Event wiring
 ```
+
+## Notes
+
+The remote action utilises a complex argument by default ```{'state': 'arg'}``` which needs to be handled by the receiving node.
+
+An example to process this form of incoming argument.
+
+```
+def getStateValue(arg):
+  if hasattr(arg, 'get'): # does it have the '.get' function i.e. dict/map-like
+    return arg['state']
+  elif isinstance(arg, basestring):
+    return arg
+  else:
+    return None
+```
+
+The alternative approach is the enable the **Device** parameter, which enforces a simple argument, i.e. "On".

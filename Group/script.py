@@ -24,6 +24,10 @@ param_members = Parameter({'title': 'Members', 'schema': {'type': 'array', 'item
    }},
    'muting': {'title': 'Muting', 'type': 'object', 'order': 5, 'properties': {
      'mode': {'title': 'Mode', 'type': 'string', 'enum': MODES}
+   }},
+   'timing': {'title': 'Timing', 'type': 'object', 'order': 6, 'properties': {
+     'on': {'title': 'On (secs)', 'type': 'integer', 'order': next_seq()},
+     'off': {'title': 'Off (secs)', 'type': 'integer', 'order': next_seq()}
    }}
 }}}})
 
@@ -115,7 +119,8 @@ def initSignal(signalName, mode, states):
     localDesiredSignal.emit(state)
     
     # for convenience, just emit the state as the status if no members are configured
-    if isEmpty(lookup_parameter('members')):
+    members = lookup_parameter('members')
+    if isEmpty(members):
       localResultantSignal.emit(state)
     
     else:
@@ -123,13 +128,25 @@ def initSignal(signalName, mode, states):
         return
       
       for memberName in membersBySignal[signalName]:
+
+        # add delay timers
+        on_seconds = off_seconds = 0
+        if signalName == 'Power':
+          for index, member in enumerate(members):
+            if member['name'] == memberName:
+              timing = members[index]['timing']
+              if not is_empty(timing):
+                on_seconds = members[index]['timing']['on'] or 0
+                off_seconds = members[index]['timing']['off'] or 0
+              break
+
         remoteAction = lookup_remote_action('Member %s %s' % (memberName, signalName))
         if remoteAction != None:
-          remoteAction.call(state)
+          call(lambda: remoteAction.call(state), delay = on_seconds if state == 'On' else off_seconds)
 
         remoteActionExtended = lookup_remote_action('Member %s %s Extended' % (memberName, signalName))
         if remoteActionExtended != None:
-          remoteActionExtended.call(complexArg)
+          call(lambda: remoteActionExtended.call(complexArg), delay = on_seconds if complexArg['state'] == 'On' else off_seconds)
           
   # create action
   def handleSimpleOrComplexArg(arg):
