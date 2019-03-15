@@ -30,14 +30,13 @@ def shutdown():
 
 def restart():
   if system in windows:
-    # shutdown WIN
-    returncode = subprocess.call("shutdown -s -f -t 0", shell=True)
+    # restart WIN
+    returncode = subprocess.call("shutdown -r -f -t 0", shell=True)
   elif(system=="Mac OS X"):
-    # shutdown OSX
-    # nodel process must have sudo rights to shutdown command
-    returncode = subprocess.call("sudo shutdown -h -u now", shell=True)
+    # restart OSX
+    returncode = subprocess.call("sudo shutdown -r now", shell=True)
   elif(system=="Linux"):
-    # shutdown Linux
+    # restart Linux
     # nodel process must have sudo rights to shutdown command
     returncode = subprocess.call("sudo shutdown -r now", shell=True)
   else:
