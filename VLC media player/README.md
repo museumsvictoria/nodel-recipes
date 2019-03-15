@@ -1,4 +1,4 @@
-## Nodel VLC Recipe 1.5 (Jan 2017)
+## Nodel VLC Recipe 1.6 (Mar 2019)
 > Simple single instance Nodel channel using stdio.
 > Integration for software-playback utilising VLC Python API: https://wiki.videolan.org/python_bindings
 
@@ -8,6 +8,9 @@
 - **Enable teaser** will loop the first video in the playlist indefinitely, returning to this clip on the completition of any other video.
 
 ### Changes
+**1.5 - 1.6**
+- Updated bindings for VLC 3.0.6
+
 **1.4.6 - 1.5**
 - General house-keeping inline for stable release.
 - Removal of Museums Victoria specific clip index.
@@ -47,7 +50,7 @@
 
 ### Requirements
 - [Nodel] v2.1.1-release196
-- [VLC] 2.1.4
+- [VLC] 3.0.6
 - [VLC Python Bindings] are provided alongside the recipe
 
 ### Todos
@@ -57,9 +60,8 @@
 
 ### Known issues
 - Playlist injection unable to decode non-standard UTF-8 characters: å é í ò ü
-- Guarantee current Dynamic Exhibit recipe is out-of-date for these changes.
 - [04372cb4] direct3d vout display error: SetThumbNailClip failed caused by running without explorer.exe
 
- [Nodel]: <https://github.com/museumvictoria/nodel.git>
+ [Nodel]: <https://github.com/museumvictoria/nodel>
  [VLC]: <https://www.videolan.org/vlc>
  [VLC Python Bindings]: <https://github.com/oaubert/python-vlc>
