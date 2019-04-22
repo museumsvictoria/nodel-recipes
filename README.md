@@ -1,6 +1,8 @@
 
 ![Nodel Recipe Logo](http://nodel.io/media/1045/nodel-recipes.png)
 
+Mochubecip4Lyfe!
+
 ## About
 A collection of recipes for [Nodel](https://github.com/museumsvictoria/nodel), the digital control system designed for museums and galleries.
 
