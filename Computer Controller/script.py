@@ -16,7 +16,7 @@ windows = [ "Windows 7", "Windows 8", "Windows 10" ]
 def shutdown():
   if system in windows:
     # shutdown WIN
-    returncode = subprocess.call("shutdown -s -f -t 0", shell=True)
+    returncode = subprocess.call('shutdown -s -f -t 0 /c "Nodel is shutting down the machine now"', shell=True)
   elif(system=="Mac OS X"):
     # shutdown OSX
     # nodel process must have sudo rights to shutdown command
@@ -31,7 +31,7 @@ def shutdown():
 def restart():
   if system in windows:
     # restart WIN
-    returncode = subprocess.call("shutdown -r -f -t 0", shell=True)
+    returncode = subprocess.call('shutdown -r -f -t 0 /c "Nodel is restarting the machine now"', shell=True)
   elif(system=="Mac OS X"):
     # restart OSX
     returncode = subprocess.call("sudo shutdown -r now", shell=True)
