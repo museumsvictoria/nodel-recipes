@@ -472,6 +472,15 @@ def setVolume(arg):
 
 Action('Volume', setVolume, {'title': 'Set', 'group': 'Audio', 'schema': {'type': 'integer', 'max': 100, 'min': 0}})
 
+@local_action({'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['Mute', 'Unmute']}})
+def Mute(arg):
+  console.info('Mute(%s)' % arg)
+  
+  msg = '\x13%s\x01%s' % (chr(int(param_id)), '\x01' if arg == 'Mute' else '\x00')
+  checksum = sum([ord(c) for c in msg]) & 0xff
+
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: local_event_Mute.emit('Mute' if resp[6] == '\x01' else 'Unmute')))
+
 # All non-critical informational polling should occur here
 def local_action_PollNonCriticalInfo(arg=None):
   '''{"title": "Poll non-critical info",  "desc": "This occurs daily in the background", "group": "General"}'''
