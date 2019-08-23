@@ -30,6 +30,7 @@ class Main:
 
     endReached = create_nodel_event('End Reached', {'group': 'Playlist'})
     def endReached_callback(self, event):
+        print 'End Reached!'
         t = threading.Thread(target=self.play_clip, args=[1])
         t.daemon = True
         t.start()
@@ -71,6 +72,7 @@ class Main:
         config = json.loads(file.read())
         file.close()
 
+        # Add the items from our Nodel parameters into our VLC medialist.
         tmp = 0
         if 'playlist' in config["paramValues"]:
             items = config["paramValues"]["playlist"]
@@ -78,12 +80,24 @@ class Main:
                 self.medialist.insert_media(self.instance.media_new(item['arg']), tmp)
                 tmp += 1
 
+        # If the user specified as such in Nodel, we'll repeat the first clip in the playlist more-or-less indefinitely. 
+        # VLC 3.0+ removed the support for a negative value, i.e. 'input-repeat=-1'
         teaser_behaviour = False
         if 'teaser' in config["paramValues"]:
             teaser = config["paramValues"]["teaser"]
             if self.medialist.count() is 1 or teaser is True:
-                self.medialist.item_at_index(0).add_option('input-repeat=-1')
+                self.medialist.item_at_index(0).add_option('input-repeat=65535')
                 teaser_behaviour = True
+
+        # If the user specified as such in Nodel, we'll toggle all clips to pause on the final frame using an exisiting flag.
+        if 'hold' in config["paramValues"]:
+            hold_behaviour = config["paramValues"]["hold"]
+            if hold_behaviour == True:
+                print 'Hold Enabled.'
+                starting_value = 1 if teaser_behaviour == True else 0
+                for x in range(starting_value, self.medialist.count()):
+                    self.medialist.item_at_index(x).add_option('play-and-pause')
+
 
         # Create two players
         # The playlist player manages multiple videos
@@ -114,6 +128,7 @@ class Main:
     # Request playback of specific video in playlist
     @nodel_action({'schema': {'type': 'integer'},"title":"PlayClip","group":"Playlist","order":9})
     def play_clip(self, num):
+        print 'Playclip: %s' % (num)
         self.playlist.play_item_at_index(num - 1)
         #self.player.video_set_spu(self.subtitle_track)
         self.current_position = 0
@@ -124,6 +139,7 @@ class Main:
 
     @nodel_action({"title":"Pause","group":"Playback","order":1})
     def pause(self):
+        print 'Pause!'
         self.player.pause()
 
     @nodel_action({"title":"Resume","group":"Playback","order":1})
@@ -198,5 +214,3 @@ register_instance_node(main)
 
 if __name__ == '__main__':
     start_nodel_channel()
-
-
