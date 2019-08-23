@@ -17,20 +17,16 @@ param_command = Parameter({ 'title': 'Python',
 # command = ['C:\\Python27\\python.exe', '-u', 'simple_vlc_player.py']
 # NOTE: the '-u' flag (unbuffered) is important for interactive stdin/out
 
-param_playlist = Parameter({ 'title': 'Content',
-                'desc': 'The list of command line arguments as JSON',
-                'order': next_seq(),
-                'schema': { 'type': 'array', 'items': {
-                'type': 'object',
-                  'properties': { 'arg': {'type': 'string'} } } } })
+param_playlist = Parameter({'title': 'Content',
+                            'desc': 'The list of playlist items as full paths.',
+                            'order': next_seq(),
+                            'schema': {'type': 'array', 'items': {
+                                'type': 'object',
+                                'properties': {'arg': {'type': 'string', 'title':'Filepath', 'hint': 'C:\\Content\\Video.mp4', 'order': next_seq()},
+                                               'hold': {'type': 'boolean', 'title': 'Enable holding on final frame', 'order': next_seq()}}}}})
 
 param_teaser = Parameter({ 'title': 'Enable teaser.',
                 'desc': 'Continually loop through first video in the playlist.',
-                'schema': {'type': 'boolean'},
-                'order': next_seq() })
-
-param_hold = Parameter({ 'title': 'Enable holding on final frame.',
-                'desc': 'Hold on the final frame of all clips except teaser.',
                 'schema': {'type': 'boolean'},
                 'order': next_seq() })
 

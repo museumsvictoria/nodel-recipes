@@ -6,9 +6,12 @@
 - Nodel must be running on the dekstop, and not as a service, as Windows will prevent access to the GUI layer. You can utilise cmd.exe, a batch file, or task scheduler to automate the process.
 - **Parameters** allow the specification of Python and the building of a playlist. On Windows the script will attempt to auto-detect Python's location.
 - **Enable teaser** will loop the first video in the playlist indefinitely, returning to this clip on the completition of any other video.
-- **Enable holding on final frame** except for a potential teaser, will pause all videos on their final frame.
+- **Hold on final frame** a new boolean in the playlist which forces a clip to pause on the final frame.
 
 ### Changes
+**1.7 - 1.7.1**
+- *Enable holding on final frame* moved into playlist to be selectable on individual clips.
+  
 **1.6 - 1.7**
 - Teaser loop updated to a `65535` count in response to VLC 3.0+ removal of negative values for `-input-loop`.
 - Resolved crash related to thread timing when using teaser.

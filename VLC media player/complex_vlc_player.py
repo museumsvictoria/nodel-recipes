@@ -77,7 +77,12 @@ class Main:
         if 'playlist' in config["paramValues"]:
             items = config["paramValues"]["playlist"]
             for item in items:
-                self.medialist.insert_media(self.instance.media_new(item['arg']), tmp)
+                media = self.instance.media_new(item['arg'])
+                # If user specified it in Nodel, we'll toggle the clip to pause on the final frame using an exisiting flag.
+                if 'hold' in item:
+                    if item['hold'] == True:
+                        media.add_option('play-and-pause')
+                self.medialist.insert_media(media, tmp)
                 tmp += 1
 
         # If the user specified as such in Nodel, we'll repeat the first clip in the playlist more-or-less indefinitely. 
@@ -88,15 +93,6 @@ class Main:
             if self.medialist.count() is 1 or teaser is True:
                 self.medialist.item_at_index(0).add_option('input-repeat=65535')
                 teaser_behaviour = True
-
-        # If the user specified as such in Nodel, we'll toggle all clips to pause on the final frame using an exisiting flag.
-        if 'hold' in config["paramValues"]:
-            hold_behaviour = config["paramValues"]["hold"]
-            if hold_behaviour == True:
-                print 'Hold Enabled.'
-                starting_value = 1 if teaser_behaviour == True else 0
-                for x in range(starting_value, self.medialist.count()):
-                    self.medialist.item_at_index(x).add_option('play-and-pause')
 
 
         # Create two players
