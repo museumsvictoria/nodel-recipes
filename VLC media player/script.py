@@ -1,11 +1,6 @@
-# Date:         2017.01.27
-# Version:      1.5
-
 '''VLC Software Playback Node'''
 
 ### Libraries required by this Node
-from time import sleep
-import threading
 import os
 
 
@@ -30,7 +25,12 @@ param_playlist = Parameter({ 'title': 'Content',
                   'properties': { 'arg': {'type': 'string'} } } } })
 
 param_teaser = Parameter({ 'title': 'Enable teaser.',
-                'desc': 'Loop through first video in the playlist.',
+                'desc': 'Continually loop through first video in the playlist.',
+                'schema': {'type': 'boolean'},
+                'order': next_seq() })
+
+param_hold = Parameter({ 'title': 'Enable holding on final frame.',
+                'desc': 'Hold on the final frame of all clips except teaser.',
                 'schema': {'type': 'boolean'},
                 'order': next_seq() })
 
