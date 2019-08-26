@@ -16,7 +16,7 @@ class _NodelPointInfo:
 
     def __init__(self, name=None, func=None, metadata=None):
         # use the function name if the name's not provided
-        self.name = name if name else func.func_name
+        self.name = name if name else func.__name__
         self.reduced = reduceName(self.name)
         self.func = func
         self.metadata = metadata
@@ -34,7 +34,7 @@ def nodel_action(metadata={}):
             # 'self' (instance) will be filled in here
             return func(*args)
 
-        info = _NodelPointInfo(name=func.func_name, func=func_wrapper, metadata=metadata)
+        info = _NodelPointInfo(name=func.__name__, func=func_wrapper, metadata=metadata)
         _actionInfos_byReducedName[info.reduced] = info
         
         return func_wrapper
@@ -48,7 +48,7 @@ class _NodelEvent:
 
     def emit(self, arg=None):
         '''Emits the event arg'''
-        print json.dumps({'event': self.info.name, 'arg': arg})
+        print(json.dumps({'event': self.info.name, 'arg': arg}))
 
 # (used as a static function)
 def create_nodel_event(name, metadata={}):
@@ -82,8 +82,8 @@ def get_reflection():
 
 def _emit_reflection():
     (events, actions) = get_reflection()
-    print json.dumps(events)
-    print json.dumps(actions)
+    print(json.dumps(events))
+    print(json.dumps(actions))
 
 def register_instance_node(instance):
     global _node_instance
@@ -100,12 +100,12 @@ def start_nodel_channel():
 # general processing functions
     
 def _process_stdin():
-    print '# processing stdin'
+    print('# processing stdin')
     
     while True:
         line = sys.stdin.readline()
         
-        print '# got raw line "%s"' % line
+        print('# got raw line "%s"' % line)
         trimmed = line.strip()
         
         # print '# ([%s] arrived)' % trimmed
@@ -113,7 +113,7 @@ def _process_stdin():
             continue
 
         if trimmed[0] == '#':
-            print trimmed
+            print(trimmed)
             continue
 
         if trimmed[0] != '{':
@@ -122,9 +122,9 @@ def _process_stdin():
 
         try:
             message = json.loads(trimmed)
-            print '# got message %s' % message
+            print('# got message %s' % message)
         except Exception as exc:
-            print '# error handling message - %s' % exc
+            print('# error handling message - %s' % exc)
             continue
         
         _process_message(message)
@@ -147,7 +147,7 @@ def _process_action_message(action, actionMessage):
     actionInfo = _actionInfos_byReducedName.get(reducedName)
     if actionInfo == None:
         # no matching action found
-        print '# no matching action "%s"' % action
+        print('# no matching action "%s"' % action)
         return
 
     try:
@@ -158,17 +158,16 @@ def _process_action_message(action, actionMessage):
             actionInfo.func.__call__(_node_instance)
         
     except Exception as exc:
-        print '# error handling action message - %s' % exc
+        print('# error handling action message - %s' % exc)
 
 # static convenience functions
 
 def emit_event(event, arg=None):
     if arg:
-        print json.dumps({'event': event, 'arg': arg})
+        print(json.dumps({'event': event, 'arg': arg}))
     else:
-        print json.dumps({'event': event})
+        print(json.dumps({'event': event}))
 
 def reduceName(name):
     '''Reduces a name for comparison purposes'''
     return ''.join([c.lower() for c in name if c.isalnum()])
-

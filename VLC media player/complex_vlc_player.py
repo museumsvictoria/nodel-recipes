@@ -1,4 +1,4 @@
-import os
+#import os
 import sys
 import json
 import threading
@@ -10,6 +10,9 @@ from nodel_stdio import *
 VLC_ARGS = []
 
 class Main:
+
+    playing = True
+
     current_position = 0
     currentClip = create_nodel_event('Current Clip', {'schema': {'type': 'string'}, 'group': 'Playing', 'order': 2})
     numClip = create_nodel_event('Clip Number', {'schema': {'type': 'number'}, 'group': 'Playing', 'order': 4})
@@ -30,10 +33,8 @@ class Main:
 
     endReached = create_nodel_event('End Reached', {'group': 'Playlist'})
     def endReached_callback(self, event):
-        print 'End Reached!'
-        t = threading.Thread(target=self.play_clip, args=[1])
-        t.daemon = True
-        t.start()
+        print('End Reached!')
+        self.playing = False        
 
     position = create_nodel_event('Position', {'schema': {'type': 'number'}, 'order': 98})
     def pos_callback(self, event, player):
@@ -113,7 +114,7 @@ class Main:
         self.player_event_manager.event_attach(EventType.MediaPlayerOpening, self.openClip_callback, self.player)
 
         if teaser_behaviour:
-            print 'Teaser Enabled.'
+            print('Teaser Enabled.')
             self.player_event_manager.event_attach(EventType.MediaPlayerEndReached, self.endReached_callback)
 
         # Prepare the player for action
@@ -124,7 +125,7 @@ class Main:
     # Request playback of specific video in playlist
     @nodel_action({'schema': {'type': 'integer'},"title":"PlayClip","group":"Playlist","order":9})
     def play_clip(self, num):
-        print 'Playclip: %s' % (num)
+        print('Playclip: %s' % (num))
         self.playlist.play_item_at_index(num - 1)
         #self.player.video_set_spu(self.subtitle_track)
         self.current_position = 0
@@ -135,7 +136,7 @@ class Main:
 
     @nodel_action({"title":"Pause","group":"Playback","order":1})
     def pause(self):
-        print 'Pause!'
+        print('Pause!')
         self.player.pause()
 
     @nodel_action({"title":"Resume","group":"Playback","order":1})
@@ -205,7 +206,22 @@ class Main:
         """Stop and exit"""
         sys.exit(0)
 
+class Monitor():
+
+    def __init__(self, main):
+        t = threading.Thread(target=self.run, args=[main])
+        t.daemon = True
+        t.start()
+
+    def run(self, main):
+        while (not sleep(0.01)):
+            if main.playing == False:
+                main.play_clip(1)
+                main.playing = True
+
+
 main = Main()
+monitor = Monitor(main)
 register_instance_node(main)
 
 if __name__ == '__main__':
