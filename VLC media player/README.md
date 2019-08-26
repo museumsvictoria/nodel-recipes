@@ -9,6 +9,10 @@
 - **Hold on final frame** a new boolean in the playlist which forces a clip to pause on the final frame.
 
 ### Changes
+**1.7.1 - 1.8**
+- Redesigned the `endReached_callback` as part of the teaser to be monitored from a seperate thread.
+- Introduce support for Py3 with the refactoring of `nodel_stdio.py` and `complex_vlc_player.py`.
+
 **1.7 - 1.7.1**
 - *Enable holding on final frame* moved into playlist to be selectable on individual clips.
   
@@ -58,9 +62,9 @@
 - Implemented elapsed time in seconds.
 
 ### Requirements
-- [Nodel] v2.1.1-release389
-- [Python] 2.7.15
-- [VLC] 3.0.7.1
+- [Nodel] v2.1.1-release389+
+- [Python] 2.7 or 3+
+- [VLC] 3.0.7.1+
 - [VLC Python Bindings] are provided alongside the recipe
 
 ### Todos
