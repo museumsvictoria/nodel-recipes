@@ -15,20 +15,18 @@ local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'t
 DEFAULT_SET_ID = '001' # sometimes this is 01
 
 param_ipAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string'}})
-param_setID = Parameter({'title': 'Set ID', 'schema': {'type': 'string', 'hint': DEFAULT_SET_ID}})
+param_setID = Parameter({'title': 'Set ID (hex)', 'desc': 'with 2 leading zeros (on most models), e.g. 001...9, a, b, c, d, e, f, 010 (= decimal 16)', 'schema': {'type': 'string', 'hint': 'e.g. 001, 01f (set 31), etc.'}})
 param_broadcastIPAddress = Parameter({'title': 'Broadcast IP address', 'schema': {'type': 'string', 'hint': DEFAULT_BROADCASTIP}})
 param_adminPort = Parameter({'title': 'Admin port', 'schema': {'type': 'integer', 'hint': DEFAULT_ADMINPORT}})
 param_macAddress = Parameter({'title': 'MAC address', 'schema': {'type': 'string'}})
+param_useSerialGateway = Parameter({'title': 'Use serial gateway node?', 'schema': {'type': 'boolean'}})
 
 wol = UDP( # dest='10.65.255.255:9999' % , # set after main
           sent=lambda arg: console.info('wol: sent [%s]' % arg),
           ready=lambda: console.info('wol: ready'), received=lambda arg: console.info('wol: received [%s]'))
 
-local_event_DebugShowLogging = LocalEvent({'group': 'Debug', 'order': 9999, 'schema': {'type': 'boolean'}})
-
 POWER_STATES = ['On', 'Input Waiting', 'Unknown', 'Turning On', 'Turning Off', 'Off']
 local_event_Power = LocalEvent({'title': 'Power', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': POWER_STATES + ['Partially On', 'Partially Off']}})
-local_event_RawPower = LocalEvent({'title': 'Raw', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': POWER_STATES}})
 local_event_DesiredPower = LocalEvent({'title': 'Desired', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}}) 
 local_event_LastPowerRequest = LocalEvent({'title': 'Last request', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string'}}) 
 
@@ -62,13 +60,21 @@ setID = DEFAULT_SET_ID
 # they're turned off
 @after_main
 def attachPowerEmitHandlers():
-  raw = lookup_local_event('Raw Power')
   desired = lookup_local_event('Desired Power')
   power = lookup_local_event('Power')
   
+  mainPower = lookup_local_event('MainPower')
+  screenPowerOff = lookup_local_event('ScreenPowerOff')
+  
   def handler(arg):
-    rawValue = raw.getArg()
     desiredValue = desired.getArg()
+    mainPowerValue = mainPower.getArg()
+    screenPowerOffValue = screenPowerOff.getArg()
+    
+    if mainPowerValue == 'Off':
+      rawValue = 'Off'
+    else:
+      rawValue = 'Off' if screenPowerOffValue == True else 'On'
     
     if desiredValue == 'On':
       if rawValue == 'Off':
@@ -87,7 +93,8 @@ def attachPowerEmitHandlers():
         
   # attach handlers
   desired.addEmitHandler(handler)
-  raw.addEmitHandler(handler)
+  mainPower.addEmitHandler(handler)
+  screenPowerOff.addEmitHandler(handler)
 
 def powerHandler(state=''):
   if state.lower() == 'on':
@@ -102,7 +109,7 @@ def powerHandler(state=''):
   
   local_event_LastPowerRequest.emit(str(date_now()))
   
-  timer_powerSyncer.setDelay(0.3)
+  timer_powerSyncer.setDelay(0.1)
 
 Action('Power', powerHandler, {'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
@@ -110,72 +117,85 @@ Action('Power', powerHandler, {'group': 'Power', 'schema': {'type': 'string', 'e
 #       This uses the 'SCREEN OFF' command as opposed to the 'POWER' command so
 #       the arguments needs to be interpretted within that context. At first glance
 #       may seem flipped.
-  
+
+screenPowerOffEvent = Event('ScreenPowerOff', {'group': 'Power', 'order': next_seq(), 'schema': {'type': 'boolean'}})
 
 # e.g. 'a 01 OK01x'
-def handlePowerResp(data):
-  if data == '00':    # yes, '00' for ON! (see important note above)
-    local_event_RawPower.emit('On') 
+def handleScreenOffResp(data):
+  if data == '01':
+    screenPowerOffEvent.emit(True) 
     
-  elif data == '01':  # yes, '01' for OFF! (see important note above)
-    local_event_RawPower.emit('Off')
+  elif data == '00':
+    screenPowerOffEvent.emit(False)
       
   else:
-    local_event_RawPower.emit('Unknown-%s' % data)
+    log(1, 'screenPowerOff unknown resp - %s' % data)
 
-def setPowerState(state):
-  log('setPowerState(%s) called' % state)
+@local_action({'group': 'Power', 'order': next_seq(), 'schema': {'type': 'boolean'}})
+def setScreenPowerOff(state):
+  log(1, 'set_screenpoweroff(%s) called' % state)
   
-  if state:
-    cmd = '00' # yes, '00' for OFF! (see note above)
-  else:
-    cmd = '01' 
+  cmd = '01' if state else '00'
     
-  # Using the "Screen Power = Off" command here NOT the main Power command
-  # otherwise risk the power going off for good (WOL can be very flakey)
-  tcp.request('kd %s %s\r' % (setID, cmd), 
-              lambda resp: checkHeaderAndHandleData(resp, 'd', handlePowerResp))
-  
-  # when turning on, do a few more things for good measure
-  if state: # (turn on)
-    # try WOL too
-    lookup_local_action("Send WOL Packet").call()
-    
-    # and try Mains Power on
-    lookup_local_action("Main Power").call('On')
-    
-  else: # (turn off)
-    tcp.send('kd %s %s' % (setID, '01')) 
-    
-def getPowerState():
-  log('getPowerState called')
+  transportRequest('set_screenpoweroff(%s)' % state, 'kd %s %s\r' % (setID, cmd), 
+              lambda resp: checkHeaderAndHandleData(resp, 'd', handleScreenOffResp))
+@local_action({'group': 'Power', 'order': next_seq()})
+def getScreenPowerOff():
+  log(1, 'get_screenpoweroff called')
 
   # this actually polls the 'SCREEN OFF' state
-  tcp.request('kd %s ff\r' % setID, 
-              lambda resp: checkHeaderAndHandleData(resp, 'd', handlePowerResp))
   
-timer_powerPoller = Timer(getPowerState, 15.0)
+  if mainPowerEvent.getArg() != 'On':
+    console.log('ignoring get_screenoff; main power not on')
+    return
+
+  transportRequest('get_screenpoweroff', 'kd %s ff\r' % setID, 
+              lambda resp: checkHeaderAndHandleData(resp, 'd', handleScreenOffResp))
+  
+timer_powerPoller = Timer(lambda: getScreenPowerOff.call(), 15.0)
   
 def syncPower():
-  log('syncPower called')
+  log(1, 'syncPower called')
   
   last = date_parse(local_event_LastPowerRequest.getArg() or ZERO_DATE_STR)
-  if date_now().getMillis() - last.getMillis() > 60000:
+  if date_now().getMillis() - last.getMillis() > 90000:
+    log(2, 'syncPower - nothing to do; last power request was more than 90s ago')
     return
   
   desired = local_event_DesiredPower.getArg()
-  actual = local_event_RawPower.getArg()
-  if desired == actual:
+  
+  mainPower = lookup_local_event('Main Power').getArg()
+  screenPowerOff = lookup_local_event('Screen Power Off').getArg()
+  
+  if mainPower == 'Off':
+    rawPower = 'Off'
+  
+  else:
+    rawPower = 'Off' if screenPowerOff == True else 'On'
+  
+  if desired == rawPower:
     # nothing to do
+    log(2, 'syncPower - nothing to do; desired and actual are the same ("%s")' % desired)
     timer_powerSyncer.setInterval(120)
     return
   
   if desired == 'On':
-    setPowerState(True)
-  elif desired == 'Off':
-    setPowerState(False)
+    # try WOL for good measure
+    log(2, 'syncPower - desired is ON; sending WoL...')
+    lookup_local_action("Send WOL Packet").call()
     
-  timer_powerSyncer.setDelay(15.0)  
+    if mainPower == 'Off':
+      log(2, "...turning on MainPower (it's Off right now)")
+      lookup_local_action('MainPower').call('On')
+      
+    log(2, "...turning making sure ScreenPowerOff=False")
+    setScreenPowerOff.call(False)
+    
+  elif desired == 'Off':
+    log(2, 'syncPower - desired is OFF; just setting ScreenPowerOff=True')
+    setScreenPowerOff.call(True)
+    
+  timer_powerSyncer.setDelay(7.5)
 
 timer_powerSyncer = Timer(syncPower, 60.0)
 
@@ -194,33 +214,33 @@ def handleInputCodeResp(arg):
   local_event_InputCode.emit(int(arg))
     
 def setInputCode(code):
-  log('setInputCode(%s) called' % code)
+  log(1, 'setInputCode(%s) called' % code)
   
-  tcp.send('xb %s %s' % (setID, code))
+  transportSend('set_inputcode(%s)' % code, 'xb %s %s' % (setID, code))
   
     
 def getInputCode():
-  if local_event_RawPower.getArg() != 'On':
-    log('Power is not On; ignoring input get request')
+  if lookup_local_event('MainPower').getArg() != 'On' or lookup_local_event('ScreenPowerOff').getArg() == True:
+    log(1, 'getInputCode - Power is not On; ignoring input get request')
     return
   
   getInputCodeNow()
     
 def getInputCodeNow():
-  log('getInputCodeNow called')
+  log(1, 'getInputCodeNow called')
   
   # e.g. resp: 'b 01 OK90'
 
   def handleData(data):
     local_event_InputCode.emit(data)
 
-  tcp.request('xb %s ff\r' % setID, 
+  transportRequest('get_inputcode', 'xb %s ff\r' % setID, 
               lambda resp: checkHeaderAndHandleData(resp, 'b', handleData))
   
 timer_inputCodePoller = Timer(getInputCode, 15.0, 20.0)  
   
 def syncInputCode():
-  log('syncInputCode called')
+  log(1, 'syncInputCode called')
   last = date_parse(local_event_LastInputCodeRequest.getArg() or ZERO_DATE_STR)
   if date_now().getMillis() - last.getMillis() > 60000:
     return
@@ -232,7 +252,7 @@ def syncInputCode():
     timer_inputCodeSyncer.setInterval(120)
     return
   
-  if local_event_RawPower.getArg() != 'On':
+  if mainPowerEvent.getArg() != 'On':
     console.log('Power is not on; ignoring input set request')
     return
   
@@ -247,26 +267,32 @@ SETTINGS_GROUP = "Settings & Info"
 # Serial number ---
 
 Event('Serial Number', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string'}})
-Action('Get Serial Number', lambda arg: tcp.request('fy %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'y', lambda data: lookup_local_event('Serial Number').emit(data))), 
+Action('Get Serial Number', lambda arg: transportRequest('get_serialnumber', 'fy %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'y', lambda data: lookup_local_event('Serial Number').emit(data))), 
        {'group': SETTINGS_GROUP, 'order': next_seq()})
 
-Timer(lambda: lookup_local_action('Get Serial Number').call(), 15, 5*60)
+Timer(lambda: lookup_local_action('Get Serial Number').call(), 5*60, 15)
 
 
 # Temperature ---
 
 Event('Temperature', {'desc': 'Inside temperature', 'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'integer'}})
-Action('Get Temperature', lambda arg: tcp.request('dn %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Temperature').emit(int(data, 16)))), 
-       {'group': SETTINGS_GROUP, 'order': next_seq()})
 
-Timer(lambda: lookup_local_action('Get Temperature').call(), 15, 5*60)
+@local_action({'group': SETTINGS_GROUP, 'order': next_seq()})
+def GetTemperature():
+  if mainPowerEvent.getArg() != 'On':
+    console.log('ignoring get_insidetemp; main power not on')
+    return
+  
+  transportRequest('get_insidetemp', 'dn %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Temperature').emit(int(data, 16))))  
+
+Timer(lambda: lookup_local_action('Get Temperature').call(), 5*60, 15)
 
 
 # Main Power ---
 
-Event('Main Power', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
-Action('Get Main Power', lambda arg: tcp.request('ka %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'a', lambda data: lookup_local_event('Main Power').emit('Off' if data == '00' else ('On' if data == '01' else 'Unknown %s' % data)))), 
-       {'group': SETTINGS_GROUP, 'order': next_seq()})
+mainPowerEvent = Event('Main Power', {'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+Action('Get Main Power', lambda arg: transportRequest('get_mainpower', 'ka %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'a', lambda data: lookup_local_event('Main Power').emit('Off' if data == '00' else ('On' if data == '01' else 'Unknown %s' % data)))), 
+       {'group': 'Power', 'order': next_seq()})
 
 def handleMainPowerSet(arg):
   if arg == 'On':
@@ -276,12 +302,12 @@ def handleMainPowerSet(arg):
   else:
     raise Exception('Unknown MainPower state %s' % arg)
     
-  tcp.request('ka %s %s\r' % (setID, cmd), 
-              lambda resp: checkHeaderAndHandleData(resp, 'a', lambda data: lookup_local_event('Main Power').emit('Off' if data == '00' else ('On' if data == '01' else 'Unknown %s' % data))))
+  transportRequest('set_mainpower(%s)' % arg, 'ka %s %s\r' % (setID, cmd), 
+              lambda resp: checkHeaderAndHandleData(resp, 'a', lambda data: lookup_local_event('Main Power').emit('Off' if data == '00' else ('On' if data == '01' else 'Unknown %s' % data))), urgent=True)
 
-Action('Main Power', handleMainPowerSet, {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+Action('Main Power', handleMainPowerSet, {'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
   
-Timer(lambda: lookup_local_action('Get Main Power').call(), 15, 5*60)
+Timer(lambda: lookup_local_action('Get Main Power').call(), 5*60, 15)
 
 
 # Automatic Standy ---
@@ -298,18 +324,26 @@ AUTOSTANDBY_NAMES_BY_CODE = dict([(code, name) for code, name in AUTOSTANDBY_MAP
 AUTOSTANDBY_CODES_BY_NAME = dict([(name, code) for code, name in AUTOSTANDBY_MAP])
 
 automaticStandbySignal = Event('Automatic Standby', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': AUTOSTANDBY_NAMES}})
-getAutomaticStandbyAction = Action('Get Automatic Standby', 
-                                   lambda arg: tcp.request('mn %s ff\r' % setID, 
+
+@local_action({'group': SETTINGS_GROUP, 'order': next_seq()})
+def GetAutomaticStandby():
+  if mainPowerEvent.getArg() != 'On':
+    console.log('ignoring get_automaticstandby; main power not on')
+    return
+  
+  transportRequest('get_automaticstandby', 'mn %s ff\r' % setID, 
                                        lambda resp: checkHeaderAndHandleData(resp, 'n', 
-                                           lambda data: automaticStandbySignal.emit(AUTOSTANDBY_NAMES_BY_CODE.get(data, 'UNKNOWNCODE_%s' % data)))),
-                                   {'group': SETTINGS_GROUP, 'order': next_seq()})
+                                           lambda data: automaticStandbySignal.emit(AUTOSTANDBY_NAMES_BY_CODE.get(data, 'UNKNOWNCODE_%s' % data))))
+  
+
+
 setAutomaticStandbyAction = Action('Automatic Standy', 
-                                lambda arg: tcp.request('mn %s %s\r' % (setID, AUTOSTANDBY_CODES_BY_NAME[arg]), 
+                                lambda arg: transportRequest('set_automaticstandby', 'mn %s %s\r' % (setID, AUTOSTANDBY_CODES_BY_NAME[arg]), 
                                     lambda resp: checkHeaderAndHandleData(resp, 'n', 
                                         lambda data: automaticStandbySignal.emit(data))), 
                                 {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': AUTOSTANDBY_NAMES}})
   
-Timer(lambda: getAutomaticStandbyAction.call(), 5*60, 15) # every 5 mins, first after 15
+Timer(lambda: GetAutomaticStandby.call(), 5*60, 15) # every 5 mins, first after 15
 
 
 # Abnormal state ---
@@ -334,12 +368,16 @@ Event('Abnormal State', {'group': 'Error Status', 'order': next_seq(), 'schema':
 def handle_AbnormalStateData(data):
   name = ABNORMAL_STATES_NAMES_BY_CODE.get(int(data), 'UNKNOWN_CODE_%s' % data)
   lookup_local_event('Abnormal State').emit(name)
-
-Action('Get Abnormal State', lambda arg: tcp.request('kz %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'z', handle_AbnormalStateData)), 
-       {'group': 'Error Status', 'order': next_seq()})
   
-Timer(lambda: lookup_local_action('Get Abnormal State').call(), 30, 10) # get every 30 seconds, first after 10
+@local_action({'group': 'Error Status', 'order': next_seq()})
+def GetAbnormalState(arg):
+  if mainPowerEvent.getArg() != 'On':
+    console.log('ignoring get_abnormalstate; main power not on')
+    return
+  
+  transportRequest('get_abnormalstate', 'kz %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'z', handle_AbnormalStateData))
 
+Timer(lambda: lookup_local_action('Get Abnormal State').call(), 30, 10) # get every 30 seconds, first after 10
 
 # Wake-On-LAN (WOL) ---
 
@@ -351,10 +389,10 @@ Event('Wake-On-LAN', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'
 def handle_WOLData(data):
   lookup_local_event('Wake-On-LAN').emit(ONOFF_NAMES_BY_CODE.get(int(data), 'UNKNOWNCODE_%s' % data))  
 
-Action('Get Wake-On-LAN', lambda arg: tcp.request('fw %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)), 
+Action('Get Wake-On-LAN', lambda arg: transportRequest('get_wol', 'fw %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)), 
        {'group': SETTINGS_GROUP, 'order': next_seq()})
 
-Action('Wake-On-LAN', lambda arg: tcp.request('fw %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)),
+Action('Wake-On-LAN', lambda arg: transportRequest('set_wol', 'fw %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)),
        {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
   
 Timer(lambda: lookup_local_action('Get Wake-On-LAN').call(), 5*60, 15) # every 5 mins, first after 15
@@ -369,10 +407,10 @@ Event('No Signal Power Off', {'group': SETTINGS_GROUP, 'desc': NSPO_DESC, 'order
 def handle_NSPOData(data):
   lookup_local_event('No Signal Power Off').emit(ONOFF_NAMES_BY_CODE.get(int(data), 'UNKNOWNCODE_%s' % data))  
 
-Action('Get No Signal Power Off', lambda arg: tcp.request('fg %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'g', handle_NSPOData)), 
+Action('Get No Signal Power Off', lambda arg: transportRequest('get_nosignalpoweroff', 'fg %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'g', handle_NSPOData)), 
        {'group': SETTINGS_GROUP, 'desc': NSPO_DESC, 'order': next_seq()})
 
-Action('No Signal Power Off', lambda arg: tcp.request('fg %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'g', handle_NSPOData)),
+Action('No Signal Power Off', lambda arg: transportRequest('set_nosignalpoweroff', 'fg %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'g', handle_NSPOData)),
        {'group': SETTINGS_GROUP, 'desc': NSPO_DESC, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
   
 Timer(lambda: lookup_local_action('Get No Signal Power Off').call(), 5*60, 15) # every 5 mins, first after 15
@@ -418,24 +456,65 @@ def connected():
 def disconnected():
   console.info('TCP DISCONNECTED')
   
-  # immediately trip this value
-  local_event_RawPower.emit('Unknown')
-  
 def timeout():
-  log('timeout')
+  console.warn('timeout - flushing all request queues')
   
   # flush the request queue
   tcp.clearQueue()
+  queue.clearQueue()
   
-  local_event_RawPower.emit('Unknown')
+# <!-- gateway
+
+queue = request_queue()
+  
+remote_action_GatewaySetSend = RemoteAction()
+
+def remote_event_GatewaySetReceive(arg):
+  log(1, 'gateway_recv: [%s]' % arg)
+  
+  lastReceive[0] = system_clock()
+  
+  queue.handle(arg)
+
+def transportRequest(ctx, data, resp, urgent=False):
+  if param_useSerialGateway:
+    def handler():
+      log(1, 'gateway_send for %s: [%s]' % (ctx, data))
+    
+      # for TCP:
+      # tcp.sendNow(data)
+    
+      # for Serial Gateway
+      remote_action_GatewaySetSend.call(data)
+    
+    if urgent:
+      queue.clearQueue()
+    
+    queue.request(handler, resp)
+    
+  else:
+    tcp.request(data, resp)
+  
+def transportSend(data):
+  if param_useSerialGateway:
+    def handler():
+      log(1, 'gateway_send: [%s]' % data)
+      tcp.sendNow(data)
+    
+    queue.send(handler)
+    
+  else:
+    tcp.send(data)
+
+# --!>
   
 def received(line):
   lastReceive[0] = system_clock()
   
-  log('RECV: [%s]' % line)
+  log(2, 'RECV: [%s]' % line)
     
 def sent(line):
-  log('SENT: [%s]' % line)
+  log(2, 'SENT: [%s]' % line)
 
 # maintain a TCP connection
 tcp = TCP(connected=connected, disconnected=disconnected, 
@@ -449,17 +528,17 @@ def main(arg = None):
   global setID
   if param_setID != None and len(param_setID) > 0:
     setID = param_setID
-  
-  dest = '%s:%s' % (param_ipAddress, param_adminPort or DEFAULT_ADMINPORT)
-  console.log('Connecting to %s...' % dest)
-  tcp.setDest(dest)
+    
+  if not param_useSerialGateway:
+    dest = '%s:%s' % (param_ipAddress, param_adminPort or DEFAULT_ADMINPORT)
+    console.log('Connecting to %s...' % dest)
+    tcp.setDest(dest)
+    
+  else:
+    console.log('Using serial gateway; make sure "Gateway" remote actions and events are specified')
   
   # set WOL dest which can only be done during 'main'
   wol.setDest('%s:9999' % param_broadcastIPAddress)
-  
-def log(data):
-  if local_event_DebugShowLogging.getArg():
-    console.info(data)
 
 def local_action_SendWOLPacket(arg=None):
   """{"title": "Send", "group": "Wake-on-LAN"}"""
@@ -507,7 +586,7 @@ def statusCheck():
     
   # is online, so check for any internal error conditions
   
-  elif lookup_local_event('Abnormal State').getArg() == 'No Signal Power On':
+  elif local_event_Power.getArg() == 'On' and lookup_local_event('Abnormal State').getArg() == 'No Signal Power On':
     # on but no video signal
     local_event_Status.emit({'level': 1, 'message': 'Display is on but no video signal detected'})
   
@@ -522,3 +601,18 @@ status_timer = Timer(statusCheck, status_check_interval)
 # for acting as a power slave
 def remote_event_Power(arg):
   lookup_local_action('power').call(arg)
+  
+# <!-- logging
+
+local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 'desc': 'Use this to ramp up the logging (with indentation)',  
+                                   'schema': {'type': 'integer'}})
+
+def warn(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.warn(('  ' * level) + msg)
+
+def log(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.log(('  ' * level) + msg)
+
+# --!>  
