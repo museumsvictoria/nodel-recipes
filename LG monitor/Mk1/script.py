@@ -3,6 +3,9 @@
 # 2nd manual: https://hf-files-oregon.s3.amazonaws.com/hdpjustaddpower_kb_attachments/2016/08-19/536f965c-5e2f-473f-8e3f-aacfac49601f/LG%20Published%20RS232C%20Guide.pdf
 # 3rd manual: http://www.lg.com/us/commercial/documents/SM3C-B_Manual.pdf
 
+# rev. history
+# - legacy screen option
+
 DEFAULT_ADMINPORT = 9761
 DEFAULT_BROADCASTIP = '192.168.1.255'
 
@@ -21,9 +24,11 @@ param_adminPort = Parameter({'title': 'Admin port', 'schema': {'type': 'integer'
 param_macAddress = Parameter({'title': 'MAC address', 'schema': {'type': 'string'}})
 param_useSerialGateway = Parameter({'title': 'Use serial gateway node?', 'schema': {'type': 'boolean'}})
 
+param_oldScreenBehaviour = Parameter({'title': 'Old screen behaviour?', 'desc': 'Ignore "screenPowerOff" (backlight control), "automaticStandby"', 'schema': {'type': 'boolean'}})
+
 wol = UDP( # dest='10.65.255.255:9999' % , # set after main
           sent=lambda arg: console.info('wol: sent [%s]' % arg),
-          ready=lambda: console.info('wol: ready'), received=lambda arg: console.info('wol: received [%s]'))
+          ready=lambda: console.info('wol: ready (ignored if serial)'), received=lambda arg: console.info('wol: received [%s]'))
 
 POWER_STATES = ['On', 'Input Waiting', 'Unknown', 'Turning On', 'Turning Off', 'Off']
 local_event_Power = LocalEvent({'title': 'Power', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': POWER_STATES + ['Partially On', 'Partially Off']}})
@@ -146,7 +151,7 @@ def getScreenPowerOff():
   # this actually polls the 'SCREEN OFF' state
   
   if mainPowerEvent.getArg() != 'On':
-    console.log('ignoring get_screenoff; main power not on')
+    log(2, 'ignoring get_screenoff; main power not on')
     return
 
   transportRequest('get_screenpoweroff', 'kd %s ff\r' % setID, 
@@ -160,6 +165,7 @@ def syncPower():
   last = date_parse(local_event_LastPowerRequest.getArg() or ZERO_DATE_STR)
   if date_now().getMillis() - last.getMillis() > 90000:
     log(2, 'syncPower - nothing to do; last power request was more than 90s ago')
+    timer_powerSyncer.setInterval(90)
     return
   
   desired = local_event_DesiredPower.getArg()
@@ -175,8 +181,7 @@ def syncPower():
   
   if desired == rawPower:
     # nothing to do
-    log(2, 'syncPower - nothing to do; desired and actual are the same ("%s")' % desired)
-    timer_powerSyncer.setInterval(120)
+    console.info('syncPower - nothing to do; desired and actual are the same ("%s"); will settle if idle of 90s' % desired)
     return
   
   if desired == 'On':
@@ -192,8 +197,13 @@ def syncPower():
     setScreenPowerOff.call(False)
     
   elif desired == 'Off':
-    log(2, 'syncPower - desired is OFF; just setting ScreenPowerOff=True')
-    setScreenPowerOff.call(True)
+    if param_oldScreenBehaviour:
+      log(2, 'syncPower - desired is OFF; using old screen behaviour so MainPower=Off')
+      lookup_local_action('MainPower').call('Off')
+      
+    else:
+      log(2, 'syncPower - desired is OFF; just setting ScreenPowerOff=True')
+      setScreenPowerOff.call(True)
     
   timer_powerSyncer.setDelay(7.5)
 
@@ -280,7 +290,7 @@ Event('Temperature', {'desc': 'Inside temperature', 'group': SETTINGS_GROUP, 'or
 @local_action({'group': SETTINGS_GROUP, 'order': next_seq()})
 def GetTemperature():
   if mainPowerEvent.getArg() != 'On':
-    console.log('ignoring get_insidetemp; main power not on')
+    log(2, 'ignoring get_insidetemp; main power not on')
     return
   
   transportRequest('get_insidetemp', 'dn %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Temperature').emit(int(data, 16))))  
@@ -323,27 +333,34 @@ AUTOSTANDBY_NAMES = [name for code, name in AUTOSTANDBY_MAP]
 AUTOSTANDBY_NAMES_BY_CODE = dict([(code, name) for code, name in AUTOSTANDBY_MAP])
 AUTOSTANDBY_CODES_BY_NAME = dict([(name, code) for code, name in AUTOSTANDBY_MAP])
 
-automaticStandbySignal = Event('Automatic Standby', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': AUTOSTANDBY_NAMES}})
+@after_main
+def initAutomaticStandBySetting():
+  automaticStandbySignal = Event('Automatic Standby', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': AUTOSTANDBY_NAMES}})
 
-@local_action({'group': SETTINGS_GROUP, 'order': next_seq()})
-def GetAutomaticStandby():
-  if mainPowerEvent.getArg() != 'On':
-    console.log('ignoring get_automaticstandby; main power not on')
-    return
+  @local_action({'group': SETTINGS_GROUP, 'order': next_seq()})
+  def GetAutomaticStandby():
+    if param_oldScreenBehaviour:
+      log(1, '(old screen so ignoring get_automaticstandby setting)')
+      return
+    
+    if mainPowerEvent.getArg() != 'On':
+      log(1, 'ignoring get_automaticstandby; main power not on')
+      return
   
-  transportRequest('get_automaticstandby', 'mn %s ff\r' % setID, 
+    transportRequest('get_automaticstandby', 'mn %s ff\r' % setID, 
                                        lambda resp: checkHeaderAndHandleData(resp, 'n', 
-                                           lambda data: automaticStandbySignal.emit(AUTOSTANDBY_NAMES_BY_CODE.get(data, 'UNKNOWNCODE_%s' % data))))
+                                             lambda data: automaticStandbySignal.emit(AUTOSTANDBY_NAMES_BY_CODE.get(data, 'UNKNOWNCODE_%s' % data))))
   
 
 
-setAutomaticStandbyAction = Action('Automatic Standy', 
-                                lambda arg: transportRequest('set_automaticstandby', 'mn %s %s\r' % (setID, AUTOSTANDBY_CODES_BY_NAME[arg]), 
-                                    lambda resp: checkHeaderAndHandleData(resp, 'n', 
-                                        lambda data: automaticStandbySignal.emit(data))), 
-                                {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': AUTOSTANDBY_NAMES}})
+  setAutomaticStandbyAction = Action('Automatic Standy', 
+                                  lambda arg: transportRequest('set_automaticstandby', 'mn %s %s\r' % (setID, AUTOSTANDBY_CODES_BY_NAME[arg]), 
+                                      lambda resp: checkHeaderAndHandleData(resp, 'n', 
+                                          lambda data: automaticStandbySignal.emit(data))), 
+                                  {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': AUTOSTANDBY_NAMES}})
   
-Timer(lambda: GetAutomaticStandby.call(), 5*60, 15) # every 5 mins, first after 15
+  if not param_oldScreenBehaviour:
+    Timer(lambda: GetAutomaticStandby.call(), 5*60, 15) # every 5 mins, first after 15
 
 
 # Abnormal state ---
@@ -372,7 +389,7 @@ def handle_AbnormalStateData(data):
 @local_action({'group': 'Error Status', 'order': next_seq()})
 def GetAbnormalState(arg):
   if mainPowerEvent.getArg() != 'On':
-    console.log('ignoring get_abnormalstate; main power not on')
+    log(2, 'ignoring get_abnormalstate; main power not on')
     return
   
   transportRequest('get_abnormalstate', 'kz %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'z', handle_AbnormalStateData))
@@ -384,19 +401,24 @@ Timer(lambda: lookup_local_action('Get Abnormal State').call(), 30, 10) # get ev
 ONOFF_NAMES_BY_CODE = { 0: 'Off', 1: 'On' }
 ONOFF_CODES_BY_NAME = { 'Off': '00', 'On': '01' }
 
-Event('Wake-On-LAN', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
-
-def handle_WOLData(data):
-  lookup_local_event('Wake-On-LAN').emit(ONOFF_NAMES_BY_CODE.get(int(data), 'UNKNOWNCODE_%s' % data))  
-
-Action('Get Wake-On-LAN', lambda arg: transportRequest('get_wol', 'fw %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)), 
-       {'group': SETTINGS_GROUP, 'order': next_seq()})
-
-Action('Wake-On-LAN', lambda arg: transportRequest('set_wol', 'fw %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)),
-       {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+@after_main
+def initWakeOnLANSetting():
+  if param_oldScreenBehaviour:
+    console.log('(old screen so ignoring get_wol setting)')
+    return
   
-Timer(lambda: lookup_local_action('Get Wake-On-LAN').call(), 5*60, 15) # every 5 mins, first after 15
+  Event('Wake-On-LAN', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
+  def handle_WOLData(data):
+    lookup_local_event('Wake-On-LAN').emit(ONOFF_NAMES_BY_CODE.get(int(data), 'UNKNOWNCODE_%s' % data))  
+
+  Action('Get Wake-On-LAN', lambda arg: transportRequest('get_wol', 'fw %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)), 
+         {'group': SETTINGS_GROUP, 'order': next_seq()})
+
+  Action('Wake-On-LAN', lambda arg: transportRequest('set_wol', 'fw %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)),
+         {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+  Timer(lambda: lookup_local_action('Get Wake-On-LAN').call(), 5*60, 15) # every 5 mins, first after 15
 
 # No Signal Power Off  ---
 # (from 3rd manual)
@@ -479,7 +501,7 @@ def remote_event_GatewaySetReceive(arg):
 def transportRequest(ctx, data, resp, urgent=False):
   if param_useSerialGateway:
     def handler():
-      log(1, 'gateway_send for %s: [%s]' % (ctx, data))
+      log(1, 'gateway_send for %s: [%s]' % (ctx, data.strip()))
     
       # for TCP:
       # tcp.sendNow(data)
@@ -493,6 +515,7 @@ def transportRequest(ctx, data, resp, urgent=False):
     queue.request(handler, resp)
     
   else:
+    log(1, 'tcp_request for %s: [%s]' % (ctx, data.strip()))
     tcp.request(data, resp)
   
 def transportSend(data):
@@ -511,10 +534,10 @@ def transportSend(data):
 def received(line):
   lastReceive[0] = system_clock()
   
-  log(2, 'RECV: [%s]' % line)
+  log(2, 'RECV: [%s]' % line.strip())
     
 def sent(line):
-  log(2, 'SENT: [%s]' % line)
+  log(2, 'SENT: [%s]' % line.strip())
 
 # maintain a TCP connection
 tcp = TCP(connected=connected, disconnected=disconnected, 
@@ -523,8 +546,6 @@ tcp = TCP(connected=connected, disconnected=disconnected,
           sendDelimiters='\r')
 
 def main(arg = None):
-  console.info('Script started')
-  
   global setID
   if param_setID != None and len(param_setID) > 0:
     setID = param_setID
@@ -542,6 +563,10 @@ def main(arg = None):
 
 def local_action_SendWOLPacket(arg=None):
   """{"title": "Send", "group": "Wake-on-LAN"}"""
+  if is_blank(param_macAddress):
+    log(2, '(ignoring SendWOLPacket; no MAC address used)')
+    return
+  
   console.info('SendWOLPacket')
   
   hw_addr = param_macAddress.replace('-', '').replace(':', '').decode('hex')
@@ -600,7 +625,11 @@ status_timer = Timer(statusCheck, status_check_interval)
   
 # for acting as a power slave
 def remote_event_Power(arg):
-  lookup_local_action('power').call(arg)
+  if arg == 1 or arg == 'On':
+    lookup_local_action('power').call('On')
+  
+  elif arg == 0 or arg == 'Off':
+    lookup_local_action('power').call('Off')
   
 # <!-- logging
 
