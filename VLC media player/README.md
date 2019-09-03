@@ -1,4 +1,4 @@
-## Nodel VLC Recipe 1.7 (August 2019)
+## Nodel VLC Recipe 1.8 (August 2019)
 > Simple single instance Nodel channel using stdio.
 > Integration for software-playback utilising VLC Python API: https://wiki.videolan.org/python_bindings
 
