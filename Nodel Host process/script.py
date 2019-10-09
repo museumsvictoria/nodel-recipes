@@ -58,7 +58,7 @@ def main():
     params.extend(['-r', param_nodesRoot])
     
   if param_wsPort != None:
-    param.extend(['--wsPort', param_wsPort])
+    params.extend(['--wsPort', param_wsPort])
     
   inclList = list()
   exclList = list()
