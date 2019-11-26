@@ -441,6 +441,110 @@ irRemoteControlEvent = Event('IR Remote Control', {'group': 'IR Remote Control',
 Action('IR Remote Control', setIRRemoteControl, {'title': 'Set', 'group': 'IR Remote Control', 'caution': 'Are you sure you want to enable/disable IR remote control?', 'schema': {'type': 'string', 'enum': ['Enabled', 'Disabled']}})
 
 
+# <!-- standby control
+
+def getStandbyControl(arg):
+  log(1, 'getStandbyControl')
+
+  msg = '\x4a%s\x00' % chr(int(param_id))
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: StandbyControlEvent.emit('On' if resp[6] == '\x01' else ('Off' if resp[6] == '\x00' else 'Auto'))))
+  
+Action('Get Standby Control', getStandbyControl, {'title': 'Get', 'group': 'Standby Control'})
+  
+def setStandbyControl(arg):
+  console.info('setStandbyControl(%s)' % arg)
+  
+  if   arg == 'On':   value = '\x01'
+  elif arg == 'Off':  value = '\x00'
+  elif arg == 'Auto': value = '\x02'
+  else: 
+    console.warn('Unknown arg: %s' % arg)
+    return
+
+  msg = '\x4a%s\x01%s' % (chr(int(param_id)), value)
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: StandbyControlEvent.emit(arg)))
+
+StandbyControlEvent = Event('Standby Control', {'group': 'Standby Control', 'schema': {'type': 'string', 'enum': ['On', 'Off', 'Auto']}})
+Action('Standby Control', setStandbyControl, {'title': 'Set', 'group': 'Standby Control', 'schema': {'type': 'string', 'enum': ['On', 'Off', 'Auto']}})
+
+# standby control -->
+
+
+# <!-- ecosolution
+
+ECO_LOOKUP = { 'Off': '\x00',
+               '4 Hour': '\x01',
+               '6 Hour': '\x02',
+               '8 Hour': '\x03' }
+
+ECO_LOOKUP_REV = dict([(y, x) for x, y  in ECO_LOOKUP.iteritems()])
+
+# NOTE: this uses a sub-function code, different from the other operations
+
+def getEcoSolution(arg):
+  log(1, 'getEcoSolution')
+
+  # msg = '\xc6%s\x00' % chr(int(param_id))
+  msg = '\xc6%s\x01\x81' % chr(int(param_id))
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  
+  # e.g. response: aa-ff-02-04-41-c6-81- *01* -8e
+  
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: EcoSolutionEvent.emit(ECO_LOOKUP_REV[resp[7]])))
+  
+Action('Get EcoSolution', getEcoSolution, {'title': 'Get', 'group': 'EcoSolution'})
+
+def setEcoSolution(arg):
+  console.info('setEcoSolution(%s)' % arg)
+
+  value = ECO_LOOKUP[arg]
+  if not value:
+    console.warn('Unknown arg: %s' % arg)
+    return
+  
+  # e.g. aa-c6-02-01-00-c9
+
+  msg = '\xc6%s\x02\x81%s' % (chr(int(param_id)), value)
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: EcoSolutionEvent.emit(arg)))
+
+EcoSolutionEvent = Event('EcoSolution', {'group': 'EcoSolution', 'schema': {'type': 'string'}})
+Action('EcoSolution', setEcoSolution, {'title': 'Set', 'group': 'EcoSolution', 'schema': {'type': 'string', 'enum': ['Off', '4 Hour', '6 Hour', '8 Hour']}})
+
+# ecosolution -->
+
+# <!-- network standby control
+
+def getNetworkStandbyControl(arg):
+  log(1, 'getNetworkStandbyControl')
+
+  msg = '\xb5%s\x00' % chr(int(param_id))
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: NetworkStandbyControlEvent.emit('On' if resp[6] == '\x01' else ('Off' if resp[6] == '\x00' else 'Unknown'))))
+  
+Action('Get Network Standby Control', getNetworkStandbyControl, {'title': 'Get', 'group': 'Network Standby Control'})
+  
+def setNetworkStandbyControl(arg):
+  console.info('setNetworkStandbyControl(%s)' % arg)
+  
+  if   arg == 'On':   value = '\x01'
+  elif arg == 'Off':  value = '\x00'
+  else: 
+    console.warn('Unknown arg: %s' % arg)
+    return
+
+  msg = '\xb5%s\x01%s' % (chr(int(param_id)), value)
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: NetworkStandbyControlEvent.emit(arg)))
+
+NetworkStandbyControlEvent = Event('Network Standby Control', {'group': 'Network Standby Control', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+Action('Network Standby Control', setNetworkStandbyControl, {'title': 'Set', 'group': 'Network Standby Control', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+
+# network standby control -->
+
 serialNumberEvent = Event('Serial Number', {'group': 'Serial Number', 'schema': {'type': 'string'}})
 
 def getSerialNumber(arg):
