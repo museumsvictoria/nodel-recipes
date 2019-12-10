@@ -1,20 +1,17 @@
-'''Lutron GRX-CI-NWK-E interface - see script for default IP, etc.'''
+'''
+**Lutron GRX-CI-NWK-E interface**
 
-# [from protocol doc](http://www.lutron.com/TechnicalDocumentLibrary/RS232ProtocolCommandSet.040196d.pdf)
-# make sure DIP6 and DIP7 switches ON for full feedback
-#
-# default login: nwk
-# default ip: 192.168.250.1   port: 23 TELNET
-
-# example comms while watching button presses:
-# C0     - Off pressed
-# c0
-# C1     - Full On pressed
-# c1
-
-# rev. 1:   2019/12/06
-#
-# TODO   :   status monitoring
+* protocol doc - [RS232ProtocolCommandSet.040196d.pdf](http://www.lutron.com/TechnicalDocumentLibrary/RS232ProtocolCommandSet.040196d.pdf)
+* device doc - [grx-ci-nwk-e.pdf](http://www.lutron.com/TechnicalDocumentLibrary/)
+* Make sure DIP6 and DIP7 switches ON for full feedback.
+* default login: nwk
+* default ip: `192.168.250.1` port: 23 (TELNET)
+* example comms while watching button presses:
+  * C0     - Off pressed
+  * c0
+  * C1     - Full On pressed
+  * c1
+'''
 
 # <!-- parameters
 
@@ -27,6 +24,18 @@ param_Port = Parameter({'schema': {'type': 'integer', 'hint': '(default %s)' % D
 
 DEFAULT_LOGIN = 'nwk'
 param_Login = Parameter({'schema': {'type': 'string', 'hint': '(default "%s")' % DEFAULT_LOGIN}})
+
+param_Labelling = Parameter({'schema': {'type': 'array', 'items': {'type': 'object', 'properties': {
+          'num':  {'type': 'integer', 'order': 1},
+          'name': {'type': 'string', 'order': 2}
+        }}}})
+
+labels_byNum = {}
+
+@after_main
+def initLabelling():
+  for i in param_Labelling or []:
+    labels_byNum[i['num']] = i['name']
 
 # -->
 
@@ -85,6 +94,8 @@ def RequestSceneStatus():
         continue
         
       initAndSetControlUnit(i+1, SCENES[code])
+      
+    lastReceive[0] = system_clock() # to indicate its alive
     
   _callbacks['~:ss'] = handleResp
   _callbacks[':ss'] = handleResp   # async feedback when scenes are changed outside nodel
@@ -95,7 +106,7 @@ def initAndSetControlUnit(i, scene):
   controlUnitSceneName = 'ControlUnit %s Scene' % i
   
   controlUnitSignal = lookup_local_event(controlUnitSceneName)
-      
+  
   if not controlUnitSignal:
     # create once
     
@@ -105,23 +116,29 @@ def initAndSetControlUnit(i, scene):
     cuAction = Action(controlUnitSceneName, lambda arg: SelectScene(i, arg), {'group': 'Scenes', 'title': '"%s"' % (i+1), 'order': next_seq(), 
                                                               'schema': {'type': 'integer'}})
     
-    # the 16 others
-    for s in range(16):
-      cuSceneSignal = Event('ControlUnit %s Scene %s' % (i, s+1), {'group': 'Control Unit %s' % i, 'title': 'Scene %s' % (s+1), 'order': next_seq(), 
+    # the 16 others including zero
+    
+    group = 'Control Unit %s' % i
+    label = labels_byNum.get(i)
+    if label:
+      group += ' ("%s")' % label
+    
+    for s in range(17):
+      cuSceneSignal = Event('ControlUnit %s Scene %s' % (i, s), {'group': group, 'title': 'Scene %s' % s, 'order': next_seq(), 
                                                                    'schema': {'type': 'boolean'}})
-      initControlUnitScene(cuAction, i, s) # need as separate method because of variable capture issues
+      initControlUnitScene(cuAction, i, s, group) # need as separate method because of variable capture issues
       
   # emit the main one
   controlUnitSignal.emit(scene)
   
   # and emit the scene boolean ones
-  for s in range(16):
-    lookup_local_event('ControlUnit %s Scene %s' % (i, s+1)).emitIfDifferent(scene == (s+1))  
+  for s in range(17):
+    lookup_local_event('ControlUnit %s Scene %s' % (i, s)).emitIfDifferent(scene == s)
     
-def initControlUnitScene(cuAction, cu, scene):
+def initControlUnitScene(cuAction, cu, scene, group):
   Action('ControlUnit %s Scene %s' % (cu, scene), 
          lambda ignore: cuAction.call(scene),
-         {'group': 'Control Unit %s' % cu, 'title': 'Scene %s' % scene, 'order': next_seq()})
+         {'group': group, 'title': 'Scene %s' % scene, 'order': next_seq()})
     
 def SelectScene(cu, scene): # NOT EXPOSING AS ACTION
   def handleResp(parts):
@@ -172,9 +189,13 @@ def tcp_timeout():
 
 def tcp_sent(data):
   log(1, "tcp_sent [%s]" % data)
+  
+local_event_TCPReceived = LocalEvent({'group': 'Comms', 'schema': {'type': 'string'}}) # allowings data to be trapped
 
 def tcp_received(data):
   log(1, "tcp_received [%s]" % data)
+  
+  local_event_TCPReceived.emit(data)
   
   if data == 'login:':
     timer_poller.start()
@@ -213,6 +234,58 @@ def setup_tcp():
   console.info('Will connect to TCP %s' % dest)
 
   tcp.setDest(dest)
+  
+# <!-- status
+
+# status ---
+
+local_event_Status = LocalEvent({'title': 'Status', 'group': 'Status', 'order': 9990, "schema": { 'title': 'Status', 'type': 'object', 'properties': {
+        'level': {'title': 'Level', 'order': 1, 'type': 'integer'},
+        'message': {'title': 'Message', 'order': 2, 'type': 'string'}
+    } } })
+
+lastReceive = [0] # last time geniune comms occurred
+
+# roughly, the last contact  
+local_event_LastContactDetect = LocalEvent({'group': 'Status', 'title': 'Last contact detect', 'schema': {'type': 'string'}})
+  
+def statusCheck():
+  diff = (system_clock() - lastReceive[0])/1000.0 # (in secs)
+  now = date_now()
+  
+  if diff > status_check_interval+15:
+    previousContactValue = local_event_LastContactDetect.getArg()
+    
+    if previousContactValue == None:
+      message = 'Always been missing.'
+      
+    else:
+      previousContact = date_parse(previousContactValue)
+      message = 'Off the network %s' % formatPeriod(previousContact)
+      
+    local_event_Status.emit({'level': 2, 'message': message})
+    return
+  
+  local_event_Status.emit({'level': 0, 'message': 'OK'})
+  
+  local_event_LastContactDetect.emit(str(now))
+  
+status_check_interval = 75
+status_timer = Timer(statusCheck, status_check_interval)
+
+def formatPeriod(dateObj):
+  if dateObj == None:      return 'for unknown period'
+  
+  now = date_now()
+  diff = (now.getMillis() - dateObj.getMillis()) / 1000 / 60 # in mins
+  
+  if diff == 0:             return 'for <1 min'
+  elif diff < 60:           return 'for <%s mins' % diff
+  elif diff < 60*24:        return 'since %s' % dateObj.toString('h:mm:ss a')
+  else:                     return 'since %s' % dateObj.toString('E d-MMM h:mm:ss a')
+
+# -->
+
 
 # <!-- logging
 
