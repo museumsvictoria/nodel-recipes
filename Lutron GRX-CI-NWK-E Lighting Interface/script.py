@@ -277,7 +277,7 @@ def formatPeriod(dateObj):
   if dateObj == None:      return 'for unknown period'
   
   now = date_now()
-  diff = (now.getMillis() - dateObj.getMillis()) / 1000 / 60 # in mins
+  diff = (dateObj.getMillis() - now.getMillis()) / 1000 / 60 # in mins
   
   if diff == 0:             return 'for <1 min'
   elif diff < 60:           return 'for <%s mins' % diff
