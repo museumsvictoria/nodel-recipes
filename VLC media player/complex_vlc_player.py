@@ -1,4 +1,4 @@
-import os
+#import os
 import sys
 import json
 import threading
@@ -10,6 +10,9 @@ from nodel_stdio import *
 VLC_ARGS = []
 
 class Main:
+
+    playing = True
+
     current_position = 0
     currentClip = create_nodel_event('Current Clip', {'schema': {'type': 'string'}, 'group': 'Playing', 'order': 2})
     numClip = create_nodel_event('Clip Number', {'schema': {'type': 'number'}, 'group': 'Playing', 'order': 4})
@@ -30,9 +33,8 @@ class Main:
 
     endReached = create_nodel_event('End Reached', {'group': 'Playlist'})
     def endReached_callback(self, event):
-        t = threading.Thread(target=self.play_clip, args=[1])
-        t.daemon = True
-        t.start()
+        print('End Reached!')
+        self.playing = False        
 
     position = create_nodel_event('Position', {'schema': {'type': 'number'}, 'order': 98})
     def pos_callback(self, event, player):
@@ -71,19 +73,28 @@ class Main:
         config = json.loads(file.read())
         file.close()
 
+        # Add the items from our Nodel parameters into our VLC medialist.
         tmp = 0
         if 'playlist' in config["paramValues"]:
             items = config["paramValues"]["playlist"]
             for item in items:
-                self.medialist.insert_media(self.instance.media_new(item['arg']), tmp)
+                media = self.instance.media_new(item['arg'])
+                # If user specified it in Nodel, we'll toggle the clip to pause on the final frame using an exisiting flag.
+                if 'hold' in item:
+                    if item['hold'] == True:
+                        media.add_option('play-and-pause')
+                self.medialist.insert_media(media, tmp)
                 tmp += 1
 
+        # If the user specified as such in Nodel, we'll repeat the first clip in the playlist more-or-less indefinitely. 
+        # VLC 3.0+ removed the support for a negative value, i.e. 'input-repeat=-1'
         teaser_behaviour = False
         if 'teaser' in config["paramValues"]:
             teaser = config["paramValues"]["teaser"]
             if self.medialist.count() is 1 or teaser is True:
-                self.medialist.item_at_index(0).add_option('input-repeat=-1')
+                self.medialist.item_at_index(0).add_option('input-repeat=65535')
                 teaser_behaviour = True
+
 
         # Create two players
         # The playlist player manages multiple videos
@@ -103,7 +114,7 @@ class Main:
         self.player_event_manager.event_attach(EventType.MediaPlayerOpening, self.openClip_callback, self.player)
 
         if teaser_behaviour:
-            print 'Teaser Enabled.'
+            print('Teaser Enabled.')
             self.player_event_manager.event_attach(EventType.MediaPlayerEndReached, self.endReached_callback)
 
         # Prepare the player for action
@@ -114,6 +125,7 @@ class Main:
     # Request playback of specific video in playlist
     @nodel_action({'schema': {'type': 'integer'},"title":"PlayClip","group":"Playlist","order":9})
     def play_clip(self, num):
+        print('Playclip: %s' % (num))
         self.playlist.play_item_at_index(num - 1)
         #self.player.video_set_spu(self.subtitle_track)
         self.current_position = 0
@@ -124,6 +136,7 @@ class Main:
 
     @nodel_action({"title":"Pause","group":"Playback","order":1})
     def pause(self):
+        print('Pause!')
         self.player.pause()
 
     @nodel_action({"title":"Resume","group":"Playback","order":1})
@@ -193,10 +206,23 @@ class Main:
         """Stop and exit"""
         sys.exit(0)
 
+class Monitor():
+
+    def __init__(self, main):
+        t = threading.Thread(target=self.run, args=[main])
+        t.daemon = True
+        t.start()
+
+    def run(self, main):
+        while (not sleep(0.01)):
+            if main.playing == False:
+                main.play_clip(1)
+                main.playing = True
+
+
 main = Main()
+monitor = Monitor(main)
 register_instance_node(main)
 
 if __name__ == '__main__':
     start_nodel_channel()
-
-
