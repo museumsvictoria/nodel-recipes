@@ -21,8 +21,6 @@ workingDir = os.getcwd()
 
 # -->
 
-# -------------------------------- Actions --------------------------------
-
 local_event_pip_mode = LocalEvent(
     {
         'title': 'PIP Mode',
@@ -55,7 +53,7 @@ def pip_mode_1(data):
     global _preset_id
     _preset_id = 0
     activate_preset(PRESETS[_preset_id]['Name'])
-    reset_source_event()
+    update_src_widget_to_default()
 
 
 local_event_pip_mode_1 = LocalEvent(
@@ -81,7 +79,7 @@ def pip_mode_2(data):
     global _preset_id
     _preset_id = 1
     activate_preset(PRESETS[_preset_id]['Name'])
-    reset_source_event()
+    update_src_widget_to_default()
 
 
 local_event_pip_mode_2 = LocalEvent(
@@ -107,7 +105,7 @@ def pip_mode_3(data):
     global _preset_id
     _preset_id = 2
     activate_preset(PRESETS[_preset_id]['Name'])
-    reset_source_event()
+    update_src_widget_to_default()
 
 
 local_event_pip_mode_3 = LocalEvent(
@@ -149,13 +147,8 @@ def on_change_layer(layer_number):
     console.info("[on_change_layer] called: %d" % layer_number)
     global _layer_number
     _layer_number = layer_number - 1  # 0-based
-    reset_source_event()
+    update_src_widget_to_default()
 
-
-# -------------------------------- Events --------------------------------
-
-
-# -------------------------------- Others --------------------------------
 
 # <!-- main entry-point
 
@@ -163,10 +156,10 @@ def on_change_layer(layer_number):
 def on_change_source(arg, src_name, event):
     console.info("[on_change_source] called: %s" % src_name)
 
-    if _preset_id == -1 or _preset_id > 2:
+    if _preset_id < 0 or _preset_id > 2:
         raise Exception('_preset_id is not valid')
 
-    if _layer_number == -1:
+    if _layer_number < 0:
         raise Exception('_layer_number is not valid')
 
     dst_id = PRESETS[_preset_id]['Layers'][_layer_number]['DestinationId']
@@ -185,17 +178,97 @@ MAP_SRC_NAME_TO_ID = {}
 
 
 def src_name_to_idx(src_name):
-    global MAP_SRC_NAME_TO_ID
     if src_name in MAP_SRC_NAME_TO_ID:
         return MAP_SRC_NAME_TO_ID[src_name]
     return -1
 
 
 def src_idx_to_name(src_idx):
-    global MAP_SRC_ID_TO_NAME
     if src_idx in MAP_SRC_ID_TO_NAME:
         return MAP_SRC_ID_TO_NAME[src_idx]
     return 'NONE'
+
+
+def get_all_sources():
+    console.info('[get_all_sources] called')
+
+    payload_list_sources = {
+        "id": str(system_clock()),
+        "jsonrpc": "2.0",
+        "method": "listSources",
+        "params": {
+            "type": 0
+        }
+    }
+
+    dest = 'http://%s:%s' % (param_ipAddress, param_port or DEFAULT_PORT)
+    resp = get_url(dest, post=json_encode(payload_list_sources))
+    obj = json_decode(resp)
+
+    # expected result :
+    # {
+    # u'jsonrpc': u'2.0',
+    # u'result': {
+    #   u'response': [
+    #    {"id": 0, "Name": "src-1"},
+    #    {"id": 1, "Name": "src-2"}
+    #   ],
+    #   u'success': 0
+    # },
+    # u'id': u'1234'
+    # }
+
+    if obj['result']['success'] != 0:
+        raise Exception('listSources command failed!')
+
+    global SOURCES
+    SOURCES = obj['result']['response']
+    for src in SOURCES:
+        global SOURCE_NAMES
+        SOURCE_NAMES.append(src['Name'])
+
+        global MAP_SRC_ID_TO_NAME
+        if src['id'] in MAP_SRC_ID_TO_NAME:
+            raise Exception("Src Id [%d] duplicated!" % src['id'])
+        MAP_SRC_ID_TO_NAME[src['id']] = src['Name']
+
+        global MAP_SRC_NAME_TO_ID
+        if src['Name'] in MAP_SRC_NAME_TO_ID:
+            raise Exception("Src Name [%s] duplicated!" % src['Name'])
+        MAP_SRC_NAME_TO_ID[src['Name']] = src['id']
+
+
+def get_content(dst_id):
+    console.info('[get_content] called')
+
+    payload_list_content = {
+        "id": str(system_clock()),
+        "jsonrpc": "2.0",
+        "method": "listContent",
+        "params": {
+            "id": dst_id
+        }
+    }
+
+    dest = 'http://%s:%s' % (param_ipAddress, param_port or DEFAULT_PORT)
+    resp = get_url(dest, post=json_encode(payload_list_content))
+    obj = json_decode(resp)
+
+    # expected result :
+    # {
+    # u'jsonrpc': u'2.0',
+    # u'result': {
+    #   u'response': [
+    #   ],
+    #   u'success': 0
+    # },
+    # u'id': u'1234'
+    # }
+
+    if obj['result']['success'] != 0:
+        raise Exception('listContent command failed!')
+
+    return obj['result']['response']
 
 
 def load_source_list(json):
@@ -283,9 +356,36 @@ def change_source_of_normal_layer(dst_id, layer_id, src_name):
         raise Exception('change_source_of_normal_layer command failed!')
 
 
+def update_src_widget_to_default():
+    console.info("[update_src_widget_to_default] called")
+
+    # After changing PIP mode
+    # After changing Layer
+    # Update status of source button
+    # Cannot control of Layer widget.
+
+    if _layer_number < 0 or _layer_number >= len(PRESETS[_preset_id]['Layers']):
+        console.warn("[update_src_widget_to_default] _layer_number is not valid!")
+        reset_source_event()
+        return
+
+    dst_id = PRESETS[_preset_id]['Layers'][_layer_number]['DestinationId']
+    lyr_id = PRESETS[_preset_id]['Layers'][_layer_number]['id']
+
+    content = get_content(dst_id)
+    for layer in content["Layers"]:
+        if layer['id'] == lyr_id:
+            reset_source_event()
+            evt = lookup_local_event(src_idx_to_name(layer['LastSrcIdx']))
+            evt.emit(True)
+            return
+
+
 def main():
     console.info("Recipe has started!")
     remote_event = create_remote_event('OnChangeLayer', on_change_layer)
+
+    # get_all_sources()
 
     source_list_file = os.path.join(workingDir, 'content', 'source_list.json')
     if os.path.exists(source_list_file):
