@@ -223,19 +223,6 @@ def get_all_sources():
 
     global SOURCES
     SOURCES = obj['result']['response']
-    for src in SOURCES:
-        global SOURCE_NAMES
-        SOURCE_NAMES.append(src['Name'])
-
-        global MAP_SRC_ID_TO_NAME
-        if src['id'] in MAP_SRC_ID_TO_NAME:
-            raise Exception("Src Id [%d] duplicated!" % src['id'])
-        MAP_SRC_ID_TO_NAME[src['id']] = src['Name']
-
-        global MAP_SRC_NAME_TO_ID
-        if src['Name'] in MAP_SRC_NAME_TO_ID:
-            raise Exception("Src Name [%s] duplicated!" % src['Name'])
-        MAP_SRC_NAME_TO_ID[src['Name']] = src['id']
 
 
 def get_content(dst_id):
@@ -277,6 +264,8 @@ def load_source_list(json):
     global SOURCES
     SOURCES = data['result']['response']
 
+
+def create_all_action_event_to_related_source():
     for src in SOURCES:
         action_order = next_seq()
         event_order = next_seq()
@@ -362,7 +351,6 @@ def update_src_widget_to_default():
     # After changing PIP mode
     # After changing Layer
     # Update status of source button
-    # Cannot control of Layer widget.
 
     if _layer_number < 0 or _layer_number >= len(PRESETS[_preset_id]['Layers']):
         console.warn("[update_src_widget_to_default] _layer_number is not valid!")
@@ -392,6 +380,8 @@ def main():
         load_source_list(Stream.readFully(File(source_list_file)))
     else:
         console.warn('(no source info was present)')
+
+    create_all_action_event_to_related_source()
 
     preset_list_file = os.path.join(workingDir, 'content', 'preset_list_new.json')
     if os.path.exists(preset_list_file):
