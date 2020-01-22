@@ -47,65 +47,92 @@ udp = UDP(sent=udp_sent,
           ready=lambda: console.info('udp_ready'),
           received=udp_received)
 
-def address_to_hex(addr_number):
-    return chr(0x80 + addr_number)
-
-def seq_to_hex(seq_number):
-    hex_str = ''
-    hex_str += chr(seq_number >> 24 & 0xff)
-    hex_str += chr(seq_number >> 16 & 0xff)
-    hex_str += chr(seq_number >> 8 & 0xff)
-    hex_str += chr(seq_number & 0xff)
-    return hex_str
-
-
-def number_to_hex(number):
-    return chr(int(number))
-
 
 def get_command_string(cmd_type, visca_addr, seq_number, data=None):
+
+    def address_to_hex(addr_number):
+        return chr(0x80 + addr_number)
+
+    def seq_to_hex(seq_number):
+        hex_str = ''
+        hex_str += chr(seq_number >> 24 & 0xff)
+        hex_str += chr(seq_number >> 16 & 0xff)
+        hex_str += chr(seq_number >> 8 & 0xff)
+        hex_str += chr(seq_number & 0xff)
+        return hex_str
+
+    def number_to_hex(number):
+        return chr(int(number))
+
+    def payload_len_to_hex(payload):
+        payload_len = len(payload)
+        hex_str = ''
+        hex_str += chr(payload_len >> 8 & 0xff)
+        hex_str += chr(payload_len & 0xff)
+        return hex_str
+
     msg_header = None
     msg_payload = None
 
     if cmd_type == 'up':
-        msg_header = '\x01\x00' + '\x00\x09' + seq_to_hex(seq_number)
         msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x03\x01' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'down':
-        msg_header = '\x01\x00' + '\x00\x09' + seq_to_hex(seq_number)
         msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x03\x02' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'left':
-        msg_header = '\x01\x00' + '\x00\x09' + seq_to_hex(seq_number)
         msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x01\x03' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'right':
-        msg_header = '\x01\x00' + '\x00\x09' + seq_to_hex(seq_number)
         msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x02\x03' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'home':
-        msg_header = '\x01\x00' + '\x00\x05' + seq_to_hex(seq_number)
         msg_payload = address_to_hex(visca_addr) + '\x01\x06\x04' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'stop':
-        msg_header = '\x01\x00' + '\x00\x09' + seq_to_hex(seq_number)
         msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x03\x03' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'reset_seq':
-        msg_header = '\x02\x00' + '\x00\x01' + seq_to_hex(seq_number)
         msg_payload = '\x01'
+        msg_header = '\x02\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'preset_reset':
-        msg_header = '\x01\x00' + '\x00\x07' + seq_to_hex(seq_number)
         msg_payload = address_to_hex(visca_addr) + '\x01\x04\x3f\x00' + number_to_hex(data) + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'preset_set':
-        msg_header = '\x01\x00' + '\x00\x07' + seq_to_hex(seq_number)
         msg_payload = address_to_hex(visca_addr) + '\x01\x04\x3f\x01' + number_to_hex(data) + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'preset_recall':
-        msg_header = '\x01\x00' + '\x00\x07' + seq_to_hex(seq_number)
         msg_payload = address_to_hex(visca_addr) + '\x01\x04\x3f\x02' + number_to_hex(data) + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
+    elif cmd_type == 'zoom_stop':
+        msg_payload = address_to_hex(visca_addr) + '\x01\x04\x07\x00' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
+    elif cmd_type == 'zoom_tele':  # Standard
+        msg_payload = address_to_hex(visca_addr) + '\x01\x04\x07\x02' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
+    elif cmd_type == 'zoom_wide':  # Standard
+        msg_payload = address_to_hex(visca_addr) + '\x01\x04\x07\x03' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
+    elif cmd_type == 'focus_auto':
+        msg_payload = address_to_hex(visca_addr) + '\x01\x04\x38\x02' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
+    elif cmd_type == 'focus_manual':
+        msg_payload = address_to_hex(visca_addr) + '\x01\x04\x38\x03' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
+    elif cmd_type == 'focus_stop':
+        msg_payload = address_to_hex(visca_addr) + '\x01\x04\x08\x00' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
+    elif cmd_type == 'focus_far':  # Standard
+        msg_payload = address_to_hex(visca_addr) + '\x01\x04\x08\x02' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
+    elif cmd_type == 'focus_near':  # Standard
+        msg_payload = address_to_hex(visca_addr) + '\x01\x04\x08\x03' + '\xff'
+        msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     else:
         raise Exception('Unsupported command type')
 
     return msg_header + msg_payload
 
-
-# save preset
-
-# recall preset
 
 # -->
 
@@ -173,11 +200,73 @@ def ptz_preset_set(data):
 @local_action({'group': 'PTZ Preset', 'title': 'Preset Recall', 'order': next_seq(), 'schema': {'type': 'integer'}})
 def ptz_preset_recall(arg):
     console.log('[ptz_preset_recall] called')
-    
-    msg_header = '\x01\x00' + '\x00\x07' + seq_to_hex(next_seq() + 20000)
-    msg_payload = address_to_hex(_viscaAddress) + '\x01\x04\x3f\x02' + number_to_hex(arg) + '\xff'    
-    
-    udp.send(msg_header + msg_payload)
+    inquery_presetRecall = get_command_string('preset_recall', _viscaAddress, next_seq() + 20000, arg)
+    udp.send(inquery_presetRecall)
+
+
+# -- Zoom related --
+@local_action({'group': 'PTZ Zoom', 'title': 'Zoom Stop', 'order': next_seq()})
+def ptz_zoom_stop(arg):
+    console.log('[ptz_zoom_stop] called')
+    inquery_zoomStop = get_command_string('zoom_stop', _viscaAddress, next_seq() + 20000)
+    udp.send(inquery_zoomStop)
+
+@local_action({'group': 'PTZ Zoom', 'title': 'Zoom Tele', 'order': next_seq()})
+def ptz_zoom_tele(arg):
+    console.log('[ptz_zoom_tele] called')
+    inquery_zoomTele = get_command_string('zoom_tele', _viscaAddress, next_seq() + 20000)
+    udp.send(inquery_zoomTele)
+
+@local_action({'group': 'PTZ Zoom', 'title': 'Zoom Wide', 'order': next_seq()})
+def ptz_zoom_wide(arg):
+    console.log('[ptz_zoom_wide] called')
+    inquery_zoomWide = get_command_string('zoom_wide', _viscaAddress, next_seq() + 20000)
+    udp.send(inquery_zoomWide)
+
+# -- Focus related --
+le_Focus_Mode = create_local_event(
+            'Focus Mode',
+            metadata={
+                'title': 'Focus Mode',
+                'group': 'PTZ Focus',
+                'order': next_seq(),
+                'schema': {
+                    'type': 'string'
+                }
+            }
+        )
+
+@local_action({'group': 'PTZ Focus', 'title': 'Focus Mode - Auto', 'order': next_seq()})
+def ptz_focus_mode_auto(arg):
+    console.log('[ptz_focus_mode_auto] called')
+    inquery_focusModeAuto = get_command_string('focus_auto', _viscaAddress, next_seq() + 20000)
+    udp.send(inquery_focusModeAuto)
+    le_Focus_Mode.emit('AUTO')
+
+@local_action({'group': 'PTZ Focus', 'title': 'Focus Mode - Manual', 'order': next_seq()})
+def ptz_focus_mode_manual(arg):
+    console.log('[ptz_focus_mode_manual] called')
+    inquery_focusModeManual = get_command_string('focus_manual', _viscaAddress, next_seq() + 20000)
+    udp.send(inquery_focusModeManual)
+    le_Focus_Mode.emit('MANUAL')
+
+@local_action({'group': 'PTZ Focus', 'title': 'Focus - Stop', 'order': next_seq()})
+def ptz_focus_stop(arg):
+    console.log('[ptz_focus_stop] called')
+    inquery_focusStop = get_command_string('focus_stop', _viscaAddress, next_seq() + 20000)
+    udp.send(inquery_focusStop)
+
+@local_action({'group': 'PTZ Focus', 'title': 'Focus - Far', 'order': next_seq()})
+def ptz_focus_far(arg):
+    console.log('[ptz_focus_far] called')
+    inquery_focusFar = get_command_string('focus_far', _viscaAddress, next_seq() + 20000)
+    udp.send(inquery_focusFar)
+
+@local_action({'group': 'PTZ Focus', 'title': 'Focus - Near', 'order': next_seq()})
+def ptz_focus_near(arg):
+    console.log('[ptz_focus_near] called')
+    inquery_focusNear = get_command_string('focus_near', _viscaAddress, next_seq() + 20000)
+    udp.send(inquery_focusNear)
 
 @local_action({'group': 'Status', 'order': next_seq()})
 def httpPoll():
