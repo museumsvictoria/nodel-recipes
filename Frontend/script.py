@@ -69,10 +69,11 @@ def loadIndexFile(xmlFile):
   
   def explore(group, e):
     eType = e.tag
-    eActionNormal = e.get('action')
+    join = e.get('join')             # shorthand for <... action=... event=...">
+    eActionNormal = e.get('action') or join
     eActionOn = e.get('action-on')   # these are for
     eActionOff = e.get('action-off') # momentary buttons
-    eEvent = e.get('event')
+    eEvent = e.get('event') or join
     title = e.get('title')
     
     # compose a group name (if possible)
