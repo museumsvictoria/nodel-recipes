@@ -1,68 +1,100 @@
-'''Windows 10 Node'''
+'''
+An agent with native Windows operations, tested with Windows 10 but might work on older or newer versions.
 
-### Libraries required by this Node
-import subprocess
+Includes:
 
+* reboot, shutdown
+* periodic screenshots
+* basic volume control of primary audio device
+* CPU monitoring
 
-### Parameters used by this Node
+'''
+
 DEFAULT_FREESPACEMB = 0.5
-param_FreeSpaceThreshold = Parameter({'title': 'Freespace threshold (GB)', 'schema': {'type': 'integer', 'hint': DEFAULT_FREESPACEMB}})
+param_FreeSpaceThreshold = Parameter({ 'title': 'Freespace threshold (GB)', 'schema': { 'type': 'integer', 'hint': '(default %s)' % DEFAULT_FREESPACEMB }})
+
+# <!-- CPU
+
+local_event_CPU = LocalEvent({ 'order': next_seq(), 'schema': { 'type': 'number' }}) # using no group so shows prominently
+
+# <!--- power
+
+@local_action({ 'group':'Power', 'order': next_seq() })
+def PowerOff():
+    console.info('PowerOff action')
+    quick_process(['shutdown', '/s', '/f', '/t', '5' , '/c', 'Nodel_SHUTDOWN_in_5_seconds...']) # not happy with spaces in args
+
+@local_action({ 'group':'Power', 'order': next_seq() })
+def Suspend():
+    console.info('Suspend action')
+    quick_process('rundll32.exe powrprof.dll,SetSuspendState 0,1,0'.split(' '))
+
+@local_action({ 'group':'Power', 'order': next_seq() })
+def Restart():
+    console.info('Restart action')
+    quick_process(['shutdown', '/r', '/f', '/t', '5' , '/c', 'Nodel_RESTART_in_5_seconds...']) # not happy with spaces in args
+
+# --->
 
 
-### Local actions this Node provides
-@local_action({'title':'PowerOff','desc':'Turns this computer off.','group':'Power'})
-def powerOff():
-    console.log('Action PowerOff requested')
-    returncode = subprocess.call('shutdown -s -f -t 0 /c "Nodel is shutting down the machine now"', shell=True)
+# <!--- mute and volume
 
-@local_action({'title':'Suspend','desc':'Suspends this computer.','group':'Power'})
-def suspend():
-    console.log('Action Suspend requested')
-    returncode = subprocess.call("rundll32.exe powrprof.dll,SetSuspendState 0,1,0", shell=True)
+local_event_Mute = LocalEvent({ 'group': 'Volume', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
 
-@local_action({'title':'Restart','desc':'Restarts this computer.','group':'Power'})
-def restart():
-    console.log('Action Restart requested')
-    returncode = subprocess.call('shutdown -r -f -t 0 /c "Nodel is restarting the machine now"', shell=True)
+@local_action({ 'group': 'Mute', 'order': next_seq(), 'schema': { 'type': 'boolean' } })
+def Mute(arg):
+    console.info('Mute %s action' % arg)
 
-@local_action({'title':'Mute','group':'Volume','schema':{'type':'string','enum': ['On', 'Off'], 'required': True}})
-def mute(arg):
-    console.log('Action Mute%s requested' % arg)
-    volumeController.send('set-mute %s' % (1 if arg == 'On' else 0))
+    # some of this for backwards compatibility
+    if arg in [ True, 1, 'On', 'ON', 'on' ]:
+        state = True
+    elif arg in [ False, 0, 'Off', 'OFF', 'off']:
+        state = False
+    else:
+        console.warn('Mute: arg missing')
+        return
+    
+    _controller.send('set-mute %s' % (1 if state else 0))
 
-@local_action({'title':'MuteOn','desc':'Mute this computer.','group':'Volume'})
-def muteOn():
-    console.log('Action MuteOn requested')
-    volumeController.send('set-mute 1')
+@local_action({ 'group': 'Mute', 'order': next_seq() })
+def MuteOn():
+    Mute.call(True)
 
-@local_action({'title':'MuteOff','desc':'Un-mute this computer.','group':'Volume'})
-def muteOff():
-    console.log('Action MuteOff requested')
-    volumeController.send('set-mute 0')
+@local_action({ 'group': 'Mute', 'order': next_seq() })
+def MuteOff():
+    Mute.call(False)
 
-@local_action({'title':'SetVolume','desc':'Set volume.','schema':{'title':'Drag slider to adjust level.','type':'integer','format':'range','min': 0, 'max': 100,'required':'true'},'group':'Volume'})
-def setVolume(arg):
-    console.log('Action SetVolume requested - '+str(arg))
-    volumeController.send('set-volume %s' % arg)
+local_event_Volume = LocalEvent({ 'group': 'Volume', 'schema': {'type': 'number' }})
+
+@local_action({ 'group':'Volume', 'order': next_seq(), 'schema': { 'type': 'integer', 'format': 'range', 'min': 0, 'max': 100, 'hint': '(0 to 100)' }})
+def Volume(arg):
+    console.info('Volume %s action' % arg)
+    if arg == None or arg < 0 or arg > 100:
+        console.warn('Volume: bad arg')
+        return
+
+    _controller.send('set-volume %s' % arg)
+
+# mute and volume --!>
 
 
-### Local events provided by this Node
-local_event_MuteStatus = LocalEvent({'group': 'Volume', 'schema': {'type': 'boolean'}})
-local_event_VolumeStatus = LocalEvent({'group': 'Volume', 'schema': {'type': 'number'}})
+# <!- status
 
-local_event_Status = LocalEvent({'group': 'Status', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
-        'level': {'type': 'integer', 'order': 1},
-        'message': {'type': 'string', 'order': 2}}}})
+
+local_event_Status = LocalEvent({ 'group': 'Status', 'order': next_seq(), 'schema': { 'type': 'object', 'properties': {
+                                      'level':   {'type': 'integer', 'order': 1 },
+                                      'message': {'type': 'string', 'order': 2 }}}})
 
 
 # <! -- monitor disk storage
+
 from java.io import File
 
 def check_status():
     # unfortunately this pulls in removable disk drives
     # roots = list(File.listRoots())
     
-    roots = [File('.')] # so just using current drive instead
+    roots = [ File('.') ] # so just using current drive instead
     
     warnings = list()
     
@@ -88,29 +120,64 @@ Timer(check_status, 150, 10) # check status every 2.5 mins (10s first time)
 
 # -- >
 
-# <! -- manage system volume
-def volumeController_feedback(data):
+# <! -- controller
+
+def controller_feedback(data):
+    log(1, 'feedback> %s' % data)
+    
+    if data.startswith('//'):
+      # ignore comments
+      return
+    
     try:
-        activity = json_decode(data) #except java.lang.Exception as err:
+        message = json_decode(data) #except java.lang.Exception as err:
+        
     except:
-        console.log(data)
+        console.warn('feedback problem, expected JSON data, got [%s]' % data)
         return
     
-    signalName = activity.get('event')
-    if is_blank(signalName):
+    signalName = message.get('event')
+    arg = message.get('arg')
+    
+    signal = lookup_local_event(signalName)
+    
+    if not signal:
+      if signalName.startswith('Screenshot'):
+        # create screenshot signal dynamically
+        signal = Event(signalName, { 'order': next_seq(), 'group': 'Screenshots', 'schema': { 'type': 'string', 'format': 'image' }})
+        
+      else:
+        # unknown event
+        log(1, 'ignoring unknown signal %s' % signalName)
         return
-    elif signalName == 'MuteStatus':
-        local_event_MuteStatus.emit(activity.get('arg'))
-    elif signalName == 'VolumeStatus':
-        local_event_VolumeStatus.emit(activity.get('arg'))
+      
+    signal.emit(arg)
 
-def volumeController_started():
-    volumeController.send('get-mute')
-    volumeController.send('get-volume')
+def controller_started():
+    _controller.send('get-mute')
+    _controller.send('get-volume')
 
-volumeController =  Process([r'%s\VolumeController.exe' % _node.getRoot().getAbsolutePath()], stdout=volumeController_feedback, started=volumeController_started)
-volumeController.stop()
+_controller = Process([ '%s\\ComputerController.exe' % _node.getRoot().getAbsolutePath() ], 
+                     stdout=controller_feedback, 
+                     started=controller_started)
+_controller.stop()
 
+# compile to code on first run
+
+import os
+
+# 32bit path is C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe
+# 64bit      is C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
+
+COMPILER_PATH = r'%s\Microsoft.NET\Framework%s\v4.0.30319\csc.exe' % (os.environ['WINDIR'], 
+                                                                      '64' if '64' in os.environ['PROCESSOR_ARCHITECTURE'] else '')
+
+@after_main
+def performCompilation():
+  log(1, 'Using compiler path %s' % COMPILER_PATH)
+  
+  quick_process([COMPILER_PATH, 'ComputerController.cs'], finished=compileComplete)
+  
 def compileComplete(arg):
     if arg.code != 0:
         console.error('BAD COMPILATION RESULT (code was %s)' % arg.code)
@@ -118,15 +185,22 @@ def compileComplete(arg):
         return
     
     # otherwise run the program
-    volumeController.start()
-
-# compile to code on first run
-quick_process([r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe", 'VolumeController.cs'], finished=compileComplete)
-
+    _controller.start()
+  
 # -- >
 
-      
-### Main
-def main(arg = None):
-    # Start your script here.
-    print 'Nodel script started.'
+
+# <!-- logging
+
+local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 'desc': 'Use this to ramp up the logging (with indentation)',  
+                                   'schema': {'type': 'integer'}})
+
+def warn(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.warn(('  ' * level) + msg)
+
+def log(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.log(('  ' * level) + msg)
+
+# --!>
