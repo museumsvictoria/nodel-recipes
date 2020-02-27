@@ -10,13 +10,14 @@ It utilises a work-around used in the **Application** node to build and manage a
 - reboot, shutdown, suspend
 - periodic screenshots
 - basic volume control of primary audio device
+- audio signal metering
 - CPU monitoring
 
 The node utilises Python's `subprocess` module for the **management of system power-states**.
 
 It also includes Java's `File` module for **monitoring system disk-space**.
 
-Finally, the Windows specific special sauce 🍲 is `ComputerController.cs` a built-on-use .NET application for **volume control** and **CPU monitoring** and **screenshotting*.
+Finally, the Windows specific special sauce 🍲 is `ComputerController.cs` a built-on-use .NET application for **volume control**, **audio signal metering**, **CPU monitoring** and **screenshotting*.
 
 ## Requirements
 
