@@ -29,6 +29,8 @@ class ComputerController
 
         MonitorSystemVolumeChanges();
 
+        MonitorSystemMeterInformation();
+
         MonitorScreenshotChanges();
 
         ProcessStandardInput();
@@ -82,7 +84,7 @@ class ComputerController
                     else
                         break;
 
-                    AudioEndpoint.Mute = state;
+                    Audio.Mute = state;
                     EmitMute();
                     break;
 
@@ -92,7 +94,7 @@ class ComputerController
 
                 case "set-volume":
                     arg = parts[1];
-                    AudioEndpoint.Volume = float.Parse(arg);
+                    Audio.Volume = float.Parse(arg);
                     EmitVolume();
                     break;
 
@@ -145,6 +147,14 @@ class ComputerController
 
     #region (Win32 wrappers, etc.)
 
+    [Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAudioMeterInformation
+    {
+        int GetPeakValue(out float pfPeak);
+        int GetMeteringChannelCount(out int pnChannelCount);
+        int GetChannelsPeakValues(int u32ChannelCount, [In]   IntPtr afPeakValues);
+    };
+
     [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IAudioEndpointVolume
     {
@@ -161,14 +171,15 @@ class ComputerController
     [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IMMDevice
     {
-        int Activate(ref Guid id, int clsCtx, int activationParams, out IAudioEndpointVolume aev);
+        [return: MarshalAs(UnmanagedType.IUnknown)]
+        object Activate([MarshalAs(UnmanagedType.LPStruct)] Guid iid, int dwClsCtx, IntPtr pActivationParams);
     }
 
     [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IMMDeviceEnumerator
     {
-        int f(); // Unused
-        int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
+        int f(); // Not used.
+        IMMDevice GetDefaultAudioEndpoint(int dataFlow, int role);
     }
 
     [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
@@ -176,18 +187,20 @@ class ComputerController
 
     #endregion
 
-    static bool s_mute = AudioEndpoint.Mute;
+    static bool s_mute = Audio.Mute;
 
-    static float s_volume = AudioEndpoint.Volume;
+    static float s_volume = Audio.Volume;
+
+    static float s_meter = Audio.Meter;
 
     static void EmitMute()
     {
-        Console.WriteLine("{ event: Mute, arg: " + (AudioEndpoint.Mute ? "true" : "false") + " }");
+        Console.WriteLine("{ event: Mute, arg: " + (Audio.Mute ? "true" : "false") + " }");
     }
 
     static void EmitVolume()
     {
-        Console.WriteLine("{ event: Volume, arg: " + Math.Round(AudioEndpoint.Volume * 100) + " }");
+        Console.WriteLine("{ event: Volume, arg: " + Math.Round(Audio.Volume * 100) + " }");
     }
 
     static async void MonitorSystemVolumeChanges()
@@ -196,15 +209,15 @@ class ComputerController
         while (s_running)
         {
             // Compare previous and current (from endpoint) mute status updating if neccesary.
-            if (s_mute != AudioEndpoint.Mute)
+            if (s_mute != Audio.Mute)
             {
-                s_mute = AudioEndpoint.Mute;
+                s_mute = Audio.Mute;
                 EmitMute();
             }
             // Compare previous and current (from endpoint) volume status updating if neccesary.
-            if (s_volume != AudioEndpoint.Volume)
+            if (s_volume != Audio.Volume)
             {
-                s_volume = AudioEndpoint.Volume;
+                s_volume = Audio.Volume;
                 EmitVolume();
             }
 
@@ -212,33 +225,62 @@ class ComputerController
         }
     }
 
-    // see https://community.idera.com/database-tools/powershell/powertips/b/tips/posts/controlling-audio-volume-and-mute-status
-    public class AudioEndpoint
+    static async void MonitorSystemMeterInformation()
     {
-        static IAudioEndpointVolume Vol()
+        Console.WriteLine("// ...inspecting audio signal every 1.25s");
+        while (s_running)
+        {
+            float v = Audio.Meter;
+            if (v != s_meter)
+            {
+                s_meter = v;
+                Console.WriteLine("{ event: Meter, arg: " + Math.Round(Audio.Meter * 100) + " }");
+            }
+
+            await Task.Delay(1250); // check every 1.25 seconds
+        }
+    }
+
+    public class Audio
+    {
+        private static IMMDevice device = GetDefaultDevice();
+        private static IAudioEndpointVolume endpointVolume = Audio.ActivateEndpointVolume(device);
+        private static IAudioMeterInformation meterInformation = Audio.ActivateMeterInformation(device);
+
+        private static IMMDevice GetDefaultDevice()
         {
             var enumerator = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator;
-            IMMDevice dev = null;
-            Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(/*eRender*/ 0, /*eMultimedia*/ 1, out dev));
-            IAudioEndpointVolume epv = null;
-            var epvid = typeof(IAudioEndpointVolume).GUID;
-            Marshal.ThrowExceptionForHR(dev.Activate(ref epvid, /*CLSCTX_ALL*/ 23, 0, out epv));
-            return epv;
+            return enumerator.GetDefaultAudioEndpoint(/*eRender*/ 0, /*eMultimedia*/ 1);
+        }
+
+        static IAudioMeterInformation ActivateMeterInformation(IMMDevice device)
+        {
+            return (IAudioMeterInformation)device.Activate(typeof(IAudioMeterInformation).GUID, 0, IntPtr.Zero);
+        }
+
+        static IAudioEndpointVolume ActivateEndpointVolume(IMMDevice device)
+        {
+            return (IAudioEndpointVolume)device.Activate(typeof(IAudioEndpointVolume).GUID, /*CLSCTX_ALL*/ 23, IntPtr.Zero);
         }
 
         public static float Volume
         {
-            get { float v = -1; Marshal.ThrowExceptionForHR(Vol().GetMasterVolumeLevelScalar(out v)); return v; }
-            set { Marshal.ThrowExceptionForHR(Vol().SetMasterVolumeLevelScalar(value, Guid.Empty)); }
+            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevelScalar(out v)); return v; }
+            set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevelScalar(value, System.Guid.Empty)); }
         }
 
         public static bool Mute
         {
-            get { bool mute; Marshal.ThrowExceptionForHR(Vol().GetMute(out mute)); return mute; }
-            set { Marshal.ThrowExceptionForHR(Vol().SetMute(value, Guid.Empty)); }
+            get { bool mute; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMute(out mute)); return mute; }
+            set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMute(value, System.Guid.Empty)); }
+        }
+
+        public static float Meter
+        {
+            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.meterInformation.GetPeakValue(out v)); return v; }
         }
     }
-
+    
     #endregion
 
     #region Screenshots
@@ -268,7 +310,8 @@ class ComputerController
         var allScreens = Screen.AllScreens;
 
         // check if screens come and / or go
-        if (s_lastScreenshots == null || s_lastScreenshots.Length != allScreens.Length) {
+        if (s_lastScreenshots == null || s_lastScreenshots.Length != allScreens.Length)
+        {
             s_lastScreenshots = new StringBuilder[allScreens.Length];
             s_currentScreenshots = new StringBuilder[allScreens.Length];
         }
@@ -309,7 +352,8 @@ class ComputerController
 
 
                 var currentScreenshot = s_currentScreenshots[i];
-                if (currentScreenshot == null) {
+                if (currentScreenshot == null)
+                {
                     currentScreenshot = new StringBuilder();
                     s_currentScreenshots[i] = currentScreenshot;
                 }
@@ -471,16 +515,16 @@ class ComputerController
     {
         if (sb1 == null && sb2 == null)
             return true; // both are null
-        
+
         if (sb1 == null || sb2 == null)
             return false; // only one is null
 
         var len = sb1.Length;
 
-        if (len != sb2.Length) 
+        if (len != sb2.Length)
             return false; // different lengths so different
 
-        for (int i =0; i<len; i++) //
+        for (int i = 0; i < len; i++) //
         {
             var c1 = sb1[i];
             var c2 = sb2[i];
