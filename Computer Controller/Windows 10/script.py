@@ -5,7 +5,8 @@ Includes:
 
 * reboot, shutdown
 * periodic screenshots
-* basic volume control of primary audio device
+* basic volume control and of primary audio device
+* audio signal metering
 * CPU monitoring
 
 '''
@@ -75,11 +76,12 @@ def Volume(arg):
 
     _controller.send('set-volume %s' % arg)
 
+local_event_Meter = LocalEvent({ 'group': 'Volume', 'schema': {'type': 'integer' }})
+
 # mute and volume --!>
 
 
 # <!- status
-
 
 local_event_Status = LocalEvent({ 'group': 'Status', 'order': next_seq(), 'schema': { 'type': 'object', 'properties': {
                                       'level':   {'type': 'integer', 'order': 1 },
