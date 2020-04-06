@@ -32,7 +32,7 @@ Finally, the Windows specific special sauce 🍲 is `ComputerController.cs` a bu
 
 It's **highly recommended** to use the `ProcessSandbox.exe`. It's available on the [release page](https://github.com/museumsvictoria/nodel/releases). This will ensure the .NET isn't left hanging as a result of the nodehost's closure.
 
-The ProcessToolkit responsible for managing the .NET component will automatically search the node's directory and the nodehost root directory for the executable.
+The ProcessToolkit responsible for managing the .NET component will automatically search 🔍 the node's directory and the nodehost root directory for the executable.
 
 #### Testing
 
