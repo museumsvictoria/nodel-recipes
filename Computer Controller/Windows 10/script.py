@@ -12,11 +12,13 @@ Includes:
 '''
 
 DEFAULT_FREESPACEMB = 0.5
+
 param_FreeSpaceThreshold = Parameter({ 'title': 'Freespace threshold (GB)', 'schema': { 'type': 'integer', 'hint': '(default %s)' % DEFAULT_FREESPACEMB }})
 
 # <!-- CPU
 
-local_event_CPU = LocalEvent({ 'order': next_seq(), 'schema': { 'type': 'number' }}) # using no group so shows prominently
+local_event_CPU = LocalEvent({ 'order': next_seq(), 'schema': { 'type': 'number' }}) # using no group so shows prominentl
+
 
 # <!--- power
 
@@ -67,16 +69,45 @@ def MuteOff():
 
 local_event_Volume = LocalEvent({ 'group': 'Volume', 'schema': {'type': 'number' }})
 
-@local_action({ 'group':'Volume', 'order': next_seq(), 'schema': { 'type': 'integer', 'format': 'range', 'min': 0, 'max': 100, 'hint': '(0 to 100)' }})
+@local_action({ 'group':'Volume', 'order': next_seq(), 'schema': { 'type': 'integer', 'hint': 'Scalar (0 | 100), dB (-100 | 0)' }})
 def Volume(arg):
     console.info('Volume %s action' % arg)
-    if arg == None or arg < 0 or arg > 100:
-        console.warn('Volume: bad arg')
-        return
+    
+    if arg == None:
+      console.warn('Volume: no arg')
+      return
 
-    _controller.send('set-volume %s' % arg)
+    decibel = lookup_local_event('Decibel').getArg()
+
+    if decibel == False or decibel == None:
+      
+      if (arg < 0 or arg > 100):
+          console.warn('Volume: bad arg')
+          return
+
+      _controller.send('set-volume %s' % (arg / 100.0))
+      
+    else:
+      
+      if (arg < -100 or arg > 0):
+          console.warn('Volume: bad arg')
+          return
+
+      _controller.send('set-volume %s' % int(arg))
 
 local_event_Meter = LocalEvent({ 'group': 'Volume', 'schema': {'type': 'integer' }})
+local_event_Decibel = LocalEvent({ 'group': 'Volume', 'schema': {'type': 'boolean', 'title': 'Are we using dBFS for volume?' }})
+
+@after_main
+def update_audio_controller_on_event_change():
+
+  def handler(arg):
+    if arg == True:
+      _controller.send('meter-type decibel')
+    else:
+      _controller.send('meter-type scalar')
+
+  event = lookup_local_event('Decibel').addEmitHandler(handler)
 
 # mute and volume --!>
 
@@ -156,8 +187,12 @@ def controller_feedback(data):
     signal.emit(arg)
 
 def controller_started():
-    _controller.send('get-mute')
-    _controller.send('get-volume')
+  
+  if lookup_local_event('Decibel').getArg() == True:
+    _controller.send('meter-type decibel')
+      
+  _controller.send('get-mute')
+  _controller.send('get-volume')
 
 _controller = Process([ '%s\\ComputerController.exe' % _node.getRoot().getAbsolutePath() ], 
                      stdout=controller_feedback, 

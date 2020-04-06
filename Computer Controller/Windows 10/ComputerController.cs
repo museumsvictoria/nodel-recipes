@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
@@ -48,6 +48,7 @@ class ComputerController
         Console.WriteLine("// set-mute (0 or 1)");
         Console.WriteLine("// get-volume");
         Console.WriteLine("// set-volume (0 - 100)");
+        Console.WriteLine("// meter-type (\"scalar\" or \"decibel\")");
         Console.WriteLine("// q");
     }
 
@@ -67,6 +68,8 @@ class ComputerController
             string action = parts[0];
             string arg;
 
+            bool state;
+
             switch (action)
             {
                 case "get-mute":
@@ -76,7 +79,6 @@ class ComputerController
                 case "set-mute":
                     arg = parts[1];
 
-                    bool state;
                     if (arg == "1")
                         state = true;
                     else if (arg == "0")
@@ -85,6 +87,7 @@ class ComputerController
                         break;
 
                     Audio.Mute = state;
+                    s_mute = state;
                     EmitMute();
                     break;
 
@@ -94,8 +97,30 @@ class ComputerController
 
                 case "set-volume":
                     arg = parts[1];
-                    Audio.Volume = float.Parse(arg);
+                    float value = float.Parse(arg);
+                    if (s_decibel)
+                    {
+                        Audio.VolumeDecibel = value;
+                    }
+                    else
+                    {
+                        Audio.VolumeScalar = value;
+                    }
+                    s_volume = value;
                     EmitVolume();
+                    break;
+
+                case "meter-type":
+                    arg = parts[1];
+
+                    if (arg == "decibel")
+                        state = true;
+                    else if (arg == "scalar")
+                        state = false;
+                    else
+                        break;
+
+                    s_decibel = state;
                     break;
 
                 case "q":
@@ -151,21 +176,23 @@ class ComputerController
     internal interface IAudioMeterInformation
     {
         int GetPeakValue(out float pfPeak);
-        int GetMeteringChannelCount(out int pnChannelCount);
-        int GetChannelsPeakValues(int u32ChannelCount, [In]   IntPtr afPeakValues);
     };
 
     [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IAudioEndpointVolume
     {
         // f(), g(), ... are unused COM method slots.
-        int f(); int g(); int h(); int i();
+        int f(); int g(); int h();
+        int SetMasterVolumeLevel(float fLevelDB, Guid pguidEventContext);
         int SetMasterVolumeLevelScalar(float fLevel, Guid pguidEventContext);
+        int GetMasterVolumeLevel(ref float pfLevelDB);
+        int GetMasterVolumeLevelScalar(ref float pfLevel);
         int j();
-        int GetMasterVolumeLevelScalar(out float pfLevel);
-        int k(); int l(); int m(); int n();
         int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, Guid pguidEventContext);
-        int GetMute(out bool pbMute);
+        int k(); int s(); int l();
+        int GetMute([MarshalAs(UnmanagedType.Bool)] ref bool pbMute);
+        int m(); int n(); int i(); int p();
+        int GetVolumeRange(out float pflVolumeMindB, out float pflVolumeMaxdB, out float pflVolumeIncrementdB);
     }
 
     [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -178,7 +205,7 @@ class ComputerController
     [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IMMDeviceEnumerator
     {
-        int f(); // Not used.
+        int f(); //  ... unused COM method.
         IMMDevice GetDefaultAudioEndpoint(int dataFlow, int role);
     }
 
@@ -187,11 +214,15 @@ class ComputerController
 
     #endregion
 
+    static Boolean s_decibel = false;
+
     static bool s_mute = Audio.Mute;
 
-    static float s_volume = Audio.Volume;
+    static float s_volume = s_decibel ? Audio.VolumeDecibel : Audio.VolumeScalar;
 
-    static float s_meter = Audio.Meter;
+    static float s_meter = 0;
+
+    static Dictionary<string, float> s_range = new Dictionary<string, float>(Audio.VolumeRange);
 
     static void EmitMute()
     {
@@ -200,12 +231,15 @@ class ComputerController
 
     static void EmitVolume()
     {
-        Console.WriteLine("{ event: Volume, arg: " + Math.Round(Audio.Volume * 100) + " }");
+        double vol = s_decibel ? Audio.VolumeDecibel : Audio.VolumeScalar * 100;
+        Console.WriteLine("{ event: Volume, arg: " + Math.Round(vol) + " }");
     }
 
     static async void MonitorSystemVolumeChanges()
     {
         Console.WriteLine("// ...monitoring volume and mute changes every 2.5s");
+        EmitMute(); // initial announcement
+        EmitVolume();
         while (s_running)
         {
             // Compare previous and current (from endpoint) mute status updating if neccesary.
@@ -215,9 +249,10 @@ class ComputerController
                 EmitMute();
             }
             // Compare previous and current (from endpoint) volume status updating if neccesary.
-            if (s_volume != Audio.Volume)
+            float curr_volume = s_decibel ? Audio.VolumeDecibel : Audio.VolumeScalar; 
+            if (s_volume != curr_volume)
             {
-                s_volume = Audio.Volume;
+                s_volume = curr_volume;
                 EmitVolume();
             }
 
@@ -228,13 +263,29 @@ class ComputerController
     static async void MonitorSystemMeterInformation()
     {
         Console.WriteLine("// ...inspecting audio signal every 1.25s");
+        Console.WriteLine("{ event: Meter, arg: " + (s_decibel ? s_range["volMinDB"] : 0 ) + " }"); // initial announcement
         while (s_running)
         {
-            float v = Audio.Meter;
+            float v = (s_mute || (s_volume == 0 || s_volume == s_range["volMinDB"]) ) ? 0 : Audio.Meter;
             if (v != s_meter)
             {
                 s_meter = v;
-                Console.WriteLine("{ event: Meter, arg: " + Math.Round(Audio.Meter * 100) + " }");
+
+                // map to the current system volume. otherwise we'll be ignoring the effect reducing volume has on the live metering
+                float v_mapped = v.Map(0f, 1.0f, 0f, Audio.VolumeScalar);
+
+                double m;
+                if (s_decibel)
+                {
+                    double l = Math.Log10(v_mapped) * 20; // convert to dBFS
+                    m = Double.IsInfinity(l) ? s_range["volMinDB"] : l; // an ultra-low result is effectively the maximum decibel value indicated by the system's "volume range"
+                }
+                else
+                {
+                    m = v_mapped * 100; // linear scalar 0 -> 1.0 to 0 -> 100
+                }
+
+                Console.WriteLine("{ event: Meter, arg: " + Math.Round(m) + " }");
             }
 
             await Task.Delay(1250); // check every 1.25 seconds
@@ -260,18 +311,37 @@ class ComputerController
 
         static IAudioEndpointVolume ActivateEndpointVolume(IMMDevice device)
         {
+
             return (IAudioEndpointVolume)device.Activate(typeof(IAudioEndpointVolume).GUID, /*CLSCTX_ALL*/ 23, IntPtr.Zero);
         }
 
-        public static float Volume
+        public static float VolumeScalar
         {
-            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevelScalar(out v)); return v; }
-            set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevelScalar(value, System.Guid.Empty)); }
+            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevelScalar(ref v)); return v; }
+            set
+            {
+                float v = value;
+                if (v < 0) { v = 0; }
+                else if (v > 1.0) { v = 1.0f; }
+                Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevelScalar(v, System.Guid.Empty));
+            }
+        }
+
+        public static float VolumeDecibel
+        {
+            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevel(ref v)); return v; }
+            set
+            {
+                float v = value;
+                if (v < s_range["volMinDB"]) { v = s_range["volMinDB"]; }
+                else if (v > 0) { v = 0; }
+                Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevel(v, System.Guid.Empty));
+            }
         }
 
         public static bool Mute
         {
-            get { bool mute; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMute(out mute)); return mute; }
+            get { bool mute = false; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMute(ref mute)); return mute; }
             set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMute(value, System.Guid.Empty)); }
         }
 
@@ -279,8 +349,25 @@ class ComputerController
         {
             get { float v = -1; Marshal.ThrowExceptionForHR(Audio.meterInformation.GetPeakValue(out v)); return v; }
         }
+
+        public static Dictionary<string, float> VolumeRange
+        {
+            get
+            {
+                float volMinDB = 0, volMaxDB = 0, volIncrDB = 0;
+                Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetVolumeRange(out volMinDB, out volMaxDB, out volIncrDB));
+
+                Dictionary<string, float> vr = new Dictionary<string, float>();
+
+                vr.Add("volMinDB", volMinDB);
+                vr.Add("volMaxDB", volMaxDB);
+                vr.Add("volIncDB", volIncrDB);
+
+                return vr;
+            }
+        }
     }
-    
+
     #endregion
 
     #region Screenshots
@@ -538,4 +625,15 @@ class ComputerController
 
     #endregion
 
+}
+
+public static class ExtensionMethods
+{
+    public static float Map(this float x, float x1, float x2, float y1, float y2)
+    {
+        var m = (y2 - y1) / (x2 - x1);
+        var c = y1 - m * x1;
+
+        return m * x + c;
+    }
 }
