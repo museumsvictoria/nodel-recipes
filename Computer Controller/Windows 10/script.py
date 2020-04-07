@@ -5,9 +5,8 @@ Includes:
 
 * reboot, shutdown
 * periodic screenshots
-* basic volume control and of primary audio device
-* audio signal metering
-* CPU monitoring
+* basic volume control of primary audio device (incl. meter)
+* CPU usage
 
 '''
 
@@ -67,9 +66,9 @@ def MuteOn():
 def MuteOff():
     Mute.call(False)
 
-local_event_Volume = LocalEvent({ 'group': 'Volume', 'schema': {'type': 'number' }})
+local_event_Volume = LocalEvent({ 'title': 'Volume (dB)', 'group': 'Volume', 'order': next_seq(), 'schema': {'type': 'number' }})
 
-@local_action({ 'group':'Volume', 'order': next_seq(), 'schema': { 'type': 'integer', 'hint': 'Scalar (0 | 100), dB (-100 | 0)' }})
+@local_action({ 'title': 'Volume (dB)', 'group':'Volume', 'order': next_seq(), 'schema': { 'type': 'number', 'hint': '(-infinity to 0 dB or more depending on hardware)' }})
 def Volume(arg):
     console.info('Volume %s action' % arg)
     
@@ -77,37 +76,19 @@ def Volume(arg):
       console.warn('Volume: no arg')
       return
 
-    decibel = lookup_local_event('Decibel').getArg()
+    _controller.send('set-volume %s' % arg)
 
-    if decibel == False or decibel == None:
-      
-      if (arg < 0 or arg > 100):
-          console.warn('Volume: bad arg')
-          return
+local_event_VolumeScalar = LocalEvent({ 'title': 'Volume (scalar/linear/percentage)', 'group': 'Volume', 'order': next_seq(), 'schema': {'type': 'number' }})
+    
+@local_action({ 'title': 'Volume (scalar/linear/percentage)', 'group':'Volume', 'order': next_seq(), 'schema': { 'type': 'number', 'hint': '(0 - 100)' }})
+def VolumeScalar(arg):
+    if arg == None or arg < 0 or arg > 100:
+      console.warn('VolumeScalar: no arg or outside 0 - 100')
+      return
+    
+    _controller.send('set-volumescalar %s' % arg)
 
-      _controller.send('set-volume %s' % (arg / 100.0))
-      
-    else:
-      
-      if (arg < -100 or arg > 0):
-          console.warn('Volume: bad arg')
-          return
-
-      _controller.send('set-volume %s' % int(arg))
-
-local_event_Meter = LocalEvent({ 'group': 'Volume', 'schema': {'type': 'integer' }})
-local_event_Decibel = LocalEvent({ 'group': 'Volume', 'schema': {'type': 'boolean', 'title': 'Are we using dBFS for volume?' }})
-
-@after_main
-def update_audio_controller_on_event_change():
-
-  def handler(arg):
-    if arg == True:
-      _controller.send('meter-type decibel')
-    else:
-      _controller.send('meter-type scalar')
-
-  event = lookup_local_event('Decibel').addEmitHandler(handler)
+local_event_Meter = LocalEvent({ 'title': 'Meter (Peak in dB)', 'group': 'Volume', 'order': next_seq(), 'schema': { 'type': 'number' }})
 
 # mute and volume --!>
 
@@ -187,10 +168,6 @@ def controller_feedback(data):
     signal.emit(arg)
 
 def controller_started():
-  
-  if lookup_local_event('Decibel').getArg() == True:
-    _controller.send('meter-type decibel')
-      
   _controller.send('get-mute')
   _controller.send('get-volume')
 

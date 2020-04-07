@@ -15,7 +15,7 @@ It utilises a work-around used in the **Application** node to build and manage a
 
 #### Components
 
-The node utilises Python's `subprocess` module for the **management of system power-states**.
+The node utilises `Process` from Nodel Toolkit for the **management of system power-states**.
 
 It also includes Java's `File` module for **monitoring system disk-space**.
 
