@@ -16,7 +16,7 @@ param_FreeSpaceThreshold = Parameter({ 'title': 'Freespace threshold (GB)', 'sch
 
 # <!-- CPU
 
-local_event_CPU = LocalEvent({ 'order': next_seq(), 'schema': { 'type': 'number' }}) # using no group so shows prominentl
+local_event_CPU = LocalEvent({ 'order': next_seq(), 'schema': { 'type': 'number' }}) # using no group so shows prominently
 
 
 # <!--- power
@@ -170,6 +170,7 @@ def controller_feedback(data):
 def controller_started():
   _controller.send('get-mute')
   _controller.send('get-volume')
+  _controller.send('get-volumescalar')
 
 _controller = Process([ '%s\\ComputerController.exe' % _node.getRoot().getAbsolutePath() ], 
                      stdout=controller_feedback, 

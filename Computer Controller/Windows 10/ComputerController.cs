@@ -261,7 +261,7 @@ class ComputerController
         while (s_running)
         {
             Console.WriteLine("{{ event: Meter, arg: {0:0.00} }}", Audio.Meter);
-            await Task.Delay(750); // check every 1.25 seconds
+            await Task.Delay(750); // check every 0.75 seconds
         }
     }
 
