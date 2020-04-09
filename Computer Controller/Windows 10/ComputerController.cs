@@ -41,12 +41,13 @@ class ComputerController
 
     static void PrintUsage()
     {
-        Console.WriteLine("// get-mute");
-        Console.WriteLine("// set-mute (0 or 1)");
+        Console.WriteLine("// get-mute (true or false)");
+        Console.WriteLine("// set-mute");
+        Console.WriteLine("// get-volumerange (min max step)");
         Console.WriteLine("// get-volume (-∞ to 0.0 dB or more depending on hardware)");
-        Console.WriteLine("// set-volume (-∞ to 0.0 dB or more depending on hardware)");
-        Console.WriteLine("// get-volumescalar (0 - 100)");
-        Console.WriteLine("// set-volumescalar (0 - 100)");
+        Console.WriteLine("// set-volume");
+        Console.WriteLine("// get-volumescalar (0.0 - 100.0)");
+        Console.WriteLine("// set-volumescalar");
         Console.WriteLine("// q");
     }
 
@@ -77,9 +78,9 @@ class ComputerController
                 case "set-mute":
                     arg = parts[1];
 
-                    if (arg == "1")
+                    if (arg == "true")
                         state = true;
-                    else if (arg == "0")
+                    else if (arg == "false")
                         state = false;
                     else
                         break;
@@ -129,27 +130,22 @@ class ComputerController
     {
         Console.WriteLine("// ...polling average CPU usage over 10s");
 
-        PerformanceCounter cpuCounter = new PerformanceCounter();
-        cpuCounter.CategoryName = "Processor";
-        cpuCounter.CounterName = "% Processor Time";
-        cpuCounter.InstanceName = "_Total";
+        PerformanceCounter cpuCounter = new PerformanceCounter()
+        {
+            CategoryName = "Processor",
+            CounterName = "% Processor Time",
+            InstanceName = "_Total"
+        };
 
-        // Get Current Cpu Usage
-        var baseSnap = cpuCounter.NextSample();
-
-        var currentCpuUsage = cpuCounter.NextValue();
+        // start the poll, first reading will be zero
+        var usage = cpuCounter.NextValue();
 
         while (s_running)
         {
             await Task.Delay(10000); // check every 10 seconds
 
-            var currentSnap = cpuCounter.NextSample();
-
-            var diff = currentSnap.RawValue - baseSnap.RawValue;
-
-            currentCpuUsage = cpuCounter.NextValue();
-            
-            Console.WriteLine("{{ event: CPU, arg: {0:0.00} }}", currentCpuUsage);
+            usage = cpuCounter.NextValue();
+            Console.WriteLine("{{ event: CPU, arg: {0:0.00} }}", usage);
         }
 
     }
@@ -169,18 +165,26 @@ class ComputerController
     [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IAudioEndpointVolume
     {
-        // f(), g(), ... are unused COM method slots.
-        int f(); int g(); int h();
-        int SetMasterVolumeLevel(float fLevelDB, Guid pguidEventContext);
-        int SetMasterVolumeLevelScalar(float fLevel, Guid pguidEventContext);
-        int GetMasterVolumeLevel(ref float pfLevelDB);
-        int GetMasterVolumeLevelScalar(ref float pfLevel);
-        int j();
-        int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, Guid pguidEventContext);
-        int k(); int s(); int l();
-        int GetMute([MarshalAs(UnmanagedType.Bool)] ref bool pbMute);
-        int m(); int n(); int i(); int p();
-        int GetVolumeRange(out float pflVolumeMindB, out float pflVolumeMaxdB, out float pflVolumeIncrementdB);
+        // with help from https://archive.codeplex.com/?p=netcoreaudio
+
+        [PreserveSig] int RegisterControlChangeNotify([In] [MarshalAs(UnmanagedType.Interface)] UIntPtr client);
+        [PreserveSig] int UnregisterControlChangeNotify([In] [MarshalAs(UnmanagedType.Interface)] UIntPtr client);
+        [PreserveSig] int GetChannelCount([Out] [MarshalAs(UnmanagedType.U4)] out UInt32 channelCount);
+        [PreserveSig] int SetMasterVolumeLevel([In] [MarshalAs(UnmanagedType.R4)] float level, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int SetMasterVolumeLevelScalar([In] [MarshalAs(UnmanagedType.R4)] float level, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int GetMasterVolumeLevel([Out] [MarshalAs(UnmanagedType.R4)] out float level);
+        [PreserveSig] int GetMasterVolumeLevelScalar([Out] [MarshalAs(UnmanagedType.R4)] out float level);
+        [PreserveSig] int SetChannelVolumeLevel([In] [MarshalAs(UnmanagedType.U4)] UInt32 channelNumber, [In] [MarshalAs(UnmanagedType.R4)] float level, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int SetChannelVolumeLevelScalar([In] [MarshalAs(UnmanagedType.U4)] UInt32 channelNumber, [In] [MarshalAs(UnmanagedType.R4)] float level, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int GetChannelVolumeLevel([In] [MarshalAs(UnmanagedType.U4)] UInt32 channelNumber, [Out] [MarshalAs(UnmanagedType.R4)] out float level);
+        [PreserveSig] int GetChannelVolumeLevelScalar([In] [MarshalAs(UnmanagedType.U4)] UInt32 channelNumber, [Out] [MarshalAs(UnmanagedType.R4)] out float level);
+        [PreserveSig] int SetMute([In] [MarshalAs(UnmanagedType.Bool)] Boolean isMuted, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int GetMute([Out] [MarshalAs(UnmanagedType.Bool)] out Boolean isMuted);
+        [PreserveSig] int GetVolumeStepInfo([Out] [MarshalAs(UnmanagedType.U4)] out UInt32 step, [Out] [MarshalAs(UnmanagedType.U4)] out UInt32 stepCount);
+        [PreserveSig] int VolumeStepUp([In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int VolumeStepDown([In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int QueryHardwareSupport([Out] [MarshalAs(UnmanagedType.U4)] out UInt32 hardwareSupportMask);
+        [PreserveSig] int GetVolumeRange([Out] [MarshalAs(UnmanagedType.R4)] out float volumeMin, [Out] [MarshalAs(UnmanagedType.R4)] out float volumeMax, [Out] [MarshalAs(UnmanagedType.R4)] out float volumeStep);
     }
 
     [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -208,6 +212,13 @@ class ComputerController
 
     static float s_volumeScalar = Audio.VolumeScalar;
 
+    static void EmitVolumeRange()
+    {
+        float min, max, step;
+        Audio.GetVolumeRange(out min, out max, out step);
+        Console.WriteLine("{{ event: VolumeRange, arg: {{ min: {0:0.00}, max: {1:0.00}, step:{2:0.00} }} }}", min, max, step);
+    }
+
     static void EmitMute()
     {
         Console.WriteLine("{ event: Mute, arg: " + (Audio.Mute ? "true" : "false") + " }");
@@ -226,8 +237,13 @@ class ComputerController
     static async void PollVolumeAndMuteChanges()
     {
         Console.WriteLine("// ...polling volume and mute changes every 2.5s");
-        EmitMute(); // initial announcement
+
+        // initial announcement
+        EmitVolumeRange();
+        EmitMute();
         EmitVolume();
+        EmitVolumeScalar();
+
         while (s_running)
         {
             // emit values if changed
@@ -260,7 +276,7 @@ class ComputerController
 
         while (s_running)
         {
-            Console.WriteLine("{{ event: Meter, arg: {0:0.00} }}", Audio.Meter);
+            Console.WriteLine("{{ event: AudioMeter, arg: {0:0.00} }}", Audio.Meter);
             await Task.Delay(750); // check every 0.75 seconds
         }
     }
@@ -286,35 +302,40 @@ class ComputerController
         {
             return (IAudioEndpointVolume)device.Activate(typeof(IAudioEndpointVolume).GUID, /*CLSCTX_ALL*/ 23, IntPtr.Zero);
         }
-        
+
+        public static void GetVolumeRange(out float min, out float max, out float step) // dB
+        {
+            Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetVolumeRange(out min, out max, out step));
+        }
+
         public static float Volume // dB
         {
-            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevel(ref v)); return v; }
+            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevel(out v)); return v; }
             set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevel(value, Guid.Empty)); }
         }
 
         public static float VolumeScalar // (0 - 100)
         {
-            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevelScalar(ref v)); return v * 100.0f; }
+            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevelScalar(out v)); return v * 100.0f; }
             set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevelScalar(value / 100.0f, Guid.Empty)); }
         }
 
         public static bool Mute
         {
-            get { bool mute = false; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMute(ref mute)); return mute; }
-            set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMute(value, System.Guid.Empty)); }
+            get { bool mute = false; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMute(out mute)); return mute; }
+            set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMute(value, Guid.Empty)); }
         }
 
         public static double Meter // dB
         {
-            get {
+            get
+            {
                 float v;
 
                 // 0.0 - 1.0 sample amplitude, -∞ to 0 dB
                 Marshal.ThrowExceptionForHR(Audio.meterInformation.GetPeakValue(out v));
 
                 // use 0.00158 (≈-96 dB) as threshold for pure digital silence
-
                 return v < 0.00158 ? -96 : 20 * Math.Log10(v);
             }
         }
