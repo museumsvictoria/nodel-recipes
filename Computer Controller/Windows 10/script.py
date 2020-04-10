@@ -1,21 +1,21 @@
 '''
-An agent with native Windows operations, tested with Windows 10 but might work on older or newer versions.
-
-Includes:
+An agent with native Windows operations, tested with Windows 10 but might work on older or newer versions. Includes:
 
 * reboot, shutdown
 * periodic screenshots
-* basic volume control of primary audio device
-* CPU monitoring
+* basic volume control of primary audio device (incl. meter)
+* CPU usage
 
 '''
 
 DEFAULT_FREESPACEMB = 0.5
+
 param_FreeSpaceThreshold = Parameter({ 'title': 'Freespace threshold (GB)', 'schema': { 'type': 'integer', 'hint': '(default %s)' % DEFAULT_FREESPACEMB }})
 
 # <!-- CPU
 
 local_event_CPU = LocalEvent({ 'order': next_seq(), 'schema': { 'type': 'number' }}) # using no group so shows prominently
+
 
 # <!--- power
 
@@ -37,7 +37,7 @@ def Restart():
 # --->
 
 
-# <!--- mute and volume
+# <!--- mute, volume and meter
 
 local_event_Mute = LocalEvent({ 'group': 'Volume', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
 
@@ -54,32 +54,49 @@ def Mute(arg):
         console.warn('Mute: arg missing')
         return
     
-    _controller.send('set-mute %s' % (1 if state else 0))
+    _controller.send('set-mute %s' % ('true' if state else 'false'))
 
-@local_action({ 'group': 'Mute', 'order': next_seq() })
+@local_action({ 'title': 'On', 'group': 'Mute', 'order': next_seq() })
 def MuteOn():
     Mute.call(True)
 
-@local_action({ 'group': 'Mute', 'order': next_seq() })
+@local_action({ 'title': 'Off', 'group': 'Mute', 'order': next_seq() })
 def MuteOff():
     Mute.call(False)
+    
+local_event_Volume = LocalEvent({ 'title': 'Volume (dB)', 'group': 'Volume', 'order': next_seq(), 'schema': {'type': 'number' }})
 
-local_event_Volume = LocalEvent({ 'group': 'Volume', 'schema': {'type': 'number' }})
-
-@local_action({ 'group':'Volume', 'order': next_seq(), 'schema': { 'type': 'integer', 'format': 'range', 'min': 0, 'max': 100, 'hint': '(0 to 100)' }})
+@local_action({ 'title': 'Volume (dB)', 'group':'Volume', 'order': next_seq(), 'schema': { 'type': 'number', 'hint': '(-infinity to 0.0 dB or more, hardware dependent, see Range)' }})
 def Volume(arg):
     console.info('Volume %s action' % arg)
-    if arg == None or arg < 0 or arg > 100:
-        console.warn('Volume: bad arg')
-        return
+    
+    if arg == None:
+      console.warn('Volume: no arg')
+      return
 
     _controller.send('set-volume %s' % arg)
 
-# mute and volume --!>
+local_event_VolumeScalar = LocalEvent({ 'title': 'Volume Scalar (%, tapered)', 'group': 'Volume', 'order': next_seq(), 'schema': {'type': 'number' }})
+    
+@local_action({ 'title': 'Volume Scalar (%, tapered)', 'group':'Volume', 'order': next_seq(), 'schema': { 'type': 'number', 'hint': '(0.0 - 100%, hardware dependent)' }})
+def VolumeScalar(arg):
+    if arg == None or arg < 0 or arg > 100:
+      console.warn('VolumeScalar: no arg or outside 0 - 100')
+      return
+    
+    _controller.send('set-volumescalar %s' % arg)
+    
+local_event_VolumeRange = LocalEvent({ 'title': 'Range (all in dB)', 'group': 'Volume', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+                                           'min': { 'type': 'number', 'order': 1 },
+                                           'max': { 'type': 'number', 'order': 2 },
+                                           'step': { 'type': 'number', 'order': 3 }}}})
+
+local_event_AudioMeter = LocalEvent({ 'title': 'Audio Meter (Peak in dB, hardware dependent)', 'desc': 'NOTE: this meter is very hardware dependent sometimes acting as a pre- gain/mute meter, sometimes post-.', 'order': next_seq(), 'schema': { 'type': 'number' }}) # using no group so shows prominently
+
+# mute, volume and meter --!>
 
 
 # <!- status
-
 
 local_event_Status = LocalEvent({ 'group': 'Status', 'order': next_seq(), 'schema': { 'type': 'object', 'properties': {
                                       'level':   {'type': 'integer', 'order': 1 },
@@ -154,8 +171,9 @@ def controller_feedback(data):
     signal.emit(arg)
 
 def controller_started():
-    _controller.send('get-mute')
-    _controller.send('get-volume')
+  _controller.send('get-mute')
+  _controller.send('get-volume')
+  _controller.send('get-volumescalar')
 
 _controller = Process([ '%s\\ComputerController.exe' % _node.getRoot().getAbsolutePath() ], 
                      stdout=controller_feedback, 

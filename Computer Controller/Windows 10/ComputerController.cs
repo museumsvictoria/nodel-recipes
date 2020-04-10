@@ -1,15 +1,12 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Windows.Forms;
 using System.IO;
 using System.Text;
-using System.Threading;
 
 class ComputerController
 {
@@ -25,11 +22,13 @@ class ComputerController
 
         AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
 
-        MonitorCPU();
+        PollCPU();
 
-        MonitorSystemVolumeChanges();
+        PollVolumeAndMuteChanges();
 
-        MonitorScreenshotChanges();
+        PollAudioMeter();
+
+        TakeScreenshots();
 
         ProcessStandardInput();
     }
@@ -42,10 +41,13 @@ class ComputerController
 
     static void PrintUsage()
     {
-        Console.WriteLine("// get-mute");
-        Console.WriteLine("// set-mute (0 or 1)");
-        Console.WriteLine("// get-volume");
-        Console.WriteLine("// set-volume (0 - 100)");
+        Console.WriteLine("// get-mute (true or false)");
+        Console.WriteLine("// set-mute");
+        Console.WriteLine("// get-volumerange (min max step)");
+        Console.WriteLine("// get-volume (-∞ to 0.0 dB or more depending on hardware)");
+        Console.WriteLine("// set-volume");
+        Console.WriteLine("// get-volumescalar (0.0 - 100.0)");
+        Console.WriteLine("// set-volumescalar");
         Console.WriteLine("// q");
     }
 
@@ -65,6 +67,8 @@ class ComputerController
             string action = parts[0];
             string arg;
 
+            bool state;
+
             switch (action)
             {
                 case "get-mute":
@@ -74,15 +78,15 @@ class ComputerController
                 case "set-mute":
                     arg = parts[1];
 
-                    bool state;
-                    if (arg == "1")
+                    if (arg == "true")
                         state = true;
-                    else if (arg == "0")
+                    else if (arg == "false")
                         state = false;
                     else
                         break;
 
-                    AudioEndpoint.Mute = state;
+                    Audio.Mute = state;
+                    s_mute = state;
                     EmitMute();
                     break;
 
@@ -90,10 +94,22 @@ class ComputerController
                     EmitVolume();
                     break;
 
+                case "get-volumescalar":
+                    EmitVolumeScalar();
+                    break;
+
                 case "set-volume":
-                    arg = parts[1];
-                    AudioEndpoint.Volume = float.Parse(arg);
+                    float value = float.Parse(parts[1]);
+                    Audio.Volume = value;
+                    s_volume = value;
                     EmitVolume();
+                    break;
+
+                case "set-volumescalar":
+                    value = float.Parse(parts[1]);
+                    Audio.VolumeScalar = value;
+                    s_volumeScalar = value;
+                    EmitVolumeScalar();
                     break;
 
                 case "q":
@@ -110,31 +126,26 @@ class ComputerController
 
     #region CPU
 
-    static async void MonitorCPU()
+    static async void PollCPU()
     {
-        Console.WriteLine("// ...measuring overall CPU usage every 10s");
+        Console.WriteLine("// ...polling average CPU usage over 10s");
 
-        PerformanceCounter cpuCounter = new PerformanceCounter();
-        cpuCounter.CategoryName = "Processor";
-        cpuCounter.CounterName = "% Processor Time";
-        cpuCounter.InstanceName = "_Total";
+        PerformanceCounter cpuCounter = new PerformanceCounter()
+        {
+            CategoryName = "Processor",
+            CounterName = "% Processor Time",
+            InstanceName = "_Total"
+        };
 
-        // Get Current Cpu Usage
-        var baseSnap = cpuCounter.NextSample();
-
-        var currentCpuUsage = cpuCounter.NextValue();
+        // start the poll, first reading will be zero
+        var usage = cpuCounter.NextValue();
 
         while (s_running)
         {
             await Task.Delay(10000); // check every 10 seconds
 
-            var currentSnap = cpuCounter.NextSample();
-
-            var diff = currentSnap.RawValue - baseSnap.RawValue;
-
-            currentCpuUsage = cpuCounter.NextValue();
-            // log("CPU:" + currentCpuUsage + ", diff:" + diff + ", ave:" + diff/4);
-            Console.WriteLine("{ event: CPU, arg: " + currentCpuUsage + " }");
+            usage = cpuCounter.NextValue();
+            Console.WriteLine("{{ event: CPU, arg: {0:0.00} }}", usage);
         }
 
     }
@@ -145,30 +156,49 @@ class ComputerController
 
     #region (Win32 wrappers, etc.)
 
+    [Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAudioMeterInformation
+    {
+        int GetPeakValue(out float pfPeak);
+    };
+
     [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IAudioEndpointVolume
     {
-        // f(), g(), ... are unused COM method slots.
-        int f(); int g(); int h(); int i();
-        int SetMasterVolumeLevelScalar(float fLevel, Guid pguidEventContext);
-        int j();
-        int GetMasterVolumeLevelScalar(out float pfLevel);
-        int k(); int l(); int m(); int n();
-        int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, Guid pguidEventContext);
-        int GetMute(out bool pbMute);
+        // with help from https://archive.codeplex.com/?p=netcoreaudio
+
+        [PreserveSig] int RegisterControlChangeNotify([In] [MarshalAs(UnmanagedType.Interface)] UIntPtr client);
+        [PreserveSig] int UnregisterControlChangeNotify([In] [MarshalAs(UnmanagedType.Interface)] UIntPtr client);
+        [PreserveSig] int GetChannelCount([Out] [MarshalAs(UnmanagedType.U4)] out UInt32 channelCount);
+        [PreserveSig] int SetMasterVolumeLevel([In] [MarshalAs(UnmanagedType.R4)] float level, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int SetMasterVolumeLevelScalar([In] [MarshalAs(UnmanagedType.R4)] float level, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int GetMasterVolumeLevel([Out] [MarshalAs(UnmanagedType.R4)] out float level);
+        [PreserveSig] int GetMasterVolumeLevelScalar([Out] [MarshalAs(UnmanagedType.R4)] out float level);
+        [PreserveSig] int SetChannelVolumeLevel([In] [MarshalAs(UnmanagedType.U4)] UInt32 channelNumber, [In] [MarshalAs(UnmanagedType.R4)] float level, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int SetChannelVolumeLevelScalar([In] [MarshalAs(UnmanagedType.U4)] UInt32 channelNumber, [In] [MarshalAs(UnmanagedType.R4)] float level, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int GetChannelVolumeLevel([In] [MarshalAs(UnmanagedType.U4)] UInt32 channelNumber, [Out] [MarshalAs(UnmanagedType.R4)] out float level);
+        [PreserveSig] int GetChannelVolumeLevelScalar([In] [MarshalAs(UnmanagedType.U4)] UInt32 channelNumber, [Out] [MarshalAs(UnmanagedType.R4)] out float level);
+        [PreserveSig] int SetMute([In] [MarshalAs(UnmanagedType.Bool)] Boolean isMuted, [In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int GetMute([Out] [MarshalAs(UnmanagedType.Bool)] out Boolean isMuted);
+        [PreserveSig] int GetVolumeStepInfo([Out] [MarshalAs(UnmanagedType.U4)] out UInt32 step, [Out] [MarshalAs(UnmanagedType.U4)] out UInt32 stepCount);
+        [PreserveSig] int VolumeStepUp([In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int VolumeStepDown([In] [MarshalAs(UnmanagedType.LPStruct)] Guid eventContext);
+        [PreserveSig] int QueryHardwareSupport([Out] [MarshalAs(UnmanagedType.U4)] out UInt32 hardwareSupportMask);
+        [PreserveSig] int GetVolumeRange([Out] [MarshalAs(UnmanagedType.R4)] out float volumeMin, [Out] [MarshalAs(UnmanagedType.R4)] out float volumeMax, [Out] [MarshalAs(UnmanagedType.R4)] out float volumeStep);
     }
 
     [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IMMDevice
     {
-        int Activate(ref Guid id, int clsCtx, int activationParams, out IAudioEndpointVolume aev);
+        [return: MarshalAs(UnmanagedType.IUnknown)]
+        object Activate([MarshalAs(UnmanagedType.LPStruct)] Guid iid, int dwClsCtx, IntPtr pActivationParams);
     }
 
     [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IMMDeviceEnumerator
     {
-        int f(); // Unused
-        int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
+        int f(); //  ... unused COM method.
+        IMMDevice GetDefaultAudioEndpoint(int dataFlow, int role);
     }
 
     [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
@@ -176,74 +206,147 @@ class ComputerController
 
     #endregion
 
-    static bool s_mute = AudioEndpoint.Mute;
+    static bool s_mute = Audio.Mute;
 
-    static float s_volume = AudioEndpoint.Volume;
+    static float s_volume = Audio.Volume;
+
+    static float s_volumeScalar = Audio.VolumeScalar;
+
+    static void EmitVolumeRange()
+    {
+        float min, max, step;
+        Audio.GetVolumeRange(out min, out max, out step);
+        Console.WriteLine("{{ event: VolumeRange, arg: {{ min: {0:0.00}, max: {1:0.00}, step:{2:0.00} }} }}", min, max, step);
+    }
 
     static void EmitMute()
     {
-        Console.WriteLine("{ event: Mute, arg: " + (AudioEndpoint.Mute ? "true" : "false") + " }");
+        Console.WriteLine("{ event: Mute, arg: " + (Audio.Mute ? "true" : "false") + " }");
     }
 
     static void EmitVolume()
     {
-        Console.WriteLine("{ event: Volume, arg: " + Math.Round(AudioEndpoint.Volume * 100) + " }");
+        Console.WriteLine("{{ event: Volume, arg: {0:0.00} }}", Audio.Volume);
     }
 
-    static async void MonitorSystemVolumeChanges()
+    static void EmitVolumeScalar()
     {
-        Console.WriteLine("// ...monitoring volume and mute changes every 2.5s");
+        Console.WriteLine("{{ event: VolumeScalar, arg: {0:0.0} }}", Audio.VolumeScalar);
+    }
+
+    static async void PollVolumeAndMuteChanges()
+    {
+        Console.WriteLine("// ...polling volume and mute changes every 2.5s");
+
+        // initial announcement
+        EmitVolumeRange();
+        EmitMute();
+        EmitVolume();
+        EmitVolumeScalar();
+
         while (s_running)
         {
-            // Compare previous and current (from endpoint) mute status updating if neccesary.
-            if (s_mute != AudioEndpoint.Mute)
+            // emit values if changed
+
+            var mute = Audio.Mute;
+            if (s_mute != mute)
             {
-                s_mute = AudioEndpoint.Mute;
+                s_mute = mute;
                 EmitMute();
             }
-            // Compare previous and current (from endpoint) volume status updating if neccesary.
-            if (s_volume != AudioEndpoint.Volume)
+
+            // only need to poll volume (scalar is linked)
+            float volume = Audio.Volume;
+            if (s_volume != volume)
             {
-                s_volume = AudioEndpoint.Volume;
+                s_volume = volume;
                 EmitVolume();
+
+                // scalar will have changed too
+                EmitVolumeScalar();
             }
 
             await Task.Delay(2500); // check every 2.5 seconds
         }
     }
 
-    // see https://community.idera.com/database-tools/powershell/powertips/b/tips/posts/controlling-audio-volume-and-mute-status
-    public class AudioEndpoint
+    static async void PollAudioMeter()
     {
-        static IAudioEndpointVolume Vol()
+        Console.WriteLine("// ...polling audio peak meter every 0.75s");
+
+        while (s_running)
+        {
+            Console.WriteLine("{{ event: AudioMeter, arg: {0:0.00} }}", Audio.Meter);
+            await Task.Delay(750); // check every 0.75 seconds
+        }
+    }
+
+    public class Audio
+    {
+        private static IMMDevice device = GetDefaultDevice();
+        private static IAudioEndpointVolume endpointVolume = Audio.ActivateEndpointVolume(device);
+        private static IAudioMeterInformation meterInformation = Audio.ActivateMeterInformation(device);
+
+        private static IMMDevice GetDefaultDevice()
         {
             var enumerator = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator;
-            IMMDevice dev = null;
-            Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(/*eRender*/ 0, /*eMultimedia*/ 1, out dev));
-            IAudioEndpointVolume epv = null;
-            var epvid = typeof(IAudioEndpointVolume).GUID;
-            Marshal.ThrowExceptionForHR(dev.Activate(ref epvid, /*CLSCTX_ALL*/ 23, 0, out epv));
-            return epv;
+            return enumerator.GetDefaultAudioEndpoint(/*eRender*/ 0, /*eMultimedia*/ 1);
         }
 
-        public static float Volume
+        static IAudioMeterInformation ActivateMeterInformation(IMMDevice device)
         {
-            get { float v = -1; Marshal.ThrowExceptionForHR(Vol().GetMasterVolumeLevelScalar(out v)); return v; }
-            set { Marshal.ThrowExceptionForHR(Vol().SetMasterVolumeLevelScalar(value, Guid.Empty)); }
+            return (IAudioMeterInformation)device.Activate(typeof(IAudioMeterInformation).GUID, 0, IntPtr.Zero);
+        }
+
+        static IAudioEndpointVolume ActivateEndpointVolume(IMMDevice device)
+        {
+            return (IAudioEndpointVolume)device.Activate(typeof(IAudioEndpointVolume).GUID, /*CLSCTX_ALL*/ 23, IntPtr.Zero);
+        }
+
+        public static void GetVolumeRange(out float min, out float max, out float step) // dB
+        {
+            Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetVolumeRange(out min, out max, out step));
+        }
+
+        public static float Volume // dB
+        {
+            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevel(out v)); return v; }
+            set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevel(value, Guid.Empty)); }
+        }
+
+        public static float VolumeScalar // (0 - 100)
+        {
+            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevelScalar(out v)); return v * 100.0f; }
+            set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevelScalar(value / 100.0f, Guid.Empty)); }
         }
 
         public static bool Mute
         {
-            get { bool mute; Marshal.ThrowExceptionForHR(Vol().GetMute(out mute)); return mute; }
-            set { Marshal.ThrowExceptionForHR(Vol().SetMute(value, Guid.Empty)); }
+            get { bool mute = false; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMute(out mute)); return mute; }
+            set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMute(value, Guid.Empty)); }
         }
+
+        public static double Meter // dB
+        {
+            get
+            {
+                float v;
+
+                // 0.0 - 1.0 sample amplitude, -∞ to 0 dB
+                Marshal.ThrowExceptionForHR(Audio.meterInformation.GetPeakValue(out v));
+
+                // use 0.00158 (≈-96 dB) as threshold for pure digital silence
+                return v < 0.00158 ? -96 : 20 * Math.Log10(v);
+            }
+        }
+
     }
 
     #endregion
 
     #region Screenshots
 
-    public async static void MonitorScreenshotChanges()
+    public async static void TakeScreenshots()
     {
         Console.WriteLine("// ...taking screenshots after 10s then every 60s");
 
@@ -257,75 +360,75 @@ class ComputerController
         }
     }
 
-    private static StringBuilder[] s_lastScreenshots;
-
-    private static StringBuilder[] s_currentScreenshots; // use this to reduce memory allocation
+    private static StringBuilder[] s_lastScreenshots; // use this to reduce memory allocation
 
     public static void Screenshots()
     {
         int i = 0;
 
-        var allScreens = Screen.AllScreens;
-
-        // check if screens come and / or go
-        if (s_lastScreenshots == null || s_lastScreenshots.Length != allScreens.Length) {
-            s_lastScreenshots = new StringBuilder[allScreens.Length];
-            s_currentScreenshots = new StringBuilder[allScreens.Length];
-        }
-
-        foreach (var screen in allScreens)
+        try
         {
-            Bitmap screenshot = new Bitmap(screen.Bounds.Width, screen.Bounds.Height, PixelFormat.Format32bppArgb);
-            Graphics screenshotGraphics = Graphics.FromImage(screenshot);
+            var allScreens = Screen.AllScreens;
 
-            // Make the screenshot
-            screenshotGraphics.CopyFromScreen(Screen.PrimaryScreen.Bounds.X, Screen.PrimaryScreen.Bounds.Y, 0, 0, Screen.PrimaryScreen.Bounds.Size, CopyPixelOperation.SourceCopy);
+            // check if screens come and / or go
+            if (s_lastScreenshots == null || s_lastScreenshots.Length != allScreens.Length)
+                s_lastScreenshots = new StringBuilder[allScreens.Length];
 
-            Image newImage = ScaleImage(screenshot, 400, 400);
-
-            // Other types
-            // screenshot.Save("screen" + i + ".jpg", GetEncoderInfo("image/jpeg"), p);
-            // newImage.Save("screen" + i + ".png", ImageFormat.Png);
-
-            // DON'T SAVE TO DISK
-            // screenshot.Save("screen" + i + ".jpg", GetEncoderInfo("image/jpeg"), p);
-
-            using (MemoryStream m = new MemoryStream())
+            foreach (var screen in allScreens)
             {
-                // must keep it tiny, fit for thumbnail purposes (nodel not designed to handle large binary blobs)
-                string contentType = "image/jpeg";
-                var p = new EncoderParameters(1);
-                p.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 10L);
-                newImage.Save(m, GetEncoderInfo("image/jpeg"), p);
+                Bitmap screenshot = new Bitmap(screen.Bounds.Width, screen.Bounds.Height, PixelFormat.Format32bppArgb);
+                Graphics screenshotGraphics = Graphics.FromImage(screenshot);
 
-                // for PNG
-                // string contentType = "image/png";
-                // newImage.Save(m, ImageFormat.Png);
+                // Make the screenshot
+                screenshotGraphics.CopyFromScreen(Screen.PrimaryScreen.Bounds.X, Screen.PrimaryScreen.Bounds.Y, 0, 0, Screen.PrimaryScreen.Bounds.Size, CopyPixelOperation.SourceCopy);
 
-                byte[] imageBytes = m.ToArray();
+                Image newImage = ScaleImage(screenshot, 400, 400);
 
-                // Convert byte[] to Base64 String
-                string base64String = Convert.ToBase64String(imageBytes, Base64FormattingOptions.None); // or InsertLineBreaks
+                // Other types
+                // screenshot.Save("screen" + i + ".jpg", GetEncoderInfo("image/jpeg"), p);
+                // newImage.Save("screen" + i + ".png", ImageFormat.Png);
 
+                // DON'T SAVE TO DISK
+                // screenshot.Save("screen" + i + ".jpg", GetEncoderInfo("image/jpeg"), p);
 
-                var currentScreenshot = s_currentScreenshots[i];
-                if (currentScreenshot == null) {
-                    currentScreenshot = new StringBuilder();
-                    s_currentScreenshots[i] = currentScreenshot;
-                }
-                currentScreenshot.Length = 0;
-                currentScreenshot.Append("{ event: Screenshot" + (i + 1) + ", arg: 'data:" + contentType + ";base64," + base64String + "' }");
-
-                var lastScreenshot = s_lastScreenshots[i];
-
-                if (!IsSame(currentScreenshot, lastScreenshot))
+                using (MemoryStream m = new MemoryStream())
                 {
+                    // must keep it tiny, fit for thumbnail purposes (nodel not designed to handle large binary blobs)
+                    var p = new EncoderParameters(1);
+                    p.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 10L);
+                    newImage.Save(m, GetEncoderInfo("image/jpeg"), p);
+
+                    // for PNG
+                    // string contentType = "image/png";
+                    // newImage.Save(m, ImageFormat.Png);
+
+                    byte[] imageBytes = m.ToArray();
+
+                    // Convert byte[] to Base64 String
+                    string base64String = Convert.ToBase64String(imageBytes, Base64FormattingOptions.None); // or InsertLineBreaks
+
+                    var currentScreenshot = s_lastScreenshots[i];
+                    if (currentScreenshot == null)
+                    {
+                        currentScreenshot = new StringBuilder();
+                        s_lastScreenshots[i] = currentScreenshot;
+                    }
+                    currentScreenshot.Length = 0; // allows reuse of memory if possible
+                    currentScreenshot.Append("{ event: Screenshot" + (i + 1) + ", arg: 'data:image/jpeg;base64," + base64String + "' }");
+
+                    var lastScreenshot = s_lastScreenshots[i];
+
                     Console.WriteLine(currentScreenshot);
                     s_lastScreenshots[i] = currentScreenshot;
                 }
-            }
 
-            i++;
+                i++;
+            }
+        }
+        catch (Exception)
+        {
+            // show a generic error screenshot indicating capture problems e.g. when locked
+            Console.WriteLine("{ event: Screenshot1, arg: 'data:image/png;base64," + MISSING_IMAGE + "' }");
         }
     }
 
@@ -354,143 +457,42 @@ class ComputerController
         var newImage = new Bitmap(newWidth, newHeight);
 
         using (var graphics = Graphics.FromImage(newImage))
+        {
             graphics.DrawImage(image, 0, 0, newWidth, newHeight);
+        }
 
         return newImage;
     }
 
-    #endregion
-
-    #region (Win32 wrappers, etc.)
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    static extern bool CloseHandle(IntPtr hObject);
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct IO_COUNTERS
-    {
-        public UInt64 ReadOperationCount;
-        public UInt64 WriteOperationCount;
-        public UInt64 OtherOperationCount;
-        public UInt64 ReadTransferCount;
-        public UInt64 WriteTransferCount;
-        public UInt64 OtherTransferCount;
-    }
-
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct JOBOBJECT_BASIC_LIMIT_INFORMATION
-    {
-        public Int64 PerProcessUserTimeLimit;
-        public Int64 PerJobUserTimeLimit;
-        public UInt32 LimitFlags;
-        public UIntPtr MinimumWorkingSetSize;
-        public UIntPtr MaximumWorkingSetSize;
-        public UInt32 ActiveProcessLimit;
-        public UIntPtr Affinity;
-        public UInt32 PriorityClass;
-        public UInt32 SchedulingClass;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct SECURITY_ATTRIBUTES
-    {
-        public UInt32 nLength;
-        public IntPtr lpSecurityDescriptor;
-        public Int32 bInheritHandle;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-    {
-        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
-        public IO_COUNTERS IoInfo;
-        public UIntPtr ProcessMemoryLimit;
-        public UIntPtr JobMemoryLimit;
-        public UIntPtr PeakProcessMemoryUsed;
-        public UIntPtr PeakJobMemoryUsed;
-    }
-
-    public enum JobObjectInfoType
-    {
-        AssociateCompletionPortInformation = 7,
-        BasicLimitInformation = 2,
-        BasicUIRestrictions = 4,
-        EndOfJobTimeInformation = 6,
-        ExtendedLimitInformation = 9,
-        SecurityLimitInformation = 5,
-        GroupInformation = 11
-    }
-
-    public static uint ProcessSecurityAndAccessRights_SYNCHRONIZE = 0x00100000;
-
-    [DllImport("kernel32.dll")]
-    public static extern IntPtr OpenProcess(
-      uint dwDesiredAccess,
-      bool bInheritHandle,
-      int dwProcessId
-    );
-
-    #endregion
-
-    #region (convenience functions)
-
-    private static IEnumerator<String> StringStream(String[] strings)
-    {
-        foreach (String s in strings)
-            yield return s;
-    }
-
-    private static string JSONEscape(string value)
-    {
-        var result = new StringBuilder(value.Length);
-        foreach (char c in value)
-        {
-            if (c == '\\')
-                result.Append("\\\\");
-            else if (c == '"')
-                result.Append("\\\"");
-            else
-                result.Append(c);
-        }
-
-        return result.ToString();
-    }
-
-    /// <summary>
-    /// Need SafeWaitHandle functionality here.
-    /// </summary>
-    private static ManualResetEvent IntPtrToManualResetEvent(IntPtr intPtr)
-    {
-        ManualResetEvent mre = new ManualResetEvent(true);
-        mre.SafeWaitHandle = new SafeWaitHandle(intPtr, false);
-        return mre;
-    }
-
-    private static bool IsSame(StringBuilder sb1, StringBuilder sb2)
-    {
-        if (sb1 == null && sb2 == null)
-            return true; // both are null
-        
-        if (sb1 == null || sb2 == null)
-            return false; // only one is null
-
-        var len = sb1.Length;
-
-        if (len != sb2.Length) 
-            return false; // different lengths so different
-
-        for (int i =0; i<len; i++) //
-        {
-            var c1 = sb1[i];
-            var c2 = sb2[i];
-
-            if (c1 != c2)
-                return false;
-        }
-
-        return true;
-    }
+    private static readonly string MISSING_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAZAAAAGQBAMAAABykSv/AAAAAXNSR0IArs4c6QAA" +
+        "AARnQU1BAACxjwv8YQUAAAAwUExURQAAABQMABsQACgYADgiAE8wAGQ9AHRHAI1W" +
+        "AJ5hAK5qAMZ6ANB/ANiEAPybAAAAANY6MdIAAAAJcEhZcwAADsMAAA7DAcdvqGQA" +
+        "AASfSURBVHja7Zo/i1xVHEBndnYUCYYkjYUoC3YWSzBuL1aiCIkEExc2H8AqwT8E" +
+        "BVEwEJTY2NtotAgGhKQJmO8gNhLJNqK77jL3M5idN28zM9nO3/3NecM53Wzxuxzu" +
+        "OzP3vbc9ERFZFMdGHWdvInK8dJz9icizpePsL9uOKELBRmgsp0ivo6yXuUZ6HWV9" +
+        "GXdEEQI2QkMRGjZCQxEaNkJDERo2QkMRGjZCQxEaNkJDERo2QkMRGjZCQxEaNkJD" +
+        "ERo2QkMRGjZCQxEaNkJDERo2QkMRGjZCQxEaNkJDERo2QkMRGjZCQxEaNkJDERo2" +
+        "QkMRGjZCQxEaNkJDERo2QkMRGjZCQxEaNkJDERo2QkMRGjZCQxEaNkJDERo2QkMR" +
+        "GjZCQxEaNkJDERo2QkMRGjZCQxEaNkJDERo2QkMRGjZCI1dk9d2r1z8+X2V0osjK" +
+        "hZ/LmP1rJ+KnpzXS37hRDtl5LXx+1o6sXLxfpvgj3CRJZPDedpnhbvQKOSKrn5Q5" +
+        "RleCl0hpZPh1eYLd07FrpOzIC+UIvohdI0Vk/SiRnfg1FiNSzoavUb2RF48UuRO6" +
+        "RvKO/Hnv1q/tF/Fu+BrVRdodeXDt/CunXr14u/k0Cr22MkVuvt583JiYfB65RmIj" +
+        "Nw9/Od5oRH6LXCNxRy4ffl75ZvyHvyPXSBE5PifSezm+9sRf9qm2V8ffXKPINVIa" +
+        "eX5epN9cW5FrpOzIMweD96dvQT4bi0TeKKaIDA8G761N/WVrLBJ5AE4RGdyf/47a" +
+        "mr/Y/jc59+xvPir73PQf6orUu0McbN77YOYPTSORN+5ZDx9OzXzqf9fNRp7gqeaM" +
+        "shY4cjHPft8qVX8Q03ZkeLujR5Q5+p+Wjh4aZ+lvNh7ll8ip+Y30Dx86Xo4cm78j" +
+        "m63HXugjunSR90tLaCLZIoOpdwuhV1ZyI+1jhwN2Yt/2pO7IYOodySh2Q3JFVh97" +
+        "lLvBr98WJbIX/coqtZHB4wvrnejZC9qRD8Nn58beevwQP3shO/JthdkLaGT0ZY3Z" +
+        "uZfWdvzRpCVXZPzDfqfK7FSR5knp91Vm5561tuIPiy25p9/nHi3w74kqo5OP8ZdK" +
+        "uVJncvaN1cZapcH+TyMNRWjYCA1FaCQ30j95stLk3B3ZuPrV9Y9OVxmdKjIcvzr8" +
+        "scqpMVXk7eaW/WyN2amNTJ6Y/l5jduaOtE+D/qkxPFNkOBHZrTF8KUVqN9I+n9up" +
+        "MTz1W2vy9vCvGrNTRS41IlUeo6SKPD3ekt3qP4j1z1oXbj18+NO5KqOTT78vnTlT" +
+        "6TGK9yM0vGenoQgNG6GhCA0boaEIDRuhoQgNG6GhCA0boaEIDRuhoQgNG6GhCA0b" +
+        "oaEIDRuhoQgNG6GhCA0boaEIDRuhoQgNG6GhCA0boaEIDRuhoQgNG6GhCA0boaEI" +
+        "DRuhoQgNG6GhCA0boaEIDRuhoQgNG6GhCA0boaEIDRuhoQgNG6GhCA0boaEIDRuh" +
+        "oQgNG6GhCA0boaEIDRuhoQgNG6GhCA0boaEIDRuhoQgNG6GhCA0boaEIDRuhoQgN" +
+        "G6GxvCJdZqaRLrN0O6IIBRuhsXQix7Y7zoOeiIgshF7vPwH61H6gvzjKAAAAAElF" +
+        "TkSuQmCC";
 
     #endregion
 
