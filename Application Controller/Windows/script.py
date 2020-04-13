@@ -63,6 +63,7 @@ appArgsList = list() # will hold the 'decoded' argument list (as opposed to sing
 # <main ---
 
 import os
+import sys
 
 def main():
   # some checks and warnings
@@ -75,7 +76,7 @@ def main():
     return
   
   # if on Windows, recommend that the process sandbox is used
-  if os.environ.get('windir') and not os.path.isfile('ProcessSandbox.exe'):
+  if os.environ.get('windir') and not (os.path.isfile('ProcessSandbox.exe') or os.path.exists('%s\ProcessSandbox.exe' % sys.exec_prefix)):
     console.warn('-- ProcessSandbox.exe NOT FOUND BUT RECOMMENDED --')
     console.warn('-- It is recommended the Nodel Process Sandbox launcher is used on Windows (see nodel releases) --')
     console.warn('-- The launcher safely manages multiple process applications, preventing rougue behaviour --')
