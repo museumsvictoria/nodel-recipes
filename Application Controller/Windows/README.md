@@ -1,22 +1,15 @@
-# Application Node - Windows
-> Long-term application mangement utilising `Process` from the nodetoolkit.
-
-## Setup
-- For security reasons interactive services were [removed with Windows Vista](https://docs.microsoft.com/en-us/previous-versions/windows/hardware/design/dn653293(v=vs.85)). 
-- Any applications launched by a nodehost *installed as a service* will not be displayed.
-- You can alternatively utilise the CLI, a `.bat` file or Windows Task Scheduler to launch Nodel in a regularly logged in desktop session.
+# App Launcher node
+This node is used to rapidly control the state of long running application (launch and kill).
 
 ## Features
-- Launch and manage an application
-- Bundle child processes with the `ProcessSandbox.exe`
-- Standard streams
-	- stdin
-	- stdout
-	- stederr
-- Interruption detection
-- Message filtering
-- CPU monitoring
+1. application path, arguments and working directory can be specified
+2. signals show state of application ('On' running, 'Off' not running)
+3. application feedback (standard-out) is piped to node's console
+4. on disruption, event is reported and application is recycled
+5. OS-level functions are used to ensure *all* child processes are cleaned up
+6. FUTURE UPDATE: further sandboxing restrictions of the process may be added e.g. memory or CPU restrictions
 
-
-## Requirements
-- The `Process` feature has been available since `v2.1.1-release214`
+### Notes & Restrictions
+- applications launched by a nodehost when *installed as a service* will not be displayed
+- ensure *installed as user* instead
+- not suitable for OSX applications
