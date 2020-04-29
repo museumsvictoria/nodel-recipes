@@ -5,7 +5,9 @@ An agent with native Windows operations, tested with Windows 10 but might work o
 * periodic screenshots
 * basic volume control of primary audio device (incl. meter)
 * CPU usage
+* Computer hardware information
 
+_(Revision 3)_
 '''
 
 DEFAULT_FREESPACEMB = 0.5
@@ -36,6 +38,23 @@ def Restart():
 
 # --->
 
+# <!-- computer info
+
+local_event_CPUName = LocalEvent({ 'group': 'Hardware Info', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+local_event_Manufacturer = LocalEvent({ 'group': 'Hardware Info', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+local_event_SystemFamily = LocalEvent({ 'group': 'Hardware Info', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+local_event_Model = LocalEvent({ 'group': 'Hardware Info', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+local_event_MaxClockSpeed = LocalEvent({ 'group': 'Hardware Info', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+local_event_Cores = LocalEvent({ 'group': 'Hardware Info', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+local_event_LogicalProcessors = LocalEvent({ 'group': 'Hardware Info', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+local_event_PhysicalMemory = LocalEvent({ 'group': 'Hardware Info', 'order': next_seq(), 'schema': { 'type': 'string' }})
 
 # <!--- mute, volume and meter
 

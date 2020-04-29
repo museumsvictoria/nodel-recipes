@@ -7,6 +7,9 @@ using System.Drawing.Imaging;
 using System.Windows.Forms;
 using System.IO;
 using System.Text;
+using System.Management;
+using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 class ComputerController
 {
@@ -14,7 +17,7 @@ class ComputerController
 
     static void Main(string[] args)
     {
-        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        Console.OutputEncoding = Encoding.UTF8;
         Console.ForegroundColor = ConsoleColor.Blue;
         Console.WriteLine("// ʕ•ᴥ•ʔ");
         Console.ResetColor();
@@ -29,6 +32,8 @@ class ComputerController
         PollAudioMeter();
 
         TakeScreenshots();
+
+        PollComputerHardwareInfoOnce();
 
         ProcessStandardInput();
     }
@@ -145,7 +150,7 @@ class ComputerController
             await Task.Delay(10000); // check every 10 seconds
 
             usage = cpuCounter.NextValue();
-            Console.WriteLine("{{ event: CPU, arg: {0:0.00} }}", usage);
+            Console.WriteLine("{{ event: CPU, arg: {0:0.0} }}", usage);
         }
 
     }
@@ -493,6 +498,91 @@ class ComputerController
         "oQgNG6GhCA0boaEIDRuhoQgNG6GhCA0boaEIDRuhoQgNG6GhCA0boaEIDRuhoQgN" +
         "G6GxvCJdZqaRLrN0O6IIBRuhsXQix7Y7zoOeiIgshF7vPwH61H6gvzjKAAAAAElF" +
         "TkSuQmCC";
+
+    #endregion
+
+    #region Computer hardware info
+
+    static void PollComputerHardwareInfoOnce()
+    {
+        Console.WriteLine("// ...retrieving computer hardware info once");
+
+        Dictionary<String, object> cache = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        CacheWMITable("Win32_Processor", cache);
+        CacheWMITable("Win32_ComputerSystem", cache);
+        CacheWMITable("Win32_PhysicalMemory", cache);
+
+        Object value;
+
+        Console.WriteLine("{{ event: CPUName, arg: {0} }}", IntoQuotedJSONString(cache.TryGetValue("Win32_Processor.name", out value) ? value : ""));
+        Console.WriteLine("{{ event: Manufacturer, arg: {0} }}", IntoQuotedJSONString(cache.TryGetValue("Win32_ComputerSystem.Manufacturer", out value) ? value : ""));
+        Console.WriteLine("{{ event: SystemFamily, arg: {0} }}", IntoQuotedJSONString(cache.TryGetValue("Win32_ComputerSystem.SystemFamily", out value) ? value : ""));
+        Console.WriteLine("{{ event: Model, arg: {0} }}", IntoQuotedJSONString(cache.TryGetValue("Win32_ComputerSystem.Model", out value) ? value : ""));
+        Console.WriteLine("{{ event: Cores, arg: {0} }}", IntoQuotedJSONString(cache.TryGetValue("Win32_Processor.NumberOfCores", out value) ? value : ""));
+        Console.WriteLine("{{ event: LogicalProcessors, arg: {0} }}", IntoQuotedJSONString(cache.TryGetValue("Win32_Processor.NumberOfLogicalProcessors", out value) ? value : ""));
+
+        cache.TryGetValue("Win32_Processor.MaxClockSpeed", out value);
+        Console.WriteLine("{{ event: MaxClockSpeed, arg: \"{0:0.0} GHz\" }}", value is UInt32 ? ((UInt32)value) / 1000.0 : 0);
+
+        cache.TryGetValue("Win32_PhysicalMemory.Capacity", out value);
+        Console.WriteLine("{{ event: PhysicalMemory, arg: \"{0:0.0} GB\" }}", value is UInt64 ? ((UInt64)value) / 1024 / 1024 / 1024 : 0);
+    }
+
+    // Removes (R), (TM), Inc.
+    static readonly Regex STRIP_EXTRANEOUS = new Regex(@"\((R|r|TM|tm)\)|Inc.");
+
+    static void CacheWMITable(String table, Dictionary<String, object> cache)
+    {
+        using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT * FROM " + table))
+        {
+            foreach (ManagementObject mo in searcher.Get())
+            {
+                using (mo)
+                {
+                    foreach (var entry in mo.Properties)
+                    {
+                        var value = entry.Value;
+                        var text = value as String;
+                        
+                        if (text != null)
+                            text = STRIP_EXTRANEOUS.Replace(text, "").Trim().Replace("  ", " ");
+
+                        var key = table + "." + entry.Name;
+                        if (!String.IsNullOrWhiteSpace(text))
+                            cache[key] = text;
+                        else if (value != null)
+                            cache[key] = value;
+                    }
+                }
+            }
+            return;
+        }
+    }
+
+    #endregion
+
+    #region Convenience
+
+    static String IntoQuotedJSONString(Object obj)
+    {
+        String text = obj == null ? "" : obj.ToString();
+        StringBuilder sb = new StringBuilder(text.Length + 2);
+        sb.Append('"');
+        foreach (char c in text)
+        {
+            if (c == '"')
+                sb.Append("\\\"");  // escape the essential 
+            else if (c == '\\') 
+                sb.Append("\\\\");
+            else if (c == '\n')     // ...and line control related
+                sb.Append("\\n");
+            else if (c == '\r')
+                sb.Append("\\r");
+            else
+                sb.Append(c);
+        }
+        return sb.Append('"').ToString();
+    }
 
     #endregion
 
