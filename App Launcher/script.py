@@ -74,7 +74,7 @@ def main():
   if os.path.sep in param_AppPath: # e.g. 
     global _resolvedAppPath
     _resolvedAppPath = param_AppPath # use full path
-    finishedMain()
+    finishMain()
   
   else:
     # otherwise test the path using 'where.exe' (Windows) or 'which' (Linux)
