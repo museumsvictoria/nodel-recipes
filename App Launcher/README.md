@@ -13,5 +13,6 @@ This node is used to rapidly control the state of long running application (laun
 - applications launched by a nodehost when *installed as a service* will not be displayed
 - ensure *installed as user* instead
 - not suitable for macOS applications
+- requires v2.1.1-release365+
 - FUTURE UPDATE: support for macOS
 
