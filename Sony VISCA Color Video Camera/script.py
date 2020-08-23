@@ -74,17 +74,20 @@ def get_command_string(cmd_type, visca_addr, seq_number, data=None):
     msg_header = None
     msg_payload = None
 
+    pan_speed = get_pan_speed()
+    tilt_speed = get_tilt_speed()
+
     if cmd_type == 'up':
-        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x03\x01' + '\xff'
+        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01' + chr(pan_speed) + chr(tilt_speed) + '\x03\x01' + '\xff'
         msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'down':
-        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x03\x02' + '\xff'
+        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01' + chr(pan_speed) + chr(tilt_speed) + '\x03\x02' + '\xff'
         msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'left':
-        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x01\x03' + '\xff'
+        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01' + chr(pan_speed) + chr(tilt_speed) + '\x01\x03' + '\xff'
         msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'right':
-        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x02\x03' + '\xff'
+        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01' + chr(pan_speed) + chr(tilt_speed) + '\x02\x03' + '\xff'
         msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'home':
         msg_payload = address_to_hex(visca_addr) + '\x01\x06\x04' + '\xff'
@@ -145,6 +148,33 @@ def resetSequenceNo():
 
     
 # -- drive related --
+
+PAN_SPEED = 5
+TILT_SPEED = 5
+
+def get_pan_speed():
+    global PAN_SPEED
+    if PAN_SPEED < 1 or PAN_SPEED > 24:
+        return 5
+    return PAN_SPEED
+    
+def get_tilt_speed():
+    global TILT_SPEED
+    if TILT_SPEED < 1 or TILT_SPEED > 24:
+        return 5
+    return TILT_SPEED
+
+@local_action({'group': 'PTZ Drive', 'title': 'Set Pan Speed', 'schema': {'title': 'Pan Speed (default: 5, Min: 1, Max: 24)', 'type': 'integer', 'format': 'range', 'min':1, 'max':24}, 'order': next_seq()})
+def set_pan_speed(arg):
+    console.log('[set_pan_speed] %d' % arg)
+    global PAN_SPEED
+    PAN_SPEED = arg;
+    
+@local_action({'group': 'PTZ Drive', 'title': 'Set Tilt Speed', 'schema': {'title': 'Tilt Speed (default: 5, Min: 1, Max: 24)', 'type': 'integer', 'format': 'range', 'min':1, 'max':24}, 'order': next_seq()})
+def set_tilt_speed(arg):
+    console.log('[set_tilt_speed] %d' % arg)
+    global TILT_SPEED
+    TILT_SPEED = arg;
 
 @local_action({'group': 'PTZ Drive', 'title': 'Home', 'order': next_seq()})
 def ptz_home(ignore):
