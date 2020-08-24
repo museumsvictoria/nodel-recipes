@@ -74,17 +74,20 @@ def get_command_string(cmd_type, visca_addr, seq_number, data=None):
     msg_header = None
     msg_payload = None
 
+    pan_speed = local_event_PanSpeed.getArg()
+    tilt_speed = local_event_TiltSpeed.getArg()
+
     if cmd_type == 'up':
-        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x03\x01' + '\xff'
+        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01' + chr(pan_speed) + chr(tilt_speed) + '\x03\x01' + '\xff'
         msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'down':
-        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x03\x02' + '\xff'
+        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01' + chr(pan_speed) + chr(tilt_speed) + '\x03\x02' + '\xff'
         msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'left':
-        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x01\x03' + '\xff'
+        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01' + chr(pan_speed) + chr(tilt_speed) + '\x01\x03' + '\xff'
         msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'right':
-        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01\x05\x05\x02\x03' + '\xff'
+        msg_payload = address_to_hex(visca_addr) + '\x01\x06\x01' + chr(pan_speed) + chr(tilt_speed) + '\x02\x03' + '\xff'
         msg_header = '\x01\x00' + payload_len_to_hex(msg_payload) + seq_to_hex(seq_number)
     elif cmd_type == 'home':
         msg_payload = address_to_hex(visca_addr) + '\x01\x06\x04' + '\xff'
@@ -145,6 +148,40 @@ def resetSequenceNo():
 
     
 # -- drive related --
+
+INIT_PAN_SPEED = 5    # initial values
+INIT_TILT_SPEED = 5
+
+local_event_PanSpeed = LocalEvent({ 'group': 'PTZ Drive', 'title': 'Pan Speed', 'schema': { 'type': 'integer', 'format': 'range', 'min': 1, 'max': 24 }, 'order': next_seq() })
+local_event_TiltSpeed = LocalEvent({ 'group': 'PTZ Drive', 'title': 'Tilt Speed', 'schema': { 'type': 'integer', 'format': 'range', 'min': 1, 'max': 24 }, 'order': next_seq() })
+
+@before_main
+def initPanAndTiltSpeeds():
+    panSpeedArg = local_event_PanSpeed.getArg()
+    if panSpeedArg < 1 or panSpeedArg > 24:
+        local_event_PanSpeed.emit(INIT_PAN_SPEED)
+
+    tiltSpeedArg = local_event_TiltSpeed.getArg()
+    if tiltSpeedArg < 1 or tiltSpeedArg > 24:
+        local_event_TiltSpeed.emit(INIT_TILT_SPEED)
+
+@local_action({'group': 'PTZ Drive', 'title': 'Pan Speed', 'schema': { 'type': 'integer', 'hint': '(default: 5, Min: 1, Max: 24)', 'format': 'range', 'min': 1, 'max': 24 }, 'order': next_seq() })
+def PanSpeed(arg):
+    if arg < 1 or arg > 24:
+        return console.warn('[set_pan_speed] bad arg - %s' % arg)
+
+    iArg = int(arg)
+    console.log('[set_pan_speed] %s' % iArg)
+    local_event_PanSpeed.emit(iArg)
+    
+@local_action({'group': 'PTZ Drive', 'title': 'Tilt Speed', 'schema': { 'type': 'integer', 'hint': '(default: 5, Min: 1, Max: 24)', 'format': 'range', 'min': 1, 'max': 24}, 'order': next_seq() })
+def TiltSpeed(arg):
+    if arg < 1 or arg > 24:
+        return console.warn('[set_tilt_speed] bad arg - %s' % arg)
+
+    iArg = int(arg)
+    console.log('[set_tilt_speed] %s' % iArg)
+    local_event_TiltSpeed.emit(iArg)
 
 @local_action({'group': 'PTZ Drive', 'title': 'Home', 'order': next_seq()})
 def ptz_home(ignore):
