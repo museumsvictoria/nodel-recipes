@@ -1,4 +1,8 @@
-'''Works with PM and other Nexia models (default IP is 192.168.1.101)'''
+'''
+Legacy recipe - works with PM and other Nexia models (default IP is 192.168.1.101)
+
+Use Mk2 recipe if possible.
+'''
 
 # TODO:
 # - For Maxtrix Mixer blocks, only cross-point muting is done.
