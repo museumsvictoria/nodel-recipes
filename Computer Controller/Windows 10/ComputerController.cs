@@ -385,7 +385,7 @@ class ComputerController
                 Graphics screenshotGraphics = Graphics.FromImage(screenshot);
 
                 // Make the screenshot
-                screenshotGraphics.CopyFromScreen(Screen.PrimaryScreen.Bounds.X, Screen.PrimaryScreen.Bounds.Y, 0, 0, Screen.PrimaryScreen.Bounds.Size, CopyPixelOperation.SourceCopy);
+                screenshotGraphics.CopyFromScreen(screen.Bounds.X, screen.Bounds.Y, 0, 0, screen.Bounds.Size, CopyPixelOperation.SourceCopy);
 
                 Image newImage = ScaleImage(screenshot, 400, 400);
 
