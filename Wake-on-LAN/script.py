@@ -12,9 +12,14 @@ param_macAddress = Parameter('{"title":"MAC Address","schema":{"type":"string"}}
 
 ### Functions used by this Node
 def sendMagicPacket(dst_mac_addr):
-    if not re.match("[0-9a-f]{2}([:])[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", dst_mac_addr.lower()):
+    # addr is delimited by ":" or "-" 
+    if re.match("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$", dst_mac_addr.lower()):
+      addr_byte = re.split(':|-', dst_mac_addr.upper())
+    # addr is undelimited
+    elif re.match("^([0-9A-Fa-f]{12})$", dst_mac_addr.lower()):
+      addr_byte = re.findall('..', dst_mac_addr.upper())
+    else:
       raise ValueError('Incorrect MAC address format')
-    addr_byte = dst_mac_addr.upper().split(':')
     hw_addr = struct.pack('BBBBBB', int(addr_byte[0], 16), int(addr_byte[1], 16), int(addr_byte[2], 16), int(addr_byte[3], 16), int(addr_byte[4], 16), int(addr_byte[5], 16))
     macpck = '\xff' * 6 + hw_addr * 16
     scks = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
