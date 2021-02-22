@@ -1,4 +1,14 @@
-'''Basic, limited Panasonic protocol, suitable for some Panasonic displays, will be expaned over time.'''
+'''
+Basic, limited Panasonic protocol, suitable for some Panasonic displays, will be expaned over time.
+
+Supports **PROTOCOL 2** (ensure selected in device).
+
+* rev. 3 WORKAROUND: set polling to 5 mins to suppress flip flopping
+* rev. 4 UPDATE: allow IP address binding (see AMX Beacon, SSDP address, or custom address provider recipes)
+  * extended timeout tolerances
+  * **Disallow Power Off** options to support equipment that do not handle loss of signal
+  * various improvements
+'''
 
 # taken from page 18:
 # - https://bizpartner.panasonic.net/public/system/files/files/fields/field_file/psd/2014/11/20/lf6_lf60u_manual_en_1416462484.pdf
@@ -20,51 +30,94 @@
 #      
 
 param_disabled = Parameter({'title':'Disabled?', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
-param_ipAddress = Parameter({'title':'IP address', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+# <!-- IP addressing
+
+param_ipAddress = Parameter({ 'order': 0, 'schema': { 'type': 'string', 'hint': '(overrides remote binding)' }})
+
+local_event_IPAddress = LocalEvent( { 'group': 'Addressing', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+def remote_event_ipAddress(arg):
+  if not is_blank(param_ipAddress):
+    return                          # param takes precedence over any binding
+
+  elif arg != local_event_IPAddress.getArg():
+    console.info('IP address updated remotely - %s - restarting...' % arg)
+    local_event_IPAddress.emit(arg) # IP address changed so
+    _node.restart()                 # restart node!
+
+# -->
 
 DEFAULT_PORT = 1024
-param_port = Parameter({'title': 'Port', 'order': next_seq(), 'schema': { 'type':'integer', 'hint': '(default %s)' % DEFAULT_PORT }})
+param_port = Parameter({ 'schema': { 'type': 'integer', 'hint': '(default %s)' % DEFAULT_PORT }})
 
-DEFAULT_USERNAME = 'admin1'
+
+DEFAULT_USERNAME = 'dispadmin'
 param_username = Parameter({'order': next_seq(), 'schema': {'type': 'string', 'hint': '(default %s)' % DEFAULT_USERNAME}})
 
-DEFAULT_PASSWORD = 'panasonic'
+DEFAULT_PASSWORD = '@Panasonic'
 param_password = Parameter({'order': next_seq(), 'schema': {'type': 'string', 'hint': '(default %s)' % DEFAULT_PASSWORD}})
 
-local_event_RawPower = LocalEvent({'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
-local_event_DesiredPower = LocalEvent({'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
-local_event_Power = LocalEvent({'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Partially On', 'Partially Off', 'Off']}})
+local_event_RawPower = LocalEvent({ 'group': 'Power', 'schema': { 'type': 'string', 'enum': [ 'On', 'Off' ] }})
+local_event_DesiredPower = LocalEvent({ 'group': 'Power', 'schema': { 'type': 'string', 'enum': [ 'On', 'Off' ] }})
+local_event_Power = LocalEvent({ 'group': 'Power', 'schema': { 'type': 'string', 'enum': [ 'On', 'Partially On', 'Partially Off', 'Off' ] }})
+local_event_PowerOn = LocalEvent({ 'group': 'Power', 'schema': { 'type': 'boolean' }})
+local_event_PowerOff = LocalEvent({ 'group': 'Power', 'schema': { 'type': 'boolean' }})
 
 local_event_TCPState = LocalEvent({'title': 'TCP state', 'order': 1, 'group': 'TCP', 'schema': {'type': 'string', 'order': 1, 'enum': ['Connected', 'Disconnected']}})
 
 import hashlib # for authentication
 
 def main():
-  if param_disabled or len((param_ipAddress or '').strip()) == 0:
-    console.warn('Disabled or no IP address set; nothing to do.')
-    return
+  if param_disabled:
+    return console.warn('Disabled, nothing to do')
   
-  dest = '%s:%s' % (param_ipAddress, param_port or DEFAULT_PORT)
-  console.info('Will establish connection to %s' % dest)
-  
-  tcp.setDest(dest)
-  
+  ipAddress = param_ipAddress
+  if is_blank(ipAddress):
+    ipAddress = local_event_IPAddress.getArg()    # from remote binding
+  else:
+    console.info('(using IP address parameter)')
+    local_event_IPAddress.emit(ipAddress)
+
+  if is_blank(ipAddress):
+    return console.warn('No IP address set or received yet!')
+
+  port = param_port
+  if not port: # if blank, zero or None, use default
+    port = DEFAULT_PORT
+
+  tcpAddr = '%s:%s' % (ipAddress, port)
+  console.info('Will connect to "%s" on port %s...' % (ipAddress, port))
+  tcp.setDest(tcpAddr)
+    
 def local_action_Power(arg=None):
   '{"group": "Power", "schema": {"type": "string", "enum": ["On", "Off"]}}'
   if arg not in ['On', 'Off']:
     raise Exception('Power arg must be On or Off')
+
+  console.info('POWER %s requested!' % arg)
   
   local_event_DesiredPower.emit(arg)
   
-  timer_powerSyncer.setDelay(0.001)  
+  tcp.drop()
+  tcp.clearQueue()
   
+  timer_powerSyncer.setDelay(0.001)
+
+local_event_DisallowPowerOff = LocalEvent({ 'group': 'Power', 'order': next_seq(), 'schema': { 'type': 'boolean' },
+                                            'desc': 'Is Powering Off disallowed? This is normally done by device dependency (remote event), e.g. do not turn off if an attached multiplayer is on)' })
+
+def remote_event_DisallowPowerOff(arg):
+  local_event_DisallowPowerOff.emit(arg)
+  syncPower.call()
+ 
 @local_action({'group': 'Power', 'order': next_seq()})  
 def syncPower():
   lastSet = lookup_local_action('Power').getTimestamp() or date_parse('1990')
   
-  # only keep trying if we're within 1 minute of the request
-  if (date_now().getMillis() - lastSet.getMillis()) > 60000:
-    log(2, '(POWER: been more than 60s; nothing to do)')
+  # only keep trying if we're within 1.5 minute of the request
+  if (date_now().getMillis() - lastSet.getMillis()) > 90000:
+    log(2, '(POWER: been more than 90s; nothing to do)')
     return
   
   arg = local_event_DesiredPower.getArg()
@@ -73,32 +126,49 @@ def syncPower():
   if arg == raw:
     log(2, '(POWER: desired and raw are both "%s"; nothing to do)' % arg)
     return
-  
-  log(2, 'POWER: forcing power to %s' % arg)
-  
+
   if arg == 'On':
+    console.info('POWER: forcing power to On')
     makeRequest('PON', handle_powerResp)
     
   elif arg == 'Off':
+    if local_event_DisallowPowerOff.getArg():
+      console.warn('POWER: want to turn power Off but Disallowed for now')
+      return
+
+    console.info('POWER: forcing power to Off')
     makeRequest('POF', handle_powerResp)
   
-timer_powerSyncer = Timer(lambda: syncPower.call(), 10, 0)  
+timer_powerSyncer = Timer(lambda: syncPower.call(), 10, 0)
+
+_previousRawPower = None
   
 def handle_powerResp(resp):
-  if resp in ['QPW:1', 'PON', '1']:
-    local_event_RawPower.emit('On')
+  if resp in ['QPW:1', 'PON', '1', '001']:
+    lastReceive[0] = system_clock()
+    arg = 'On'
       
-  elif resp in ['QPW:0', 'POF', '0']:
-    local_event_RawPower.emit('Off')
+  elif resp in ['QPW:0', 'POF', '0', '000']:
+    lastReceive[0] = system_clock()
+    arg = 'Off'
       
   else:
     console.warn('Unexpected feedback from power request. resp:[%s]' % resp)
+    return
 
-@local_action({'group': 'Power', 'order': next_seq()})
+  local_event_RawPower.emit(arg)
+
+  global _previousRawPower
+  if _previousRawPower != None and _previousRawPower != arg: # log change in detected power state
+    console.info('Power is %s' % arg)
+
+  _previousRawPower = arg
+  
+@local_action({'group': 'Power', 'order': next_seq()}) 
 def PollPower(arg=None):
   makeRequest('QPW', handle_powerResp)
   
-poller_timer = Timer(lambda: lookup_local_action('PollPower').call(), 10, 5)  
+poller_power = Timer(lambda: lookup_local_action('PollPower').call(), 10, 5)  
   
 @after_main
 def computePower():
@@ -109,17 +179,19 @@ def computePower():
     lastTimeSet = lookup_local_action('Power').getTimestamp() or date_parse('1990')
 
     # ignore if been more than a minute
-    if (date_now().getMillis() - lastTimeSet.getMillis()) > 60000:
+    if (date_now().getMillis() - lastTimeSet.getMillis()) > 90000:
       # fallback to Raw
       local_event_Power.emitIfDifferent(rawArg)
-
-      return
 
     elif rawArg == desiredArg:
       local_event_Power.emit(desiredArg)
 
     else:
       local_event_Power.emit('Partially %s' % desiredArg)
+
+    arg = local_event_Power.getArg()
+    local_event_PowerOn.emitIfDifferent(arg == 'On')
+    local_event_PowerOff.emitIfDifferent(arg == 'Off')
   
   local_event_RawPower.addEmitHandler(handler)
   local_event_DesiredPower.addEmitHandler(handler)
@@ -130,7 +202,7 @@ INPUTS = ['AV1', 'AV2', 'HM1', 'HM2', 'DV1', 'PC1', 'DL1', 'Off']
 
 local_event_DesiredInput = LocalEvent({'group': 'Input', 'order': next_seq(), 'schema': {'type': 'string', 'enum': INPUTS}})
 
-local_event_RawInput = LocalEvent({'group': 'Input', 'order': next_seq(), 'schema': {'type': 'string', 'enum': INPUTS}})
+local_event_RawInput = LocalEvent({'group': 'Input', 'order': next_seq(), 'schema': {'type': 'string' }})
 
 local_event_Input = LocalEvent({'group': 'Input', 'order': next_seq(), 'schema': {'type': 'string', 'enum': INPUTS + ['Partially %s' % i for i in INPUTS]}})
 
@@ -144,7 +216,7 @@ def computeInput():
     lastTimeSet = Input.getTimestamp() or date_parse('1990')
 
     # ignore if been more than a minute
-    if (date_now().getMillis() - lastTimeSet.getMillis()) > 60000:
+    if (date_now().getMillis() - lastTimeSet.getMillis()) > 90000:
       # fallback to Raw
       local_event_Input.emitIfDifferent(raw)
       return
@@ -179,27 +251,27 @@ def PollInput(arg=None):
       # presuming the resp is the input
       local_event_RawInput.emit(resp)
       
-  rawPowerArg = local_event_RawPower.getArg()
+  powerArg = local_event_Power.getArg()
   
-  if rawPowerArg in ['Off', 'Partially Off']:
+  if powerArg in ['Off', 'Partially Off']:
     local_event_RawInput.emit('Off')
       
-  if rawPowerArg != 'On':
+  if powerArg != 'On':
     log(2, 'INPUT: Power is not On, so not querying input')
     return
 
   log(2, 'INPUT: Querying input (power is On so can)')
   makeRequest('QMI', handleResp)
   
-poller_timer = Timer(lambda: lookup_local_action('PollInput').call(), 10, 5)  
+poller_input = Timer(lambda: lookup_local_action('PollInput').call(), 13, 8)  # out of sync with power
   
 @local_action({'group': 'Input', 'order': next_seq()})  
 def SyncInput():
   lastSet = lookup_local_action('Input').getTimestamp() or date_parse('1990')
   
   # only keep trying if we're within 1 minute of the request
-  if (date_now().getMillis() - lastSet.getMillis()) > 60000:
-    log(2, '(INPUT: been more than 60s; nothing to do)')
+  if (date_now().getMillis() - lastSet.getMillis()) > 90000:
+    log(2, '(INPUT: been more than 90s; nothing to do)')
     return
   
   # only set if powered On
@@ -240,23 +312,37 @@ local_event_FirstNoSignal = LocalEvent({'group': 'Signal', 'order': next_seq(), 
 @local_action({'group': 'Signal', 'order': next_seq()})
 def PollSignalStatus(arg=None):
   def handleResp(resp):
-    if not resp.startswith('M'):
-      warn(1, 'unexp resp polling signal status')
-      return
+    # projectors respond with '1' or '0'
+    if resp  == '1': # projectors response with "1" or "0"
+        local_event_SignalStatus.emit('SIGNAL')
+        return
     
-    elif '----' in resp:
+    elif '----' in resp or resp == '0': # projectors response with "1" or "0"
       if local_event_SignalStatus.getArg() != 'NO SIGNAL':
         local_event_FirstNoSignal.emit(str(date_now()))
         local_event_SignalStatus.emit('NO SIGNAL')
-    
+        
+    elif not resp.startswith('M'):
+      warn(1, 'unexp resp polling signal status')
+      return
+        
     else:
       local_event_SignalStatus.emit(resp)
       
+  powerArg = local_event_Power.getArg()
+  
+  if powerArg in ['Off', 'Partially Off']:
+    local_event_RawInput.emit('Off')
+      
+  if powerArg != 'On':
+    log(2, 'SIGNALSTATUS: Power is not On, so not querying signal status')
+    return
+  
   log(2, 'SIGNALSTATUS: Querying')
   makeRequest('QSF', handleResp)
   
 # seems to be safe to poll even while power is Off
-poller_SignalStatus = Timer(lambda: PollSignalStatus.call(), 10, 5)
+poller_signal = Timer(lambda: PollSignalStatus.call(), 10, 10)
 
 # -->
 
@@ -281,20 +367,49 @@ def prepareAuth(line):
   global _authPrefix
   
   if parts[1] == '0':
-    console.info('Using Panasonic network protocol unprotected')
+    log(1, 'Using Panasonic network protocol unprotected')
     _authPrefix = '00'
     
   elif parts[1] == '1':
-    console.info('Using Panasonic network protocol protected')  
+    log(1, 'Using Panasonic network protocol protected')
     
     randomPart = parts[2]
     toBeHashed = '%s:%s:%s' % (param_username or DEFAULT_USERNAME, param_password or DEFAULT_PASSWORD, randomPart)
     hsh = hashlib.md5(toBeHashed).hexdigest()
     _authPrefix = '%s00' % hsh
-    
+
+# any requests pending
+_reqPending = False
+
 def makeRequest(cmd, onResp):
+  global _reqPending
+
+  if local_event_TCPState.getArg() != 'Connected':
+    # not connected, use best effort by delaying a call
+    if _reqPending:
+      log(2, 'make_req: operation already pending; dropping request [%s]' % cmd)
+      # and fall through...
+
+    else:
+      # make the delayed call
+      def delayedCall():
+        global _reqPending   # clear flag and make request
+        _reqPending = False
+
+        log(2, 'make_req: operation already pending')
+        doMakeRequest(cmd, onResp)
+
+      log(2, 'make_req: not connected so delaying request by 2s')
+      _reqPending = True
+      call(delayedCall, 2)
+
+  else:
+    # connected, so can make request immediately
+    doMakeRequest(cmd, onResp)
+
+
+def doMakeRequest(cmd, onResp):
   def trapResp(data):
-    lastReceive[0] = system_clock()
     log(2, 'panasonic_recv: [%s]' % data)
     onResp(data)
       
@@ -312,7 +427,7 @@ def makeRequest(cmd, onResp):
 # [ TCP ---
 
 def connected():
-  console.info('Connected!')
+  log(1, 'tcp_connected')
   local_event_TCPState.emit('Connected')
   
   tcp.clearQueue()
@@ -324,10 +439,10 @@ def received(data):
     prepareAuth(data)
   
 def sent(data):
-  log(3, 'tcp_sent: [%s]' % data)
+  log(3, 'tcp_sent: [%s] stripped' % data.strip())
   
 def disconnected():
-  console.warn('TCP disconnected')
+  log(1, 'tcp_disconnected')
   local_event_TCPState.emit('Disconnected')
   
   
@@ -370,36 +485,41 @@ def statusCheck():
     previousContactValue = local_event_LastContactDetect.getArg()
     
     if previousContactValue == None:
-      message = 'Always been missing.'
+      message = 'Never been monitored'
       
     else:
       previousContact = date_parse(previousContactValue)
-      message = 'Off the network %s' % formatPeriod(previousContact)
+      message = 'Unmonitorable %s' % formatPeriod(previousContact)
       
     local_event_Status.emit({'level': 2, 'message': message})
     return
     
   if local_event_Power.getArg() == 'On' and local_event_SignalStatus.getArg() == 'NO SIGNAL':
-    local_event_Status.emit({'level': 1, 'message': 'Power On but no signal %s' % formatPeriod(local_event_FirstNoSignal.getArg())})
+    local_event_Status.emit({'level': 1, 'message': 'Power On but no signal %s' % formatPeriod(date_parse(local_event_FirstNoSignal.getArg()))})
     return
   
   local_event_Status.emit({'level': 0, 'message': 'OK'})
   
   local_event_LastContactDetect.emit(str(now))
   
-status_check_interval = 75
+# TODO: setting this to 5 mins while figure out why it flip flops
+status_check_interval = 60 * 5 # was 75
 status_timer = Timer(statusCheck, status_check_interval)
 
-def formatPeriod(dateObj):
-  if dateObj == None:      return 'for unknown period'
-  
+def formatPeriod(dateObj, asInstant=False):
+  if dateObj == None:       return 'for unknown period'
+
   now = date_now()
-  diff = (dateObj.getMillis() - now.getMillis()) / 1000 / 60 # in mins
+  diff = (now.getMillis() - dateObj.getMillis()) / 1000 / 60 # in mins
   
-  if diff == 0:             return 'for <1 min'
-  elif diff < 60:           return 'for <%s mins' % diff
-  elif diff < 60*24:        return 'since %s' % dateObj.toString('h:mm:ss a')
-  else:                     return 'since %s' % dateObj.toString('E d-MMM h:mm:ss a')
+  if diff < 0:              return 'never ever'
+  elif diff == 0:           return 'for <1 min' if not asInstant else '<1 min ago'
+  elif diff < 60:           return ('for <%s mins' if not asInstant else '<%s mins ago') % diff
+  elif diff < 60*24:        return ('since %s' if not asInstant else 'at %s') % dateObj.toString('h:mm a')
+  else:                     return ('since %s' if not asInstant else 'on %s') % dateObj.toString('E d-MMM h:mm a')
+
+# --->
+
 
 # <!-- logging
 
