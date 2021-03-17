@@ -12,7 +12,7 @@ def multicast_ready():
     print 'AMX beacon receiver started.'
     
 def multicast_received(source, data):
-    # print 'got: [%s]', data.encode('hex')
+    console.info('recv: [%s]' % data)
   
     if not data.startswith('AMX'):
         # ignore packet
@@ -94,6 +94,15 @@ def parseAMXBPacket(source, data):
         eventsByUUID[uuid] = event
 
     event.emit(plainInfo)
+    
+    key = '%s IP Address' % uuid
+    ipSignal = lookup_local_event(key)
+    if not ipSignal:
+      ipSignal = create_local_event(key, { 'group': 'Discovery', 'order': next_seq(), 'schema': { 'type': 'string' } })
+      
+    colonIndex = source.rfind(':')
+    ipAddress = source[:colonIndex] if colonIndex >= 0 else source
+    ipSignal.emit(ipAddress) 
     
 # converts a field name into a 'safe', plain version possible extending
 # compatibility with UI frameworks
