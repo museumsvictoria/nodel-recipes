@@ -1,15 +1,32 @@
-'''XMV Series (ready for MTX3, MTX5-D, MRX7-D, EXi8, EXo8), see script for manual location.'''
+'''Yamaha XMV Series Amplifier (ready for MTX3, MTX5-D, MRX7-D, EXi8, EXo8)
 
-# taken from (the large) manual:
-# http://download.yamaha.com/api/asset/file/?language=en&site=countrysite-master.prod.wsys.yamaha.com&asset_id=63959
+* Manual link - https://jp.yamaha.com/files/download/other_assets/1/1144121/mtx_mrx_xmv_ex_remote_control_protocol_spec_v310_en.pdf
 
-# TODO:
-# - turn a few of the static addresses and counts into parameters
+*rev 3. changelog*
+
+   * support for IP Address via binding
+   * console noise tidyup
+   * only polls when connected
+'''
 
 DEFAULT_TCPPORT = 49280
 
 param_Disabled = Parameter({'schema': {'type': 'boolean'}})
+
+# IP addressing can be done by parameter or remote signals
 param_IPAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string'}})
+
+local_event_IPAddress = LocalEvent({ 'group': 'Addressing', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+def remote_event_IPAddress(arg):
+  if is_blank(param_IPAddress): return         # parameter always overrides binding
+    
+  previous = local_event_IPAddress.getArg()    # check if changed, if so update and restart
+  if arg != previous:                          
+    console.info('IP address binding value changed - now %s, previously %s - restarting node' % (arg, previous))
+    local_event_IPAddress.emit(arg)
+    _node.restart()
+    # ... and leave for main() to deal with
 
 DEFAULT_NUMCHANNELS = 8
 param_NumChannels = Parameter({'title': 'Channels', 'desc': 'Number of channels', 'schema': {'type': 'integer', 'hint': DEFAULT_NUMCHANNELS}})
@@ -23,6 +40,8 @@ inputMeterSignals = list()
 outputMeterSignals = list()
 
 # create input and output channel meters
+
+_pollers = list() # holds all the pollers (timers) to enable/disable on connection state
 
 for i in range(16):
   signal = Event('Input %s Meter' % (i+1), {'title': '#%s' % (i+1), 'group': 'Input Meters', 'order': 8000+next_seq(), 'schema': {'type': 'integer'}})
@@ -126,21 +145,23 @@ def bindParameters(paramInfo):
   signalsByAddr[address] = (converters[0], signal)
   
   # kick-off a getter within the next 15 seconds and then every 2 minutes or so
-  Timer(lambda: getter.call(), random(120,150), random(10,15))
+  _pollers.append(Timer(lambda: getter.call(), random(120,150), random(10,15), stopped=True))
   
   
 def main():
   if param_Disabled:
-    console.warn('Disabled! nothing to do')
-    return
-  
-  if is_blank(param_IPAddress):
-    console.warn('No IP address set; nothing to do')
-    return
-  
-  dest = '%s:%s' % (param_IPAddress, DEFAULT_TCPPORT)
-  
-  console.info('Will connect to [%s]' % dest)
+    return console.warn('Disabled! nothing to do')
+
+  if not is_blank(param_IPAddress):
+    ipAddress = param_IPAddress
+    local_event_IPAddress.emit(ipAddress)
+  else:
+    ipAddress = local_event_IPAddress.getArg() # would have been updated via binding
+    if is_blank(ipAddress):
+      return console.warn('No IP address!')
+
+  dest = '%s:%s' % (ipAddress, DEFAULT_TCPPORT)
+  console.info('Will connect to "%s"...' % dest)
   tcp.setDest(dest)
 
 def kickOffMeters():
@@ -153,7 +174,7 @@ def kickOffMeters():
   
 # give it 15 seconds before getting the meters and repeat request every X seconds
 # since they automatically stop after a period of time
-Timer(kickOffMeters, 8, 15)
+_pollers.append(Timer(kickOffMeters, 8, 15, stopped=True))
 
 # --- main>
   
@@ -188,6 +209,9 @@ def parseResp(resp, option=-1, converter=None, signal=None):
   #
   #   OK devstatus fs "44.1kHz"
   #   ERROR devstatus InvalidArgument
+  # Sometimes:
+  #   OK mtrstart MTX:mtr_512/20001/meter   OR
+  #   NOTIFY mtr MTX:mtr_512/20000/meter level 1b 1c 1c 1c 1b 1d 1d 1c 00 00 00 00 00 00 00 00
   options = splitIntoOptions(resp)
   
   option0 = options[0]
@@ -196,9 +220,8 @@ def parseResp(resp, option=-1, converter=None, signal=None):
     console.warn('Got bad response [%s]' % resp)
   
   # otherwise pass through 'OK' and 'NOTIFY'
-  if option0 == OK or option0 == NOTIFY:
+  elif option0 == OK or option0 == NOTIFY:
     option1 = options[1]
-    
     if option1 == 'mtr':
       # this is considered stray feedback - should very rarely, if ever get here, but 
       # have seen that the amp doesn't/cannot guarentee no cross-talk between call requests and 
@@ -206,17 +229,30 @@ def parseResp(resp, option=-1, converter=None, signal=None):
       
       # just pass it through to the meter handler
       handleNotifyMtr(options)
+      return
+
+    elif option1 == 'mtrstart':
+      # also stray feedback, can just ignore
+      return
     
-    if option >= 0:
-      if converter == None:
-        signal.emit(options[option])
-      
-      else:
-        try:
-          signal.emit(converter(options[option]))
-        except:
-          console.warn('conversion failure dealing with: [%s]' % options)
-          
+    if option < 0:
+      return
+
+    if option >= len(options):
+      return console.warn('parse_resp: option index is not valid - resp was "%s"' % resp)
+
+    rawOption = options[option]
+    
+    if converter != None:
+      try:
+        optionArg = converter(rawOption)
+      except:
+          return console.warn('parse_resp: conversion failure dealing with: [%s]' % options)
+    else:
+      optionArg = rawOption
+
+    if signal != None:
+      signal.emit(optionArg)          
     
 def getParameter(memNum, uniqueID, elemNum, xPos, yPos, paramNum, indexNum, option=-1, signal=None):
   tcp.request('get MTX:mem_%s/%s/%s/%s/%s/%s/%s 0 0' % (memNum, uniqueID, elemNum, xPos, yPos, paramNum, indexNum), 
@@ -247,7 +283,7 @@ def bindDevStatusCommand(name, group, cmd):
   signalsByDevStatus[cmd] = (STRING_CONVERTERS[0], signal)
   
   # kick-off more frequest timers
-  Timer(lambda: action.call(), random(60,90), random(5,10))
+  _pollers.append(Timer(lambda: action.call(), random(60,90), random(5,10), stopped=True))
   
 @after_main
 def bindDevStatuses():
@@ -268,7 +304,7 @@ def bindDevInfoCommand(name, group, cmd):
     
   action = Action('Get %s' % name, handler, {'group': group, 'order': next_seq()})
   
-  Timer(lambda: action.call(), random(150, 190), random(5, 10))
+  _pollers.append(Timer(lambda: action.call(), random(150, 190), random(5, 10), stopped=True))
   
 @after_main
 def bindProductInfo():
@@ -300,8 +336,7 @@ def local_action_meterStart(arg=None):
                                                "interval": {"type": "integer", "order": 3, "desc": "e.g. 333"}}}}'''
   # e.g. [mtrstart MTX:mtr_512/20000/meter 100]
   log(2, "MeterStart [%s]" % arg)
-  tcp.request('mtrstart %s %s' % (arg['address'], arg['interval']),
-              lambda resp: parseResp(resp))
+  tcp.request('mtrstart %s %s' % (arg['address'], arg['interval']), lambda resp: parseResp(resp))
 
 # --- protocol>
 
@@ -311,6 +346,10 @@ def local_action_meterStart(arg=None):
 def tcp_connected():
   console.info('tcp_connected')
   tcp.clearQueue()
+  
+  # pollers can start
+  for p in _pollers:
+    p.start()
   
   lookup_local_action('GetDeviceRunMode').call()
   
@@ -377,6 +416,10 @@ def tcp_sent(data):
   
 def tcp_disconnected():
   console.warn('tcp_disconnected')
+  
+  # stop all pollers
+  for p in _pollers:
+    p.stop()
   
 def tcp_timeout():
   console.warn('tcp_timeout')
