@@ -1,3 +1,15 @@
+# -*- coding: utf-8 -*-
+# (utf-8 for agenda mark-down)
+
+'''
+A Calendar / Scheduling node that takes in multiple sources (e.g. see *Microsoft Exchange Schedule Retriever* recipe)
+
+* rev. 2
+    * support for "momentary" events (not stateful) when "start time" strictly equals "end time" e.g. "{ Power: Off }"
+    * "Agenda" signal for usable, MARKDOWN formatted, future agenda (use `<panel>` element in Frontend)
+    * minor: polling every 2.5 mins now (was incorrectly 5 mins)
+'''
+
 param_members = Parameter({'title': 'Member hierarchy', 'schema': {'type': 'array', 'items': {
         'type': 'object', 'properties': {
           'name': {'type': 'string', 'order': 1},
@@ -43,7 +55,7 @@ local_event_ActiveFuture = LocalEvent({'title': 'Active Future', 'schema': {'typ
             'warning': {'type': 'string', 'order': 5}
         }}}}}}})
 
-# loose, text-based agent
+# loose, text-based agent using MARKDOWN
 local_event_Agenda = LocalEvent({'group': 'Info', 'schema': {'type': 'string', 'format': 'long'}})
 
 local_event_Debug = LocalEvent({'title': 'Debug level', 'group': 'Debug', 'schema': {'type': 'integer'}})
@@ -91,7 +103,7 @@ members = {}
 def applyStateList(states, force=False):
   stateTrees = {}
   
-  def lockAndTraverse(state, member, traverseOnly=False):
+  def lockAndTraverse(state, member, momentary, traverseOnly=False):
     # set the state if not locked
     if not member['locked']:
       member['state'] = state
@@ -99,10 +111,12 @@ def applyStateList(states, force=False):
     # lock if not only traversing
     if not traverseOnly:
       member['locked'] = True
-    
+      
+    member['momentary'] = momentary
+      
     for subMember in member['members']:
       # only traverse from here
-      lockAndTraverse(state, subMember, True)
+      lockAndTraverse(state, subMember, momentary, True)
       
   # create a tree for each signal type
   for signalType in param_signalTypes:
@@ -118,10 +132,11 @@ def applyStateList(states, force=False):
     memberName = stateInfo['member']
     signal = stateInfo['signal']
     state = stateInfo['state']
+    momentary = stateInfo.get('momentary')
     
     member = stateTrees[signal][memberName]
       
-    lockAndTraverse(state, member)
+    lockAndTraverse(state, member, momentary)
     
   for signalType in param_signalTypes:
     signalName = signalType['name']
@@ -137,10 +152,16 @@ def applyStateList(states, force=False):
     for name in stateTree:
       memberInfo = stateTree[name]
       state = memberInfo['state']
+      
+      if memberInfo.get('momentary'):
+        # clear state entry immediately so its non-active state is called
+        memberInfo['state'] = None
     
       reverting = False
       
       lastState = lastTrees[signalName][name]['state']
+      
+      # wasMomentary = lastTrees[signalName][name]['momentary']
       
       if not force and state == lastState:
         continue
@@ -152,6 +173,10 @@ def applyStateList(states, force=False):
           continue
           
         else:
+          # if wasMomentary:
+          #   print ('Skipping "%s", was momentary' % name)
+          #   continue
+          
           state = signalType['nonactiveState']
           reverting = True
       
@@ -172,7 +197,7 @@ def dumpTree(tree):
   if local_event_Debug.getArg() > 0:
     for name in tree:
       value = tree[name]
-      print '[%s]: state:[%s] locked:[%s]' % (name, value['state'], value['locked'])
+      console.log('[%s]: state:[%s] locked:[%s] momentary:[%s]' % (name, value['state'], value['locked'], value['momentary']))
   
 def createNewTree():
   stateTree = {}
@@ -184,6 +209,7 @@ def createNewTree():
       member = { 'state': None,
                  'locked': False,
                  'isEdge': False,
+                 'momentary': False, # if a momentary event was last involved
                  'members': [] }
       stateTree[name] = member
     else:
@@ -242,7 +268,7 @@ def main():
   console.info('Scheduler started! (polling on half-minute boundaries first one in %.1f seconds)' % delay)
   
   # check the active future ones every 5 mins (after 30s at first)
-  Timer(lambda: lookup_local_action('ProcessActiveFuture'), 30, 5*60)
+  Timer(lambda: lookup_local_action('ProcessActiveFuture').call(), 2.5*60, 30)
   
 # schedules the next poll on sharp 30s wall-clock edges
 def quantisePollNow():
@@ -377,6 +403,8 @@ def emitAgenda(fullList):
   "Where 'fullList' contains {'instant': '...', 'items' : [ ... ]}"
   lines = list()
   
+  now = date_now()
+  
   currentDay = ''
   
   for instantItem in fullList:
@@ -384,36 +412,86 @@ def emitAgenda(fullList):
     items = instantItem['items']
     
     for item in items:
+      # only include instants where they're the start time
+      start = date_parse(item['start'])
+      if start != instant:
+        continue
+      
       day = instant.toString('E d-MMM')
+      
+      momentary = item.get('momentary')
       
       # group by day
       if day != currentDay:
         if len(lines) > 0:
           lines.append('')
           
-        lines.append(day)
+        lines.append('**%s**\r\n' % day)
         
         currentDay = day
+            
+      end = date_parse(item['end'])
+      
+      inThePast = now.isAfter(end)
+      
+      isActive = now.isAfter(start) and now.isBefore(end)
+            
+      if not momentary:
+        # include the end part (with day part if it's a different day)
+        endPart = 'until **%s**' % (end.toString('h:mm a') if instant.toString('yyyyMMdd') == end.toString('yyyyMMdd') else end.toString('E d-MMM h:mm a'))
+      else:
+        endPart = ''
+        
+      # strip out brackets, e.g. "... { ... }" TODO: use regex
+      title = item['title'] or ''
+      bracketPos = title.rfind('{')
+      if bracketPos >= 0:
+        bracketEnd = title.rfind('}')
+        if bracketEnd > bracketPos:
+          title = title[:bracketPos]
+      title = title.strip()
+      
+      titlePart = '' if not title else '("%s")' % title
         
       # example:
       # At 3:30 PM, Power On in ASDF "longer title" 
       # INVALID: At 3:30 PM Power On in ASDF "longer title" 
       
-      line = '%sAt %s, %s %s in %s ("%s")' % ('INVALID: ' if item.get('warning') else '',
+      line = u'%s%s **%s** %s %s in %s %s %s' % ('<span style="color:red">**INVALID**</span> ' if item.get('warning') else '',
+                                       'From' if not momentary else 'At',
                                        instant.toString('h:mm a'),
                                        item['signal'],
                                        item.get('state') if 'state' in item else '<undefined_state>',
                                        item['member'],
-                                       item['title'])
+                                       titlePart,
+                                       endPart)
+      if inThePast:
+        # wrap in strike out
+        line = ' * <s style="color:#444444;">%s</s>' % line
+      elif isActive:
+        # wrap in purple #ff00ff, actually green
+        line = ' * <span style="color:#00ff00">%s</span>' % line
+      else:
+        # future, lighter #444444, actually leave as is
+        line = ' * %s' % line
+      
       lines.append(line)
   
   local_event_Agenda.emit('\r\n'.join(lines))
+  
+# the last time a poll was done (used to assist with zero-length items i.e. startTime == endTime)
+_lastInstantMillis = None # (date time millis based)
 
 def processAllActiveItems(instant, warnings):
+  global _lastInstantMillis
+
   instantMillis = instant.getMillis()
 
   activeItems = list()
-  
+ 
+  if _lastInstantMillis != None:
+    console.info('Polling between: %s  and: %s' % (date_instant(_lastInstantMillis), date_instant(instantMillis)))
+    
   # consolidates all available calendar sources
   for sourceInfo in param_scheduleSources:
     items = lookup_local_event('Source %s Items' % sourceInfo['name']).getArg()
@@ -424,16 +502,32 @@ def processAllActiveItems(instant, warnings):
 
       startMillis = date_parse(start).getMillis()
       endMillis = date_parse(end).getMillis()
-
-      if instantMillis < startMillis or instantMillis >= endMillis:
-        continue
       
+      momentary = False
+      
+      if _lastInstantMillis != None and startMillis == endMillis: # check if it's a momentary event
+        # check if active
+        if not (startMillis > _lastInstantMillis and startMillis <= instantMillis):
+          # is not within poll period i.e. start is not between current instant and end of last instant
+          continue
+          
+        # is an active momentary event
+        console.info('Is Active Momentary! %s' % start)
+        
+        momentary = True
+        
+      elif instantMillis < startMillis or instantMillis >= endMillis:
+        continue
+
       activeItem = {}
       
       warning = None
       
       for key in item:
         activeItem[key] = item[key]
+        
+      if momentary:
+        activeItem['momentary'] = True
 
       # resolve member
       if isBlank(item['member']):
@@ -466,6 +560,8 @@ def processAllActiveItems(instant, warnings):
                          'message': warning})
 
       activeItems.append(activeItem)
+      
+  _lastInstantMillis = instantMillis
   
   return activeItems
 

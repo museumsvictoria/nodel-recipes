@@ -11,6 +11,8 @@ using System.Management;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
+// rev. 3: fixed partial screenshot capture when DPI not 100%
+
 class ComputerController
 {
     static bool s_running = true;
@@ -350,10 +352,16 @@ class ComputerController
     #endregion
 
     #region Screenshots
+    
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    public static extern bool SetProcessDPIAware();
 
     public async static void TakeScreenshots()
     {
         Console.WriteLine("// ...taking screenshots after 10s then every 60s");
+
+        // required when non-100% DPI scaling used
+        SetProcessDPIAware();
 
         await Task.Delay(10000); // first after 10s
         Screenshots();

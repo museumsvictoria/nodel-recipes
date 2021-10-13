@@ -1,6 +1,11 @@
 
 ![Nodel Recipe Logo](http://nodel.io/media/1045/nodel-recipes.png)
 
+## Thanks
+| Contribution  | Kindly made possible by | Implemented by |
+| ------- | ----------------------- | -------------- |
+_May 2021:_ Sony SSIP protocol for displays [recipe](https://github.com/museumsvictoria/nodel-recipes/tree/master/Sony%20SSIP%20protocol%20for%20displays) | <a href='https://automatic.com.au'><img src="https://automatic.com.au/wp-content/uploads/2019/11/logo.png" width="100"/></a>  | <a href='https://automatic.com.au'><img src="https://automatic.com.au/wp-content/uploads/2019/11/logo.png" width="100" /></a>
+
 ## About
 A collection of recipes for [Nodel](https://github.com/museumsvictoria/nodel), the digital control system designed for museums and galleries.
 
