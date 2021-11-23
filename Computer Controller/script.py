@@ -1,9 +1,15 @@
-'''Computer Node'''
+'''
+Computer Node
+
+**For Linux, please make sure that alsa-utils is installed.
+
+'''
 
 ### Libraries required by this Node
 import java.lang.System
 import subprocess
-
+from org.nodel.reflection import Serialisation
+from org.nodel.json import JSONArray
 
 ### Parameters used by this Node
 system = java.lang.System.getProperty('os.name')
@@ -108,21 +114,33 @@ def local_action_Restart(arg = None):
 def local_action_Mute(arg = None):
   """{"title":"Mute","group":"Volume","schema":{"type":"string","enum": ['On', 'Off'], "required": True}}"""
   print 'Action Mute%s requested' % arg
+  if not HAVE_SOUND_DEVICE:
+      console.error('No audio device found')
+      return
   mute() if arg == 'On' else unmute()
 
 def local_action_MuteOn(arg = None):
   """{"title":"MuteOn","desc":"Mute this computer.","group":"Volume"}"""
   print 'Action MuteOn requested'
+  if not HAVE_SOUND_DEVICE:
+      console.error('No audio device found')
+      return
   mute()
 
 def local_action_MuteOff(arg = None):
   """{"title":"MuteOff","desc":"Un-mute this computer.","group":"Volume"}"""
   print 'Action MuteOff requested'
+  if not HAVE_SOUND_DEVICE:
+      console.error('No audio device found')
+      return
   unmute()
 
 def local_action_SetVolume(arg = None):
   """{"title":"SetVolume","desc":"Set volume.","schema":{"title":"Drag slider to adjust level.","type":"integer","format":"range","min": 0, "max": 100,"required":"true"},"group":"Volume"}"""
   print 'Action SetVolume requested - '+str(arg)
+  if not HAVE_SOUND_DEVICE:
+      console.error('No audio device found')
+      return
   set_volume(arg)
 
 DEFAULT_FREESPACEMB = 0.5
@@ -161,8 +179,61 @@ def check_status():
     local_event_Status.emit({'level': 0, 'message': 'OK'})
 
 Timer(check_status, 150, 10) # check status every 2.5 mins (10s first time)
-      
+
+# for Windows
+PS_SOUND_DEVICE = ['powershell', '-Command',
+                   'Get-CimInstance', '-ClassName', 'win32_sounddevice',
+                   '|', 'select', 'Manufacturer, Name',
+                   '|', 'ConvertTo-Json']  # [{"Manufacturer":, "Name": }]
+
+BASH_SOUND_DEVICE = ['arecord', '-l']
+
+HAVE_SOUND_DEVICE = False
+
+
+def query_audio_devices():
+    def ps_finished(arg):
+        global HAVE_SOUND_DEVICE
+        res_code = arg.code
+        if res_code != 0:
+            console.error('[query_if_audio_devices_exists] process exited with code: %d' % (res_code))
+            HAVE_SOUND_DEVICE = False
+            return
+
+        parsed = jsonDecodeByArray(arg.stdout)  # []
+        HAVE_SOUND_DEVICE = True if parsed is not None and len(parsed) > 0 else False
+        console.info('Audio device found' if HAVE_SOUND_DEVICE else 'No audio device found')
+
+    def bash_finished(arg):
+        global HAVE_SOUND_DEVICE
+        # console.info(arg)
+        res_code = arg.code
+        if res_code != 0:
+            console.error('[query_if_audio_devices_exists] process exited with code: %d' % (res_code))
+            HAVE_SOUND_DEVICE = False
+            return
+
+        se_message = arg.stderr
+        HAVE_SOUND_DEVICE = False if 'no soundcards' in se_message else True
+        console.info('Audio device found' if HAVE_SOUND_DEVICE else 'No audio device found')
+
+    if system in windows:
+        quick_process(PS_SOUND_DEVICE, working=None, finished=ps_finished)
+    elif (system == "Mac OS X"):
+        global HAVE_SOUND_DEVICE
+        HAVE_SOUND_DEVICE = True
+    elif (system == "Linux"):
+        quick_process(BASH_SOUND_DEVICE, working=None, finished=bash_finished)
+    else:
+        print 'unknown system: ' + system
+
+
+def jsonDecodeByArray(arrayString):
+    return Serialisation.coerce(None, JSONArray(arrayString))
+
+
 ### Main
-def main(arg = None):
-  # Start your script here.
-  print 'Nodel script started.'
+def main(arg=None):
+    # Start your script here.
+    print 'Nodel script started.'
+    query_audio_devices()
