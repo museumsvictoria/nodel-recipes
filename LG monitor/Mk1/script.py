@@ -1,10 +1,34 @@
-'No direct network port available. Link to main manual (see page 71) - http://www.lg.com/us/commercial/documents/MAN_SE3B_SE3KB_SL5B.pdf and others (see script)'
+'''
+_(rev. 3)_
 
-# 2nd manual: https://hf-files-oregon.s3.amazonaws.com/hdpjustaddpower_kb_attachments/2016/08-19/536f965c-5e2f-473f-8e3f-aacfac49601f/LG%20Published%20RS232C%20Guide.pdf
-# 3rd manual: http://www.lg.com/us/commercial/documents/SM3C-B_Manual.pdf
+A recipe for most **LG** monitors support serial or LAN control. For some older monitors certain functions will not work and report "no positive acknowledgement" in the console.
 
-# rev. history
-# - legacy screen option
+**POSSIBLE INPUT CODES**
+  
+* To be sure, check your own model!
+
+    * **20**: AV **40**: COMPONENT **60**: RGB **70**: DVI-D (PC) **80**: DVI-D (DTV) **91**: HDMI2 (DTV) **90**: HDMI1 (DTV) **92**: OPS/HDMI3/DVI-D (DTV) 
+    * **A0**: HDMI1 (PC), **A1**: HDMI2 (PC) **A2**: OPS/HDMI3/DVI-D (PC) **95**: OPS/DVI-D (DTV) **A5**: OPS/DVI-D (PC) 
+    * **96**: HDMI3/DVI-D (DTV) **A6**: HDMI3/DVI-D (PC) **97**: HDMI3/HDMI2/DVI-D (DTV) **A7**: HDMI3/HDMI2/DVI-D (PC) **98**: OPS (DTV) **C1**: DISPLAYPORT/USB-C (DTV)
+    * **A8**: OPS (PC) **99**: HDMI2/OPS (DTV) **A9**: HDMI2/OPS (PC) **C0**: DISPLAYPORT (DTV) **D0**: DISPLAYPORT (PC) 
+    * **D1**: DISPLAYPORT/USB-C (PC) **C2**: HDMI3 (DTV) **D2**: HDMI3 (PC) **C3**: HDBaseT (DTV) **D3**: HDBaseT (PC) **E0**: SuperSign webOS Player
+    * **E1**: Others **E2**: Multi Screen **E3**: Play via URL
+ 
+**MANUALS**
+
+* Just an assortment of online manuals (LG relocate them from time to time).
+
+   * [USER MANUAL - LG Digial Signage (Monitor Signage) - ENG.pdf](https://gscs-b2c.lge.com/downloadFile?fileId=DnofFZpS006rsciVwoXKTw)
+
+**REVISION HISTORY**
+
+ * rev. 3: IP address using binding
+    * **Input Code** tidy up
+    * added **Audio Mute**
+    * recipe header tidy up
+ * rev. 2: legacy screen option
+
+'''
 
 DEFAULT_ADMINPORT = 9761
 DEFAULT_BROADCASTIP = '192.168.1.255'
@@ -17,12 +41,12 @@ local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'t
 
 DEFAULT_SET_ID = '001' # sometimes this is 01
 
-param_ipAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string'}})
-param_setID = Parameter({'title': 'Set ID (hex)', 'desc': 'with 2 leading zeros (on most models), e.g. 001...9, a, b, c, d, e, f, 010 (= decimal 16)', 'schema': {'type': 'string', 'hint': 'e.g. 001, 01f (set 31), etc.'}})
+param_ipAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string', 'hint': '(overrides binding)'}})
+param_setID = Parameter({'title': 'Set ID (hex)', 'desc': 'with 2 leading zeros (on most models), e.g. 001...9, a, b, c, d, e, f, 010 (= decimal 16) or sometimes without leading zeros', 'schema': {'type': 'string', 'hint': 'e.g. 001, 01f (set 31), sometimes no leading zeros, etc.'}})
 param_broadcastIPAddress = Parameter({'title': 'Broadcast IP address', 'schema': {'type': 'string', 'hint': DEFAULT_BROADCASTIP}})
 param_adminPort = Parameter({'title': 'Admin port', 'schema': {'type': 'integer', 'hint': DEFAULT_ADMINPORT}})
-param_macAddress = Parameter({'title': 'MAC address', 'schema': {'type': 'string'}})
-param_useSerialGateway = Parameter({'title': 'Use serial gateway node?', 'schema': {'type': 'boolean'}})
+param_macAddress = Parameter({'title': 'MAC address (for Wake-on-LAN)', 'schema': {'type': 'string'}})
+param_useSerialGateway = Parameter({'title': 'Use serial gateway node? (when daisy-chaining)', 'schema': {'type': 'boolean'}})
 
 param_oldScreenBehaviour = Parameter({'title': 'Old screen behaviour?', 'desc': 'Ignore "screenPowerOff" (backlight control), "automaticStandby"', 'schema': {'type': 'boolean'}})
 
@@ -34,6 +58,16 @@ POWER_STATES = ['On', 'Input Waiting', 'Unknown', 'Turning On', 'Turning Off', '
 local_event_Power = LocalEvent({'title': 'Power', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': POWER_STATES + ['Partially On', 'Partially Off']}})
 local_event_DesiredPower = LocalEvent({'title': 'Desired', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}}) 
 local_event_LastPowerRequest = LocalEvent({'title': 'Last request', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string'}}) 
+
+local_event_IPAddress = LocalEvent({ 'group': 'Addressing', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+def remote_event_IPAddress(arg):
+  if not is_blank(param_ipAddress): return
+  previous = local_event_IPAddress.getArg()
+  if arg != previous:
+    console.info('IP address changed / updated to %s, previously %s; will restart...' % (arg, previous))
+    local_event_IPAddress.emit(arg)
+    _node.restart()
 
 INPUTS_TABLE = [ ('RGB', '60'),
                  ('DVI-D (PC)', '70'),
@@ -50,8 +84,6 @@ for row in INPUTS_TABLE:
 INPUTCODES_byName = {}
 for row in INPUTS_TABLE:
   INPUTCODES_byName[row[0]] = row[1]
-
-# local_event_Input = LocalEvent({'title': 'Input', 'group': 'Input', 'order': next_seq(), 'schema': {'type': 'string', 'enum': INPUTS_STR}})
 
 local_event_InputCode = LocalEvent({'title': 'Actual', 'group': 'Input Code', 'order': next_seq(), 'schema': {'type': 'string'}})
 local_event_DesiredInputCode = LocalEvent({'title': 'Desired', 'group': 'Input Code', 'order': next_seq(), 'schema': {'type': 'string'}})
@@ -155,7 +187,7 @@ def getScreenPowerOff():
     return
 
   transportRequest('get_screenpoweroff', 'kd %s ff\r' % setID, 
-              lambda resp: checkHeaderAndHandleData(resp, 'd', handleScreenOffResp))
+              lambda resp: checkHeaderAndHandleData(resp, 'd', handleScreenOffResp, ctx='get_screenpoweroff'))
   
 timer_powerPoller = Timer(lambda: getScreenPowerOff.call(), 15.0)
   
@@ -210,24 +242,20 @@ def syncPower():
 timer_powerSyncer = Timer(syncPower, 60.0)
 
 
+# <!-- Input Code
 
-
-def inputCodeHandler(code):
-  local_event_DesiredInputCode.emit(code)
+@local_action({ 'group': 'Input Code', 'order': next_seq(), 'schema': { 'type': 'string' }})
+def InputCode(arg):
+  console.info('InputCode(%s)' % arg)
+  local_event_DesiredInputCode.emit(arg)
   local_event_LastInputCodeRequest.emit(str(date_now()))
-  
   timer_inputCodeSyncer.setDelay(0.3)
-  
-Action('Input Code', inputCodeHandler, {'group': 'Input Code', 'schema': {'type': 'string'}})
-
-def handleInputCodeResp(arg):
-  local_event_InputCode.emit(int(arg))
     
 def setInputCode(code):
   log(1, 'setInputCode(%s) called' % code)
   
-  transportSend('set_inputcode(%s)' % code, 'xb %s %s' % (setID, code))
-  
+  transportRequest('set_inputcode', 'xb %s %s' % (setID, code), 
+              lambda resp: checkHeaderAndHandleData(resp, 'b', lambda arg: local_event_InputCode.emit(arg), ctx='set_inputcode'))
     
 def getInputCode():
   if lookup_local_event('MainPower').getArg() != 'On' or lookup_local_event('ScreenPowerOff').getArg() == True:
@@ -245,14 +273,15 @@ def getInputCodeNow():
     local_event_InputCode.emit(data)
 
   transportRequest('get_inputcode', 'xb %s ff\r' % setID, 
-              lambda resp: checkHeaderAndHandleData(resp, 'b', handleData))
+              lambda resp: checkHeaderAndHandleData(resp, 'b', handleData, ctx='get_inputcode'))
   
 timer_inputCodePoller = Timer(getInputCode, 15.0, 20.0)  
   
 def syncInputCode():
-  log(1, 'syncInputCode called')
+  log(1, 'syncInputCode: called')
   last = date_parse(local_event_LastInputCodeRequest.getArg() or ZERO_DATE_STR)
   if date_now().getMillis() - last.getMillis() > 60000:
+    log(1, 'syncInputCode: has been a long time since InputCode request; will not enforce')
     return
   
   desired = local_event_DesiredInputCode.getArg()
@@ -272,12 +301,14 @@ def syncInputCode():
 
 timer_inputCodeSyncer = Timer(syncInputCode, 60.0)
 
+# Input Code --!>
+
 SETTINGS_GROUP = "Settings & Info"
 
 # Serial number ---
 
 Event('Serial Number', {'group': SETTINGS_GROUP, 'order': next_seq(), 'schema': {'type': 'string'}})
-Action('Get Serial Number', lambda arg: transportRequest('get_serialnumber', 'fy %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'y', lambda data: lookup_local_event('Serial Number').emit(data))), 
+Action('Get Serial Number', lambda arg: transportRequest('get_serialnumber', 'fy %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'y', lambda data: lookup_local_event('Serial Number').emit(data), ctx='get_serialnumber')), 
        {'group': SETTINGS_GROUP, 'order': next_seq()})
 
 Timer(lambda: lookup_local_action('Get Serial Number').call(), 5*60, 15)
@@ -293,7 +324,7 @@ def GetTemperature():
     log(2, 'ignoring get_insidetemp; main power not on')
     return
   
-  transportRequest('get_insidetemp', 'dn %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Temperature').emit(int(data, 16))))  
+  transportRequest('get_insidetemp', 'dn %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'n', lambda data: lookup_local_event('Temperature').emit(int(data, 16)), ctx='get_insidetemp'))  
 
 Timer(lambda: lookup_local_action('Get Temperature').call(), 5*60, 15)
 
@@ -301,7 +332,8 @@ Timer(lambda: lookup_local_action('Get Temperature').call(), 5*60, 15)
 # Main Power ---
 
 mainPowerEvent = Event('Main Power', {'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
-Action('Get Main Power', lambda arg: transportRequest('get_mainpower', 'ka %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'a', lambda data: lookup_local_event('Main Power').emit('Off' if data == '00' else ('On' if data == '01' else 'Unknown %s' % data)))), 
+Action('Get Main Power', lambda arg: transportRequest('get_mainpower', 'ka %s ff\r' % setID, 
+         lambda resp: checkHeaderAndHandleData(resp, 'a', lambda data: lookup_local_event('Main Power').emit('Off' if data == '00' else ('On' if data == '01' else 'Unknown %s' % data)), ctx='get_mainpower')), 
        {'group': 'Power', 'order': next_seq()})
 
 def handleMainPowerSet(arg):
@@ -349,7 +381,7 @@ def initAutomaticStandBySetting():
   
     transportRequest('get_automaticstandby', 'mn %s ff\r' % setID, 
                                        lambda resp: checkHeaderAndHandleData(resp, 'n', 
-                                             lambda data: automaticStandbySignal.emit(AUTOSTANDBY_NAMES_BY_CODE.get(data, 'UNKNOWNCODE_%s' % data))))
+                                             lambda data: automaticStandbySignal.emit(AUTOSTANDBY_NAMES_BY_CODE.get(data, 'UNKNOWNCODE_%s' % data)), ctx='get_automaticstandby'))
   
 
 
@@ -361,6 +393,39 @@ def initAutomaticStandBySetting():
   
   if not param_oldScreenBehaviour:
     Timer(lambda: GetAutomaticStandby.call(), 5*60, 15) # every 5 mins, first after 15
+    
+# <!-- audio mute (ke)
+
+@after_main
+def initAudioMute():
+  group = 'Audio Mute'
+  signal = Event('Audio Mute', {'group': group, 'order': next_seq(), 'schema': {'type': 'boolean' }})
+
+  def handle_resp(data):
+    if data == '01':   value = True
+    elif data == '00': value = False
+    else:
+      return console.warn('audio_mute: got unknown resp - %s' % data)
+    
+    signal.emit(value)  
+
+  getter = Action('Get Audio Mute', lambda arg: transportRequest('get_audiomute', 'ke %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'e', handle_resp, ctx='get_audiomute')),
+         {'group': group, 'order': next_seq()})
+  
+  def handler(arg):
+    if arg in [ True, 1, 'On', 'ON', 'on' ]:       value = '01'
+    elif arg in [ False, 0, 'Off', 'OFF', 'off' ]: value = '00'
+    else:
+      return console.warn('audio_mute: unknown arg - %s' % arg)
+    
+    transportRequest('set_audiomute', 'ke %s %s\r' % (setID, value), lambda resp: checkHeaderAndHandleData(resp, 'e', handle_resp))    
+
+  setter = Action('Audio Mute', handler, {'group': group, 'order': next_seq(), 'schema': {'type': 'boolean'}})
+
+  Timer(lambda: getter.call(), 5, 15) # every 5 secs, first after 15  
+
+# -->
+
 
 
 # Abnormal state ---
@@ -392,7 +457,7 @@ def GetAbnormalState(arg):
     log(2, 'ignoring get_abnormalstate; main power not on')
     return
   
-  transportRequest('get_abnormalstate', 'kz %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'z', handle_AbnormalStateData))
+  transportRequest('get_abnormalstate', 'kz %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'z', handle_AbnormalStateData, ctx='get_abnormalstate'))
 
 Timer(lambda: lookup_local_action('Get Abnormal State').call(), 30, 10) # get every 30 seconds, first after 10
 
@@ -412,7 +477,7 @@ def initWakeOnLANSetting():
   def handle_WOLData(data):
     lookup_local_event('Wake-On-LAN').emit(ONOFF_NAMES_BY_CODE.get(int(data), 'UNKNOWNCODE_%s' % data))  
 
-  Action('Get Wake-On-LAN', lambda arg: transportRequest('get_wol', 'fw %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)), 
+  Action('Get Wake-On-LAN', lambda arg: transportRequest('get_wol', 'fw %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData, ctx='get_wol')), 
          {'group': SETTINGS_GROUP, 'order': next_seq()})
 
   Action('Wake-On-LAN', lambda arg: transportRequest('set_wol', 'fw %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'w', handle_WOLData)),
@@ -429,7 +494,7 @@ Event('No Signal Power Off', {'group': SETTINGS_GROUP, 'desc': NSPO_DESC, 'order
 def handle_NSPOData(data):
   lookup_local_event('No Signal Power Off').emit(ONOFF_NAMES_BY_CODE.get(int(data), 'UNKNOWNCODE_%s' % data))  
 
-Action('Get No Signal Power Off', lambda arg: transportRequest('get_nosignalpoweroff', 'fg %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'g', handle_NSPOData)), 
+Action('Get No Signal Power Off', lambda arg: transportRequest('get_nosignalpoweroff', 'fg %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'g', handle_NSPOData, ctx='get_nosignalpoweroff')), 
        {'group': SETTINGS_GROUP, 'desc': NSPO_DESC, 'order': next_seq()})
 
 Action('No Signal Power Off', lambda arg: transportRequest('set_nosignalpoweroff', 'fg %s %s\r' % (setID, ONOFF_CODES_BY_NAME[arg]), lambda resp: checkHeaderAndHandleData(resp, 'g', handle_NSPOData)),
@@ -440,24 +505,25 @@ Timer(lambda: lookup_local_action('Get No Signal Power Off').call(), 5*60, 15) #
 
 
 # LG protocol specific
-def checkHeaderAndHandleData(resp, cmdChar, dataHandler):
+def checkHeaderAndHandleData(resp, cmdChar, dataHandler, ctx=None):
   # e.g. 'a 01 OK01x'
   
   # Would like to check for x but delimeters are filtered out
   # if resp[-1:]  != 'x':
   #   console.warn('End-of-message delimiter "x" was missing')
   #   return
+  ctx = '%s: ' % ctx if ctx != None else ''
   
   if len(resp) < 2:
-    console.warn('Response was missing or too small')
+    console.warn(ctx + 'Response was missing or too small')
     return
   
   if resp[0] != cmdChar:
-    console.warn('Response did not match expected command (expected "%s", got "%s")' % (cmdChar, resp[0]))
+    console.warn(ctx + 'Response did not match expected command (expected "%s", got "%s")' % (cmdChar, resp[0]))
     return
     
   if not 'OK' in resp:
-    console.warn('Response is not positive acknowledgement (no "OK")')
+    console.warn(ctx + 'Response is not positive acknowledgement (no "OK")')
     return
   
   # get the data between the OK and the 'x'
@@ -517,17 +583,6 @@ def transportRequest(ctx, data, resp, urgent=False):
   else:
     log(1, 'tcp_request for %s: [%s]' % (ctx, data.strip()))
     tcp.request(data, resp)
-  
-def transportSend(data):
-  if param_useSerialGateway:
-    def handler():
-      log(1, 'gateway_send: [%s]' % data)
-      tcp.sendNow(data)
-    
-    queue.send(handler)
-    
-  else:
-    tcp.send(data)
 
 # --!>
   
@@ -551,9 +606,16 @@ def main(arg = None):
     setID = param_setID
     
   if not param_useSerialGateway:
-    dest = '%s:%s' % (param_ipAddress, param_adminPort or DEFAULT_ADMINPORT)
-    console.log('Connecting to %s...' % dest)
-    tcp.setDest(dest)
+    ipAddress = param_ipAddress if not is_blank(param_ipAddress) else local_event_IPAddress.getArg()
+      
+    if is_blank(ipAddress):
+      console.warn('No IP address to use!')
+    else:
+      # we have an IP address, update and use
+      local_event_IPAddress.emit(ipAddress)
+      dest = '%s:%s' % (ipAddress, param_adminPort or DEFAULT_ADMINPORT)
+      console.log('Connecting to %s...' % dest)
+      tcp.setDest(dest)
     
   else:
     console.log('Using serial gateway; make sure "Gateway" remote actions and events are specified')

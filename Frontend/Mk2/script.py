@@ -1,8 +1,30 @@
+'''
+_(requires Nodel v2.2 or higher; recipe Mk 2 rev. 3)_
+
+To get started from scratch, use the **Create Frontend from sample** Action.
+
+This **Frontend** / **Dashboard** makes use of the following files:
+
+   * `content/index.xml` (*): a landing page (see <a href="index-sample.xml?_source" target="_blank">here</a> for viewing/copying)
+   * `content/css/custom.css`: custom CSS (see <a href="css/custom-sample.css?_source" target="_blank">here</a> for viewing/copying)
+   * `content/js/custom.js`: custom Javascript (see <a href="js/custom-sample.js?_source" target="_blank">here</a> for viewing/copying)
+   * `content/img/background.jpg`
+   * `content/img/logo.png`
+   
+(*) required, more than one allowed
+
+You can **drag & drop** content into the editor for convenience, including certain binary files (e.g. graphics, etc.).
+
+To switch to your Frontend / Dashboard, use the **Nav** / **UI** menu or use `/index.xml` URL suffix for node.
+ 
+'''
+
 import xml.etree.ElementTree as ET # XML parsing
 import os                          # working directory
 from java.io import File           # reading files
 from org.nodel.io import Stream    # reading files
 from org.nodel import SimpleName   # for Node names
+from org.nodel.core import Nodel   # for host path
 
 param_suggestedNode = Parameter({'title': 'Suggested Node', 
                                  'desc': 'A suggestion can be made when remote bindings are created. The then need to be confirm and saved',
@@ -41,8 +63,7 @@ def main():
   # parse the index
   indexFile = os.path.join(workingDir, 'content', 'index.xml')
   if not os.path.exists(indexFile):
-    console.warn('No "%s" file exists; cannot continue' % indexFile)
-    return
+    return console.warn('No "content/index.xml" file exists; please use "Create from sample" Action')
   
   schemasFile = os.path.join(workingDir, 'content', 'schemas.json')
   if os.path.exists(schemasFile):
@@ -69,10 +90,11 @@ def loadIndexFile(xmlFile):
   
   def explore(group, e):
     eType = e.tag
-    eActionNormal = e.get('action')
+    join = e.get('join')             # shorthand for <... action=... event=...">
+    eActionNormal = e.get('action') or join
     eActionOn = e.get('action-on')   # these are for
     eActionOff = e.get('action-off') # momentary buttons
-    eEvent = e.get('event')
+    eEvent = e.get('event') or join
     title = e.get('title')
     
     # compose a group name (if possible)
@@ -130,7 +152,24 @@ def loadIndexFile(xmlFile):
       explore(thisGroup, i)
   
   explore('', xml.getroot())
+  
 
+Nodel.getHostPath()
 
-# customisation
-
+@local_action({'title': 'Create Frontend from sample and restart (will not overwrite existing)' })
+def CreateFromSample():
+  # this is "embedded" (and updated) with each version of Nodel
+  sampleFile = File(os.path.join(Nodel.getHostPath(), '.nodel', 'webui_cache', 'index-sample.xml')) 
+  contentDir = File(_node.getRoot(), 'content')
+  dstFile = File(contentDir, 'index.xml')
+  
+  if dstFile.exists():
+    return console.warn('index.xml file already exists!')
+  
+  if not contentDir.exists() and not contentDir.mkdirs():
+    return console.error('Could not create directory %s' % contentDir)
+  
+  Stream.writeFully(dstFile, Stream.readFully(sampleFile))
+  
+  console.info('"content/index.xml" created successfully from sample. Please edit to suit your needs. Restarting node...')
+  _node.restart()

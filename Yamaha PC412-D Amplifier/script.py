@@ -1,181 +1,171 @@
-'''Yamaha XMV Series Amplifier (ready for MTX3, MTX5-D, MRX7-D, EXi8, EXo8)
+'''
+Yamaha PC412-D (previously ready for XMV Series, MTX3, MTX5-D, MRX7-D, EXi8, EXo8), see script for manual location.
 
-* Manual link - https://jp.yamaha.com/files/download/other_assets/1/1144121/mtx_mrx_xmv_ex_remote_control_protocol_spec_v310_en.pdf
+Taken from manuals:
 
-*rev 3. changelog*
-
-   * support for IP Address via binding
-   * console noise tidyup
-   * only polls when connected
+  * https://au.yamaha.com/files/download/other_assets/4/1307804/pc_remote_control_protocol_spec_v102_en.pdf
+  * http://download.yamaha.com/api/asset/file/?language=en&site=countrysite-master.prod.wsys.yamaha.com&asset_id=63959
 '''
 
 DEFAULT_TCPPORT = 49280
 
 param_Disabled = Parameter({'schema': {'type': 'boolean'}})
 
-# IP addressing can be done by parameter or remote signals
 param_IPAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string'}})
-
-local_event_IPAddress = LocalEvent({ 'group': 'Addressing', 'order': next_seq(), 'schema': { 'type': 'string' }})
-
-def remote_event_IPAddress(arg):
-  if is_blank(param_IPAddress): return         # parameter always overrides binding
-    
-  previous = local_event_IPAddress.getArg()    # check if changed, if so update and restart
-  if arg != previous:                          
-    console.info('IP address binding value changed - now %s, previously %s - restarting node' % (arg, previous))
-    local_event_IPAddress.emit(arg)
-    _node.restart()
-    # ... and leave for main() to deal with
-
-DEFAULT_NUMCHANNELS = 8
-param_NumChannels = Parameter({'title': 'Channels', 'desc': 'Number of channels', 'schema': {'type': 'integer', 'hint': DEFAULT_NUMCHANNELS}})
-
+ 
 local_event_DisableMeters = LocalEvent({'group': 'Meters', 'schema': {'type': 'boolean'}})
 
-INPUT_METER_ADDR  = 'MTX:mtr_512/20000/meter'
-OUTPUT_METER_ADDR = 'MTX:mtr_512/20001/meter'
+param_Presets = Parameter({ 'schema': { 'type': 'array', 'items': { 'type': 'object', 'properties': {
+  'index':   { 'type': 'integer', 'order': 1 },
+  'label':   { 'type': 'string', 'order': 2 }}}}})
 
-inputMeterSignals = list()
-outputMeterSignals = list()
-
-# create input and output channel meters
-
-_pollers = list() # holds all the pollers (timers) to enable/disable on connection state
-
-for i in range(16):
-  signal = Event('Input %s Meter' % (i+1), {'title': '#%s' % (i+1), 'group': 'Input Meters', 'order': 8000+next_seq(), 'schema': {'type': 'integer'}})
-  inputMeterSignals.append(signal)
+METERS = [
+  { 'addr': 'AMP:DigitalIn/Level', 'channels': 16 },
+  { 'addr': 'AMP:AnalogIn/Level', 'channels': 4 },
+  { 'addr': 'AMP:Ch/OutputVoltage', 'channels': 4},
+  { 'addr': 'PCD:Meter/AmpCh/VoltageRMS', 'channels': 4},
+]  
   
-for i in range(8):
-  signal = Event('Output %s Meter' % (i+1), {'title': '#%s' % (i+1), 'group': 'Output Meters', 'order': 8000+next_seq(), 'schema': {'type': 'integer'}})
-  outputMeterSignals.append(signal)
-  
-# parameters
-INT_SCHEMA = {'type': 'integer'}
-INT_CONVERTERS = [ lambda arg: int(arg),   # first converter is converting raw string value from device
-                   lambda arg: str(arg) ]  # second is converting nodel type to raw string device
-
-STRING_CONVERTERS = [ lambda arg: arg,     # this does NO conversation obviously
-                      lambda arg: arg ] 
-
-MUTE_SCHEMA = {'type': 'string', 'enum': ['On', 'Off']}
-MUTE_CONVERTERS = [ lambda arg: 'On' if arg == '1' else 'Off', 
-                    lambda arg: 1 if arg == 'On' else 0 ]
-
-POLARITY_SCHEMA = {'type': 'string', 'enum': ['Normal', 'Inverse']}
-POLARITY_CONVERTERS = [ lambda arg: 'Inverse' if arg == '1' else 'Normal', 
-                        lambda arg: 1 if arg == 'Inverse' else 0 ]
-
-POWER_SCHEMA = {'type': 'string', 'enum': ['On', 'Off']}
-POWER_CONVERTERS = [ lambda arg: 'Off' if arg == '1' else 'On', # yes, 1 means Off / stand-by
-                     lambda arg: 1 if arg == 'Off' else 0 ]
-
-INPUTSEL_LOOKUP = [('0', 'Analog'), ('1', 'Digital'), ('2', 'Multiple')]
-INPUTSEL_SCHEMA = {'type': 'string', 'enum': [y for x, y in INPUTSEL_LOOKUP]}
-INPUTSEL_byCode = dict([(x, y) for x, y in INPUTSEL_LOOKUP])
-INPUTSEL_byName = dict([(y, x) for x, y in INPUTSEL_LOOKUP])
-INPUTSEL_CONVERTERS = [ lambda arg: INPUTSEL_byCode[arg],
-                        lambda arg: INPUTSEL_byName[arg] ]
-
-SENSI_SCHEMA = {'type': 'string', 'enum': ['-20dBFS', '-3dBFS']}
-SENSI_CONVERTERS = [ lambda arg: '-3dBFS' if arg == '1' else '-20dBFS',
-                     lambda arg: 1 if arg == '-3dBFS' else 0 ]
-
-CHSEL_SCHEMA = {'type': 'string', 'enum': ['-20dBFS', '-3dBFS']}
-CHSEL_CONVERTERS = [ lambda arg: 'Digital' if arg == '1' else 'Analog',
-                     lambda arg: 1 if arg == 'Digital' else 0 ]
-
-
-PARAMETERS = [
-  #     0:address                 1:group        2:name               3:schema         4:converters
-      ['MTX:mem_512/1/6/0/0/0/0', "Power",       "Power",             POWER_SCHEMA,    POWER_CONVERTERS],
-      ['MTX:mem_512/1/7/0/0/0/0', "Utility",     "Input Select",      INPUTSEL_SCHEMA, INPUTSEL_CONVERTERS],
-      ['MTX:mem_512/1/10/0/0/0/0', "Sensitivity", "Input Sensitivity", SENSI_SCHEMA,   SENSI_CONVERTERS]
-  ]  
-
-@after_main
-def channelsConfig():
-  NUM_CHANNELS = param_NumChannels or DEFAULT_NUMCHANNELS
-  for i in range(NUM_CHANNELS):
-    PARAMETERS.extend([
-      ['MTX:mem_512/1/4/%s/0/0/0' % i,  "Attenuation (Signal Processing)",         "Channel %s Att" % (i+1),          INT_SCHEMA,      INT_CONVERTERS],
-      ['MTX:mem_512/1/4/%s/0/1/0' % i,  "Digital Attenuation (Signal Processing)", "Channel %s Digital Att" % (i+1),  INT_SCHEMA,      INT_CONVERTERS],
-      ['MTX:mem_512/1/4/%s/0/2/0' % i,  "Muting",                                  "Channel %s Mute" % (i+1),         MUTE_SCHEMA,     MUTE_CONVERTERS],
-      ['MTX:mem_512/1/4/%s/0/3/0' % i,  "Polarity",                                "Channel %s Polarity" % (i+1),     POLARITY_SCHEMA, POLARITY_CONVERTERS],
-        
-      # Not sure but this doesn't seem to be working: (see page 107)
-      # ['MTX:mem_512/1/11/%s/0/0/0' % i, "Channel Utility",   "Channel %s Input Select" % (i+1), CHSEL_SCHEMA,    CHSEL_CONVERTERS],
-    ])
-
-    
 # for async feedback
 
-signalsByAddr = {}      # e.g. { 'MTX:mem_512/1/4/0/0/1/0': (`convertor`, `a signal`) }
-signalsByDevStatus = {} # e.g. { 'lockstatus': (`convertor`, `a signal`) }
+# _ALL_ callbacks
+# will only call callback IF name matches
+_callbacks_byName = { } # e.g. { 'MTX:mem_512/1/4/0/0/1/0': (lambda resp: ...) }
+
+_signalsByAddr = {}      # e.g. { 'MTX:mem_512/1/4/0/0/1/0': (`convertor`, `a signal`) }
+_signalsByDevStatus = {} # e.g. { 'lockstatus': (`convertor`, `a signal`) }
+
+# holds all pollers (timers) that get enabled/disabled depending on connection state
+_pollers = list()
 
 # <main ---
 
 @after_main
 def bindAllParameters():
-  for paramInfo in PARAMETERS:
-    bindParameters(paramInfo)
+  bindParameters('AMP:Power 0 0', "Power", "Power", POWER_SCHEMA, POWER_CONVERTERS)
+  bindParameters('AMP:Ch/Volume 0 0', "Volume", "Channel A Volume", DB100_SCHEMA, DB100_CONVERTERS)
+  bindParameters('AMP:Ch/Volume 1 0', "Volume", "Channel B Volume", DB100_SCHEMA, DB100_CONVERTERS)
+  bindParameters('AMP:Ch/Volume 2 0', "Volume", "Channel C Volume", DB100_SCHEMA, DB100_CONVERTERS)
+  bindParameters('AMP:Ch/Volume 3 0', "Volume", "Channel D Volume", DB100_SCHEMA, DB100_CONVERTERS)
+  bindParameters('AMP:Ch/Mute 0 0', "Mute", "Channel A Mute", BOOL_SCHEMA, BOOL_CONVERTERS)
+  bindParameters('AMP:Ch/Mute 1 0', "Mute", "Channel B Mute", BOOL_SCHEMA, BOOL_CONVERTERS)
+  bindParameters('AMP:Ch/Mute 2 0', "Mute", "Channel C Mute", BOOL_SCHEMA, BOOL_CONVERTERS)
+  bindParameters('AMP:Ch/Mute 3 0', "Mute", "Channel D Mute", BOOL_SCHEMA, BOOL_CONVERTERS)
+  bindParameters('AMP:Ch/Name 0 0', "Names", "Channel A Name", STRING_SCHEMA, STRING_CONVERTERS, readOnly=True)
+  bindParameters('AMP:Ch/Name 1 0', "Names", "Channel B Name", STRING_SCHEMA, STRING_CONVERTERS, readOnly=True)
+  bindParameters('AMP:Ch/Name 2 0', "Names", "Channel C Name", STRING_SCHEMA, STRING_CONVERTERS, readOnly=True)
+  bindParameters('AMP:Ch/Name 3 0', "Names", "Channel D Name", STRING_SCHEMA, STRING_CONVERTERS, readOnly=True)
+  bindParameters('PCD:Mains/Voltage 0 0', "Mains", "Voltage", INT_SCHEMA, INT_CONVERTERS, readOnly=True)
+  bindParameters('PCD:Mains/Current 0 0', "Mains", "Current", INT_SCHEMA, INT_CONVERTERS, readOnly=True)
 
-def bindParameters(paramInfo):
-  address = paramInfo[0] # e.g. 'MTX:mem_512/1/4/0/0/1/0'
-  group = paramInfo[1]
-  name = paramInfo[2]
-  schema = paramInfo[3]
-  converters = paramInfo[4]
-  
+def bindParameters(address, group, name, schema, converters, readOnly=False):
   log(2, 'binding address:%s group:%s name:%s schema:%s' % (address, group, name, schema))
   
   # signal
   signal = Event(name, {'order': next_seq(), 'group': group, 'schema': schema})
   
+  def onCallback(parts):
+    signal.emit(converters[0](parts[5]))
+    
+  _callbacks_byName[address] = onCallback
+  
   # getter
-  getter = Action('Get ' + name, lambda arg: getParam(address, option=5, converter=converters[0], signal=signal),
-                  {'group': group, 'order': next_seq()})
+  getter = Action('Get ' + name, lambda arg: tcp.send('get %s' % address), {'group': group, 'order': next_seq()})
   
   # setter
-  setter = Action(name, lambda arg: setParam(address, arg, option=5, converters=converters, signal=signal),
-                  {'group': group, 'order': next_seq(), 'schema': schema})
+  if not readOnly:
+    setter = Action(name, lambda arg: tcp.send('set %s %s' % (address, converters[0](arg))),
+                    {'group': group, 'order': next_seq(), 'schema': schema})
   
   # for async feedback from device e.g. [NOTIFY set MTX:mem_512/1/4/0/0/1/0 0 0 -75 "-75"]
-  signalsByAddr[address] = (converters[0], signal)
+  # _signalsByAddr[address] = (converters[0], signal)
   
   # kick-off a getter within the next 15 seconds and then every 2 minutes or so
   _pollers.append(Timer(lambda: getter.call(), random(120,150), random(10,15), stopped=True))
   
-  
 def main():
   if param_Disabled:
-    return console.warn('Disabled! nothing to do')
-
-  if not is_blank(param_IPAddress):
-    ipAddress = param_IPAddress
-    local_event_IPAddress.emit(ipAddress)
-  else:
-    ipAddress = local_event_IPAddress.getArg() # would have been updated via binding
-    if is_blank(ipAddress):
-      return console.warn('No IP address!')
-
-  dest = '%s:%s' % (ipAddress, DEFAULT_TCPPORT)
-  console.info('Will connect to "%s"...' % dest)
+    return console.warn('Disabled! Nothing to do')
+  
+  if is_blank(param_IPAddress):
+    return console.warn('No IP address specified')
+  
+  initMeters()
+  
+  initPresets()
+  
+  dest = '%s:%s' % (param_IPAddress, DEFAULT_TCPPORT)
+  console.info('Will connect to %s' % dest)
   tcp.setDest(dest)
+  
+def initMeters():
+  for meterInfo in METERS:
+    addr = meterInfo['addr']
+    channels = meterInfo['channels']
 
+    # create 'sub' meters
+    for i in range(1, channels+1):
+      name = '%s Meter %s' % (addr, i)
+      e = create_local_event(name, { 'group': 'Meters - %s' % addr, 'order': next_seq(), 'schema': { 'type': 'number' }})
+    
 def kickOffMeters():
   # do nothing if meters are disabled
   if local_event_DisableMeters.getArg():
     return
   
-  lookup_local_action('meterStart').call({'address': INPUT_METER_ADDR,  'interval': 333})
-  lookup_local_action('meterStart').call({'address': OUTPUT_METER_ADDR, 'interval': 333})
+  for meterInfo in METERS or []:
+    lookup_local_action('meterStart').call({'address': meterInfo['addr'], 'interval': 333})
   
 # give it 15 seconds before getting the meters and repeat request every X seconds
 # since they automatically stop after a period of time
-_pollers.append(Timer(kickOffMeters, 8, 15, stopped=True))
+console.info('Will kick-off meters after 30s')
+_pollers.append(Timer(kickOffMeters, 8, 30, stopped=True))
 
+# presets
+
+def initPresets():
+  signal = create_local_event('Preset', { 'group': 'Presets', 'order': next_seq(), 'schema': { 'type': 'integer' }})
+  
+  signalUnmodified = create_local_event('Preset Unmodified', { 'group': 'Presets', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
+  
+  setter = Action('Preset', lambda arg: tcp.request('ssrecall_ex %s' % arg, lambda resp: parseResp(resp, option=2, converter=INT_CONVERTERS[0], signal=signal)), 
+                  { 'group': 'Presets', 'order': next_seq(), 'schema': { 'type': 'integer' }})
+  
+  def handle_resp(resp):
+    #   e.g. OK sscurrent_ex preset 0 modified
+    hasError = False
+    if not resp.startswith('OK sscurrent_ex'):
+      hasError = True
+    else:
+      options = splitIntoOptions(resp)
+      if len(options) < 5:
+        hasError = True
+    
+    if hasError:
+      return console.warn('GetPreset: response was not expected - "%s"' % resp)
+    
+    currentPreset = int(options[3])
+    signal.emit(currentPreset)
+    
+    isUnmodified = options[4] == 'unmodified'    
+    signalUnmodified.emit(isUnmodified)
+  
+  getter = Action('Get Preset', lambda arg: tcp.request('sscurrent_ex preset', handle_resp), { 'group': 'Presets', 'order': next_seq() })
+  _pollers.append(Timer(lambda: getter.call(), 8, 3, stopped=True))
+  
+  for presetInfo in param_Presets or []:
+    initPreset(presetInfo, signal, setter)
+    
+def initPreset(presetInfo, signal, setter):
+  index = presetInfo['index']
+  label = presetInfo['label']
+  title = ('#%s "%s"' % (index, label)) or 'Index %s' % index
+  
+  presetSignal = Signal('Preset %s' % index, { 'group': 'Presets', 'order': next_seq(), 'title': title, 'schema':  { 'type': 'boolean' } })
+  signal.addEmitHandler(lambda arg: presetSignal.emitIfDifferent(arg == index))
+  
+  presetSetter = Action('Preset %s' % index, lambda ignore: setter.call(index), { 'group': 'Presets', 'order': next_seq(), 'title': title })
+    
 # --- main>
   
 # <protocol ---
@@ -189,29 +179,22 @@ METER = "METER"
 
 def handleNotifyMtr(options):
   # e.g. meter: 
-  # NOTIFY mtr MTX:mtr_512/20000/meter level 1b 1c 1c 1c 1b 1d 1d 1c 00 00 00 00 00 00 00 00
-  option3 = options[2]
-  
-  if option3 == INPUT_METER_ADDR:
-    metersSignals = inputMeterSignals
+  # NOTIFY mtr MTX:Index.4 level 1b 1c 1c 1c
+  # NOTIFY mtr AMP:DigitalIn/Level level 1e 1e 1e 1e 1e 1e 1e 1e 1e 1e 1e 1e 1e 1e 1e 1e]
+  option3 = options[2] # address
+  option4 = options[3] # 'level'
     
-  elif option3 == OUTPUT_METER_ADDR:
-    metersSignals = outputMeterSignals
-    
-  offset = 0
-  for levelCode in options[4:]:
-    # see page 58
-    metersSignals[offset].emitIfDifferent(-126 + int(levelCode, 16))
-    offset += 1
+  for i, levelCode in enumerate(options[4:]):
+    meterE = lookup_local_event('%s Meter %s' % (option3, i+1))
+    if meterE == None:
+      break
+    meterE.emit(-126 + int(levelCode, 16))
 
 def parseResp(resp, option=-1, converter=None, signal=None):
   # Example responses:
   #
   #   OK devstatus fs "44.1kHz"
   #   ERROR devstatus InvalidArgument
-  # Sometimes:
-  #   OK mtrstart MTX:mtr_512/20001/meter   OR
-  #   NOTIFY mtr MTX:mtr_512/20000/meter level 1b 1c 1c 1c 1b 1d 1d 1c 00 00 00 00 00 00 00 00
   options = splitIntoOptions(resp)
   
   option0 = options[0]
@@ -220,8 +203,9 @@ def parseResp(resp, option=-1, converter=None, signal=None):
     console.warn('Got bad response [%s]' % resp)
   
   # otherwise pass through 'OK' and 'NOTIFY'
-  elif option0 == OK or option0 == NOTIFY:
+  if option0 == OK or option0 == NOTIFY:
     option1 = options[1]
+    
     if option1 == 'mtr':
       # this is considered stray feedback - should very rarely, if ever get here, but 
       # have seen that the amp doesn't/cannot guarentee no cross-talk between call requests and 
@@ -230,40 +214,24 @@ def parseResp(resp, option=-1, converter=None, signal=None):
       # just pass it through to the meter handler
       handleNotifyMtr(options)
       return
-
-    elif option1 == 'mtrstart':
-      # also stray feedback, can just ignore
-      return
     
-    if option < 0:
-      return
-
-    if option >= len(options):
-      return console.warn('parse_resp: option index is not valid - resp was "%s"' % resp)
-
-    rawOption = options[option]
-    
-    if converter != None:
-      try:
-        optionArg = converter(rawOption)
-      except:
-          return console.warn('parse_resp: conversion failure dealing with: [%s]' % options)
-    else:
-      optionArg = rawOption
-
-    if signal != None:
-      signal.emit(optionArg)          
-    
-def getParameter(memNum, uniqueID, elemNum, xPos, yPos, paramNum, indexNum, option=-1, signal=None):
-  tcp.request('get MTX:mem_%s/%s/%s/%s/%s/%s/%s 0 0' % (memNum, uniqueID, elemNum, xPos, yPos, paramNum, indexNum), 
-              lambda resp: parseResp(resp, option, signal))
-  
+    if option >= 0:
+      if converter == None:
+        signal.emit(options[option])
+      
+      else:
+        try:
+          signal.emit(converter(options[option]))
+        except:
+          console.warn('conversion failure dealing with: [%s]' % options)
+          
 def getParam(addr, option=-1, converter=None, signal=None):
-  tcp.request('get %s 0 0' % (addr), 
+  
+  tcp.request('get %s' % (addr), 
               lambda resp: parseResp(resp, option, converter, signal))
   
 def setParam(addr, arg, option=-1, converters=None, signal=None):
-  tcp.request('set %s 0 0 %s' % (addr, converters[1](arg)), 
+  tcp.request('set %s %s' % (addr, converters[1](arg)), 
               lambda resp: parseResp(resp, option, converters[0], signal))
 
   
@@ -280,17 +248,20 @@ def bindDevStatusCommand(name, group, cmd):
   action = Action('Get %s' % name, handler, {'group': group, 'order': next_seq()})
   
   # for async feedback via notify
-  signalsByDevStatus[cmd] = (STRING_CONVERTERS[0], signal)
+  _signalsByDevStatus[cmd] = (STRING_CONVERTERS[0], signal)
   
   # kick-off more frequest timers
   _pollers.append(Timer(lambda: action.call(), random(60,90), random(5,10), stopped=True))
   
-@after_main
+#@after_main
 def bindDevStatuses():
   group = 'Device Status'
   bindDevStatusCommand('Device Run Mode', group, 'runmode')  
   bindDevStatusCommand('Device Error Status', group, 'error')
-  bindDevStatusCommand('Device Sampling Freq', group, 'fs')
+  
+  # 'fs' not supported
+  # bindDevStatusCommand('Device Sampling Freq', group, 'fs')
+  
   bindDevStatusCommand('Device Work Clock Status', group, 'lockstatus')  
   
   
@@ -330,14 +301,25 @@ def local_action_scpKeepAlive(arg):
 
 #         --- Meters ---  
 
-def local_action_meterStart(arg=None):
-  '''{"title": "Meter Start", "group": "Meter", "order": 1, "schema": {"type": "object", "properties": {
-                                               "address":   {"type": "string", "order": 1, "desc": "e.g. MTX:mtr_512/20000/meter"},
-                                               "interval": {"type": "integer", "order": 3, "desc": "e.g. 333"}}}}'''
-  # e.g. [mtrstart MTX:mtr_512/20000/meter 100]
+# This is for non-MRX7-D equipment
+# @local_action({"title": "Meter Start", "group": "Meter", "order": 1, "schema": {"type": "object", "properties": {
+#                                                "address":   {"type": "string", "order": 1, "desc": "e.g. MTX:mtr_512/20000/meter"},
+#                                                "interval": {"type": "integer", "order": 3, "desc": "e.g. 333"}}}})
+# def MeterStart(arg=None):
+#   # e.g. [mtrstart MTX:mtr_512/20000/meter 100]
+#   log(2, "MeterStart [%s]" % arg)
+#   tcp.request('mtrstart %s %s' % (arg['address'], arg['interval']), lambda resp: parseResp(resp))
+  
+@local_action({"title": 'Meter Start', 'group': 'Meters', "order": 1, "schema": {"type": "object", "properties": {
+                                             "address":   {"type": "string", "order": 1, "hint": "(e.g. MTX:Index_2)"},
+                                             "type":      {'type': 'string', 'order': 2, 'enum': [ 'Level', 'Gain Reduction', 'Hold' ] },
+                                             "interval": {"type": "integer", "order": 3, "desc": "e.g. 333"}}}})
+def MeterStart(arg):
+  # e.g. [mtrstart MTX:Index_2 level 1000]
   log(2, "MeterStart [%s]" % arg)
+  
   tcp.request('mtrstart %s %s' % (arg['address'], arg['interval']), lambda resp: parseResp(resp))
-
+  
 # --- protocol>
 
   
@@ -347,7 +329,7 @@ def tcp_connected():
   console.info('tcp_connected')
   tcp.clearQueue()
   
-  # pollers can start
+  # start all pollers
   for p in _pollers:
     p.start()
   
@@ -382,7 +364,7 @@ def tcp_received(data):
       # e.g. [NOTIFY set MTX:mem_512/1/4/0/0/1/0 0 0 -75 "-75"]
       # so lookup the signal given the address
       addressPart = options[2]
-      signalInfo = signalsByAddr.get(addressPart)
+      signalInfo = _signalsByAddr.get(addressPart)
 
       if signalInfo == None:
         # unmapped
@@ -399,7 +381,7 @@ def tcp_received(data):
       #        NOTIFY devstatus lockstatus "lock"
 
       categoryPart = options[2] # e.g. 'fs'
-      signalInfo = signalsByDevStatus.get(categoryPart)
+      signalInfo = _signalsByDevStatus.get(categoryPart)
       
       if signalInfo == None:
         return
@@ -569,3 +551,50 @@ def splitIntoOptions(line):
 
 
 # --->
+
+# <! --- converters
+
+INT_SCHEMA = {'type': 'integer'}
+INT_CONVERTERS = [ lambda arg: int(arg),   # first converter is converting raw string value from device
+                   lambda arg: str(arg) ]  # second is converting nodel type to raw string device
+
+DB100_SCHEMA = { 'type': 'number' } # dB multiplied by 100
+DB100_CONVERTERS = [ lambda arg: int(arg) / 100.0,
+                   lambda arg: str(int(arg * 100)) ]
+
+STRING_SCHEMA = { 'type': 'string' }
+STRING_CONVERTERS = [ lambda arg: arg,     # this does NO conversation obviously
+                      lambda arg: arg ] 
+
+MUTE_SCHEMA = {'type': 'string', 'enum': ['On', 'Off']}
+MUTE_CONVERTERS = [ lambda arg: 'On' if arg == '1' else 'Off', 
+                    lambda arg: 1 if arg == 'On' else 0 ]
+
+BOOL_SCHEMA = {'type': 'boolean' }
+BOOL_CONVERTERS = [ lambda arg: True if arg == '1' else ( False if arg == '0' else console.warn('Unknown bool value - %s' % arg) ), 
+                    lambda arg: 1 if arg in [ True, '1', 1, 'On', 'ON', 'on' ] else ( 0 if arg in [ False, '0', 0, 'Off', 'OFF', 'off' ] else console.warn('Unknown arg - %s' % arg) ) ]
+
+POLARITY_SCHEMA = {'type': 'string', 'enum': ['Normal', 'Inverse']}
+POLARITY_CONVERTERS = [ lambda arg: 'Inverse' if arg == '1' else 'Normal', 
+                        lambda arg: 1 if arg == 'Inverse' else 0 ]
+
+POWER_SCHEMA = {'type': 'string', 'enum': ['On', 'Off']}
+POWER_CONVERTERS = [ lambda arg: 'Off' if arg == '1' else 'On', # yes, 1 means Off / stand-by
+                     lambda arg: 1 if arg == 'Off' else 0 ]
+
+INPUTSEL_LOOKUP = [('0', 'Analog'), ('1', 'Digital'), ('2', 'Multiple')]
+INPUTSEL_SCHEMA = {'type': 'string', 'enum': [y for x, y in INPUTSEL_LOOKUP]}
+INPUTSEL_byCode = dict([(x, y) for x, y in INPUTSEL_LOOKUP])
+INPUTSEL_byName = dict([(y, x) for x, y in INPUTSEL_LOOKUP])
+INPUTSEL_CONVERTERS = [ lambda arg: INPUTSEL_byCode[arg],
+                        lambda arg: INPUTSEL_byName[arg] ]
+
+SENSI_SCHEMA = {'type': 'string', 'enum': ['-20dBFS', '-3dBFS']}
+SENSI_CONVERTERS = [ lambda arg: '-3dBFS' if arg == '1' else '-20dBFS',
+                     lambda arg: 1 if arg == '-3dBFS' else 0 ]
+
+CHSEL_SCHEMA = {'type': 'string', 'enum': ['-20dBFS', '-3dBFS']}
+CHSEL_CONVERTERS = [ lambda arg: 'Digital' if arg == '1' else 'Analog',
+                     lambda arg: 1 if arg == 'Digital' else 0 ]
+
+# --!>

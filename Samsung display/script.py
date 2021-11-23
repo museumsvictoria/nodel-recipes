@@ -1,27 +1,42 @@
-'''Samsung serial driver - manual http://www.samsung.com/us/pdf/UX_DX.pdf'''
+'''
+**Samsung display** recipe, serial or TCP.
+
+Remember to adjust **Network Standby Control** to **On**.
+
+* rev. ~10+:
+  * new: IP address config via remote binding (see AMX Beacon, SSDP address, or custom address provider recipes)
+  * reliability: flipping Power and/or Input rapidly may settle on wrong state
+  * deprecated Mute; added MuteOnOff to better match conventional On & Off action and signal argument usage
+  * added discrete Power and Mute states PowerOn, PowerOff, MuteOn and MuteOff
+'''
 
 DEFAULT_TCP_PORT = 1515 # Samsung's default port
 DEFAULT_SETID = 0
 
-param_ipAddress = Parameter({"value":"192.168.100.1","title":"IP address","order":0, "schema":{"type":"string"}})
 param_port = Parameter({"title": "TCP port", "order":0, "schema": {"type": "integer", 'hint': DEFAULT_TCP_PORT}})
 param_id = Parameter({"title": "Set ID", "order": 0, "schema": {"type":"integer", 'hint': 0}})
 
 param_mainInputCode = Parameter({'title': 'Main Input Code', 'desc': 'The input (source) for the "ensure" actions and events', 'schema': {'type': 'string'}})
 
 # general device status
-local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'type': 'object', 'title': '...', 'properties': {
-        'level': {'type': 'integer', 'title': 'Value'},
-        'message': {'type': 'string', 'title': 'String'}
+local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'type': 'object', 'properties': {
+        'level': {'type': 'integer', 'order': 1 },
+        'message': {'type': 'string', 'order': 2 }
       }}})
 
 local_event_RawPower = LocalEvent({'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 local_event_Power = LocalEvent({'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Partially On', 'Partially Off', 'Off']}})
+local_event_PowerOn = LocalEvent({ 'group': 'Power', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
+local_event_PowerOff = LocalEvent({ 'group': 'Power', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
 local_event_DesiredPower = LocalEvent({'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 # (also see initPowerEvaluation)
 
 local_event_Volume = LocalEvent({'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'integer'}})
-local_event_Mute = LocalEvent({'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['Mute', 'Unmute']}})
+local_event_Mute = LocalEvent({ 'title': 'Mute (deprecated)', 'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['Mute', 'Unmute']}})
+local_event_MuteOnOff = LocalEvent({ 'title': 'Mute (On / Off)', 'group': 'Audio', 'order': next_seq(), 'schema': { 'type': 'string', 'enum': [ 'On', 'Off' ] }})
+local_event_MuteOn = LocalEvent({ 'title': 'Mute On?', 'group': 'Audio', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
+local_event_MuteOff = LocalEvent({ 'title': 'Mute Off?', 'group': 'Audio', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
+
 
 # this table is incomplete
 INPUT_CODE_TABLE = [ ('1F', 'PC'),
@@ -44,8 +59,32 @@ timer_deviceStatus = Timer(lambda: getDisplayStatusAction.call(), 30)
 # check error status every 45 seconds (first after 15)
 timer_errorStatus = Timer(lambda: getExtendedDisplayStatusAction.call(), 45, 15)
 
-def main(arg = None):
-  if param_ipAddress == None or len(param_ipAddress.strip())==0:
+# <!-- IP addressing
+
+param_ipAddress = Parameter({ 'order': 0, 'schema': { 'type': 'string', 'hint': '(overrides remote binding)' }})
+
+local_event_IPAddress = LocalEvent( { 'group': 'Addressing', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+def remote_event_ipAddress(arg):
+  if not is_blank(param_ipAddress):
+    return                          # param takes precedence over any binding
+
+  elif arg != local_event_IPAddress.getArg():
+    console.info('IP address updated remotely - %s - restarting...' % arg)
+    local_event_IPAddress.emit(arg) # IP address changed so
+    _node.restart()                 # restart node!
+
+# -->
+
+def main():
+  ipAddress = param_ipAddress
+  if is_blank(ipAddress):
+    ipAddress = local_event_IPAddress.getArg()    # from remote binding
+  else:
+    console.info('(using IP address parameter)')
+    local_event_IPAddress.emit(ipAddress)
+
+  if is_blank(ipAddress):
     console.warn('No IP address set!')
     timer_deviceStatus.stop()
     timer_nonCritical.stop()
@@ -66,7 +105,7 @@ def main(arg = None):
   power_timer.stop()
   inputCode_timer.stop()
   
-  address = '%s:%s' % (param_ipAddress, param_port)
+  address = '%s:%s' % (ipAddress, param_port)
   
   console.info('Will connect to [%s], setID:%s...' % (address, param_id))
   tcp.setDest(address)
@@ -163,22 +202,19 @@ def quickPowerCheck():
   ok = False
   
   if desired == None or current == desired:
-    if power_timer.isStarted(): # only log if enforcer active
-      console.info('power: done checking state - states match or desired is none)')
-    power_timer.stop()
     ok = True
     
   return current, desired, ok
 
 def enforcePower():
   current, desired, ok = quickPowerCheck()
-  
-  if ok:
-    return
-  
+    
   if (date_now().getMillis() - date_parse(local_event_LastPowerRequest.getArg()).getMillis()) > 75000 :
-    console.warn('power: giving up enforcing state - waited more than 1m15s.')
+    console.log('power: will not enforce state any longer - 1m 15s has elapsed')
     power_timer.stop()
+    return
+
+  if ok:
     return
   
   console.info('power: state (still) does not match desired, setting to "%s"' % desired)
@@ -209,6 +245,7 @@ def local_action_TurnOff(arg=None):
   powerAction.call('Off')
   
 def setPower(state):
+  console.info('Power(%s) called' % state)
   local_event_LastPowerRequest.emit(str(date_now()))
   local_event_DesiredPower.emit(state)
   
@@ -223,7 +260,10 @@ powerAction = Action('Power', lambda arg: setPower(arg), {'group': 'Power', 'sch
 def initPowerEvaluation():
   def handler(ignore):
     raw, desired = local_event_RawPower.getArg(), local_event_DesiredPower.getArg()
-    local_event_Power.emit(raw if desired == raw else 'Partially %s' % desired)
+    arg = raw if desired == raw or desired == None else 'Partially %s' % desired
+    local_event_Power.emit(arg)
+    local_event_PowerOn.emit(arg == 'On')
+    local_event_PowerOff.emit(arg == 'Off')
   
   local_event_RawPower.addEmitHandler(handler)
   local_event_DesiredPower.addEmitHandler(handler)
@@ -238,29 +278,25 @@ def quickInputCodeCheck():
   ok = False
   
   if desired == None or current == desired:
-    if inputCode_timer.isStarted(): # only log if enforcer active
-      console.info('inputCode: done checking state - states match or desired is none')
-    inputCode_timer.stop()
     ok = True  
 
   return current, desired, ok
 
 def enforceInputCode():
   current, desired, ok = quickInputCodeCheck()
-  
-  if ok:
-    return
-  
+    
   if (date_now().getMillis() - date_parse(local_event_LastInputCodeRequest.getArg()).getMillis()) > 75000 :
-    console.warn('inputCode: giving up enforcing state - waited more than 1m15s.')
+    console.log('inputCode: will not enforce state any longer - 1m 15s has elapsed')
     inputCode_timer.stop()
+    return
+
+  if ok:
     return
   
   # check power first
   desiredPower = local_event_DesiredPower.getArg()
   if desiredPower == 'Off':
-    console.warn('inputCode: desired power state is off; aborting input code request')
-    inputCode_timer.stop()
+    console.warn('inputCode: desired power state is off; ignoring input code request')
     return
   
   power = local_event_RawPower.getArg()
@@ -287,6 +323,8 @@ def forceInputCode(arg):
 forceInputCodeAction = Action('Force Input Code', forceInputCode, {'title': 'Force', 'group': 'Input code', 'order': next_seq(), 'schema': {'type': 'string'}})
 
 def setInputCode(arg=None):
+  console.info('InputCode(%s) called' % arg)
+
   local_event_LastInputCodeRequest.emit(str(date_now()))
   local_event_DesiredInputCode.emit(arg)
   
@@ -355,7 +393,11 @@ def getDisplayStatus():
     local_event_RawPower.emit('On' if ord(arg[6]) == 1 else 'Off')
     
     local_event_Volume.emit(ord(arg[7]))
-    local_event_Mute.emit('Mute' if ord(arg[8]) == 1 else 'Unmute')
+    muteState = True if ord(arg[8]) == 1 else False
+    local_event_Mute.emit('Mute' if muteState else 'Unmute')
+    local_event_MuteOnOff.emit('On' if muteState else 'Off')
+    local_event_MuteOn.emit(muteState)
+    local_event_MuteOff.emit(not muteState)
     
     inputCodeEvent.emit(arg[9].encode('hex'))
     
@@ -574,16 +616,37 @@ def setVolume(arg):
   checksum = sum([ord(c) for c in msg]) & 0xff
   queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: lookup_local_event('volume').emit(arg)))
 
-Action('Volume', setVolume, {'title': 'Set', 'group': 'Audio', 'schema': {'type': 'integer', 'max': 100, 'min': 0}})
+Action('Volume', setVolume, {'title': 'Volume', 'group': 'Audio', 'schema': {'type': 'integer', 'max': 100, 'min': 0}})
 
-@local_action({'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['Mute', 'Unmute']}})
+@local_action({'group': 'Audio', 'title': 'Mute', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['Mute', 'Unmute', 'On', 'Off']}})
 def Mute(arg):
   console.info('Mute(%s)' % arg)
+
+  if arg in [ 'Mute', 1, True, 'On', 'on', 'ON' ]:         state = True
+  elif arg in [ 'Unmute', 0, False, 'Off', 'off', 'OFF' ]: state = False
+  else:
+    return console.warn('unknown arg - %s' % arg)
   
-  msg = '\x13%s\x01%s' % (chr(int(param_id)), '\x01' if arg == 'Mute' else '\x00')
+  msg = '\x13%s\x01%s' % (chr(int(param_id)), '\x01' if state else '\x00')
   checksum = sum([ord(c) for c in msg]) & 0xff
 
-  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: local_event_Mute.emit('Mute' if resp[6] == '\x01' else 'Unmute')))
+  def handler(resp):
+    state = resp[6] == '\x01'
+    local_event_Mute.emit('Mute' if state else 'Unmute')
+    local_event_MuteOnOff.emit('On' if state else 'Off')
+    local_event_MuteOn.emit(state)
+    local_event_MuteOff.emit(not state)
+
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: handler(resp)))
+
+@local_action({ 'group': 'Audio', 'title': 'On', 'order': next_seq() })
+def MuteOn(arg):
+  Mute.call('On')
+
+@local_action({ 'group': 'Audio', 'title': 'Off', 'order': next_seq() })
+def MuteOff(arg):
+  Mute.call('Off')  
+
 
 # All non-critical informational polling should occur here
 def local_action_PollNonCriticalInfo(arg=None):
@@ -601,7 +664,10 @@ def checkHeader(arg, onSuccess=None):
     raise Exception('Bad message structure')
     
   if arg[4] != 'A':
-    raise Exception('Bad acknowledgement')
+    if local_event_Power.getArg() != 'On':
+      log(2, 'Bad acknowledgement - may be expected because power is Off')
+    else:
+      raise Exception('Bad acknowledgement')
     
   if onSuccess:
     onSuccess()
@@ -706,11 +772,11 @@ local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 
                                    'schema': {'type': 'integer'}})
 
 def warn(level, msg):
-  if local_event_LogLevel.getArg() >= level:
+  if (local_event_LogLevel.getArg() or 0) >= level:
     console.warn(('  ' * level) + msg)
 
 def log(level, msg):
-  if local_event_LogLevel.getArg() >= level:
+  if (local_event_LogLevel.getArg() or 0) >= level:
     console.log(('  ' * level) + msg)
 
 # --!>    

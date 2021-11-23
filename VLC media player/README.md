@@ -74,6 +74,7 @@
 
 ### Known issues
 - Playlist injection unable to decode non-standard UTF-8 characters: å é í ò ü
+- Changes in Python 3.8 [have broken](https://github.com/oaubert/python-vlc/issues/118) this recipe, and 3.7 and below are recommended.
 
  [Nodel]: <https://github.com/museumvictoria/nodel>
  [Python]: <https://www.python.org/downloads/>
