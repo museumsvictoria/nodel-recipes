@@ -7,7 +7,7 @@ An agent with native Windows operations, tested with Windows 10 but might work o
 * CPU usage
 * Computer hardware information
 
-_(Revision 3)_
+_(Revision 4)_
 '''
 
 DEFAULT_FREESPACEMB = 0.5
@@ -174,7 +174,12 @@ def controller_feedback(data):
     
     signalName = message.get('event')
     arg = message.get('arg')
-    
+    error = message.get('error')
+
+    if error:
+        console.error('[%s] %s' % (signalName, error))
+        return
+
     signal = lookup_local_event(signalName)
     
     if not signal:

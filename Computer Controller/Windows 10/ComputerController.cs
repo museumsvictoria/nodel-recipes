@@ -11,7 +11,7 @@ using System.Management;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
-// rev. 3: fixed partial screenshot capture when DPI not 100%
+// rev. 4: check if audio devices exist
 
 class ComputerController
 {
@@ -92,8 +92,11 @@ class ComputerController
                     else
                         break;
 
-                    Audio.Mute = state;
-                    s_mute = state;
+                    if (Audio.HasDevices)
+                    {
+                        Audio.Mute = state;
+                        s_mute = state;
+                    }
                     EmitMute();
                     break;
 
@@ -107,15 +110,21 @@ class ComputerController
 
                 case "set-volume":
                     float value = float.Parse(parts[1]);
-                    Audio.Volume = value;
-                    s_volume = value;
+                    if (Audio.HasDevices)
+                    {
+                        Audio.Volume = value;
+                        s_volume = value;
+                    }
                     EmitVolume();
                     break;
 
                 case "set-volumescalar":
                     value = float.Parse(parts[1]);
-                    Audio.VolumeScalar = value;
-                    s_volumeScalar = value;
+                    if (Audio.HasDevices)
+                    {
+                        Audio.VolumeScalar = value;
+                        s_volumeScalar = value;
+                    }
                     EmitVolumeScalar();
                     break;
 
@@ -221,6 +230,12 @@ class ComputerController
 
     static void EmitVolumeRange()
     {
+        if (!Audio.HasDevices)
+        {
+            Console.WriteLine("{ event: VolumeRange, error: 'No audio devices found' }");
+            return;
+        }
+
         float min, max, step;
         Audio.GetVolumeRange(out min, out max, out step);
         Console.WriteLine("{{ event: VolumeRange, arg: {{ min: {0:0.00}, max: {1:0.00}, step:{2:0.00} }} }}", min, max, step);
@@ -228,16 +243,34 @@ class ComputerController
 
     static void EmitMute()
     {
+        if (!Audio.HasDevices)
+        {
+            Console.WriteLine("{ event: Mute, error: 'No audio devices found' }");
+            return;
+        }
+
         Console.WriteLine("{ event: Mute, arg: " + (Audio.Mute ? "true" : "false") + " }");
     }
 
     static void EmitVolume()
     {
+        if (!Audio.HasDevices)
+        {
+            Console.WriteLine("{ event: Volume, error: 'No audio devices found' }");
+            return;
+        }
+
         Console.WriteLine("{{ event: Volume, arg: {0:0.00} }}", Audio.Volume);
     }
 
     static void EmitVolumeScalar()
     {
+        if (!Audio.HasDevices)
+        {
+            Console.WriteLine("{ event: VolumeScaler, error: 'No audio devices found' }");
+            return;
+        }
+
         Console.WriteLine("{{ event: VolumeScalar, arg: {0:0.0} }}", Audio.VolumeScalar);
     }
 
@@ -250,6 +283,12 @@ class ComputerController
         EmitMute();
         EmitVolume();
         EmitVolumeScalar();
+
+        if (!Audio.HasDevices)
+        {
+            Console.WriteLine("// ...stop polling volume and mute changes");
+            return;
+        }
 
         while (s_running)
         {
@@ -281,6 +320,12 @@ class ComputerController
     {
         Console.WriteLine("// ...polling audio peak meter every 0.75s");
 
+        if (!Audio.HasDevices)
+        {
+            Console.WriteLine("// ...stop polling audio peak meter");
+            return;
+        }
+
         while (s_running)
         {
             Console.WriteLine("{{ event: AudioMeter, arg: {0:0.00} }}", Audio.Meter);
@@ -296,18 +341,26 @@ class ComputerController
 
         private static IMMDevice GetDefaultDevice()
         {
-            var enumerator = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator;
-            return enumerator.GetDefaultAudioEndpoint(/*eRender*/ 0, /*eMultimedia*/ 1);
+            try
+            {
+                var enumerator = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator;
+                return enumerator.GetDefaultAudioEndpoint(/*eRender*/ 0, /*eMultimedia*/ 1);
+            } catch (Exception ex)
+            {
+                // No devices found
+                // Console.WriteLine(ex.Message);
+            }
+            return null;
         }
 
         static IAudioMeterInformation ActivateMeterInformation(IMMDevice device)
         {
-            return (IAudioMeterInformation)device.Activate(typeof(IAudioMeterInformation).GUID, 0, IntPtr.Zero);
+            return (device == null ? null : (IAudioMeterInformation)device.Activate(typeof(IAudioMeterInformation).GUID, 0, IntPtr.Zero));
         }
 
         static IAudioEndpointVolume ActivateEndpointVolume(IMMDevice device)
         {
-            return (IAudioEndpointVolume)device.Activate(typeof(IAudioEndpointVolume).GUID, /*CLSCTX_ALL*/ 23, IntPtr.Zero);
+            return (device == null ? null : (IAudioEndpointVolume)device.Activate(typeof(IAudioEndpointVolume).GUID, /*CLSCTX_ALL*/ 23, IntPtr.Zero));
         }
 
         public static void GetVolumeRange(out float min, out float max, out float step) // dB
@@ -315,21 +368,41 @@ class ComputerController
             Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetVolumeRange(out min, out max, out step));
         }
 
+        public static bool HasDevices
+        {
+            get { return Audio.device != null; }
+        }
+
         public static float Volume // dB
         {
-            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevel(out v)); return v; }
+            get {
+                if (!HasDevices) { return -99; };
+                float v = -1;
+                Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevel(out v));
+                return v;
+            }
             set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevel(value, Guid.Empty)); }
         }
 
         public static float VolumeScalar // (0 - 100)
         {
-            get { float v = -1; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevelScalar(out v)); return v * 100.0f; }
+            get {
+                if (!HasDevices) { return -1; }
+                float v = -1;
+                Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMasterVolumeLevelScalar(out v));
+                return v * 100.0f;
+            }
             set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMasterVolumeLevelScalar(value / 100.0f, Guid.Empty)); }
         }
 
         public static bool Mute
         {
-            get { bool mute = false; Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMute(out mute)); return mute; }
+            get {
+                if (!HasDevices) { return true; };
+                bool mute = false;
+                Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetMute(out mute));
+                return mute;
+            }
             set { Marshal.ThrowExceptionForHR(Audio.endpointVolume.SetMute(value, Guid.Empty)); }
         }
 
@@ -337,6 +410,7 @@ class ComputerController
         {
             get
             {
+                if (!HasDevices) { return -99; };
                 float v;
 
                 // 0.0 - 1.0 sample amplitude, -∞ to 0 dB
