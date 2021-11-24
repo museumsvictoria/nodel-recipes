@@ -1,7 +1,7 @@
 '''
 Computer Node
 
-**For Linux, please make sure that alsa-utils is installed.
+**For Linux, please make sure that alsa-utils is installed.**
 
 '''
 
@@ -186,6 +186,7 @@ PS_SOUND_DEVICE = ['powershell', '-Command',
                    '|', 'select', 'Manufacturer, Name',
                    '|', 'ConvertTo-Json']  # [{"Manufacturer":, "Name": }]
 
+# for Linux
 BASH_SOUND_DEVICE = ['arecord', '-l']
 
 HAVE_SOUND_DEVICE = False
@@ -196,7 +197,7 @@ def query_audio_devices():
         global HAVE_SOUND_DEVICE
         res_code = arg.code
         if res_code != 0:
-            console.error('[query_if_audio_devices_exists] process exited with code: %d' % (res_code))
+            console.error('[query_audio_devices] process exited with code: %d' % (res_code))
             HAVE_SOUND_DEVICE = False
             return
 
@@ -209,10 +210,11 @@ def query_audio_devices():
         # console.info(arg)
         res_code = arg.code
         if res_code != 0:
-            console.error('[query_if_audio_devices_exists] process exited with code: %d' % (res_code))
+            console.error('[query_audio_devices] process exited with code: %d' % (res_code))
             HAVE_SOUND_DEVICE = False
             return
 
+        # need to use stderr, not stdout. Because "no soundcards" message comes from stderr, not stdout.
         se_message = arg.stderr
         HAVE_SOUND_DEVICE = False if 'no soundcards' in se_message else True
         console.info('Audio device found' if HAVE_SOUND_DEVICE else 'No audio device found')
