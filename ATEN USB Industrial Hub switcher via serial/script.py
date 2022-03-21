@@ -13,7 +13,19 @@ ATEN USB Industrial Hub switcher via serial.
 
 Example manual - [link](https://assets.aten.com/product/manual/us3344i_um_w_2018-11-13.pdf).
 
-_rev 1_
+Example wiring diagram:
+
+      ATEN             GENERIC
+     US3344i        RS485 - RS232   
+    --------------------------------
+     GND : Green -|- Blue  : 485+
+      T- :       -|- Red   : 485-
+      T+ :       -|- Green : GND
+      R+ : Blue  -|-       : 5-12V
+      R- : Red   -|-
+    --------------------------------
+
+_rev 2_
 '''
 
 param_PortsInUse = Parameter({ 'title': 'Ports in use', 'schema': { 'type': 'array', 'items': { 'type': 'object', 'properties': {
