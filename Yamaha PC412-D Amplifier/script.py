@@ -579,7 +579,7 @@ POLARITY_CONVERTERS = [ lambda arg: 'Inverse' if arg == '1' else 'Normal',
                         lambda arg: 1 if arg == 'Inverse' else 0 ]
 
 POWER_SCHEMA = {'type': 'string', 'enum': ['On', 'Off']}
-POWER_CONVERTERS = [ lambda arg: 'Off' if arg == '1' else 'On', # yes, 1 means Off / stand-by
+POWER_CONVERTERS = [ lambda arg: 'Off' if arg == '1' else 'On', # yes, 1 means Off / stand-by. <-- Yes on XMV series, but not on PC412. 
                      lambda arg: 1 if arg == 'Off' else 0 ]
 
 INPUTSEL_LOOKUP = [('0', 'Analog'), ('1', 'Digital'), ('2', 'Multiple')]
