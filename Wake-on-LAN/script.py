@@ -1,32 +1,33 @@
-'''Wake On LAN and computer monitoring node'''
+'''
+Wake On LAN and computer monitoring node
 
-### Libraries this Node requires
-import struct, socket, re
+ * _rev 2 - leakfix: uses managed UDP, allows for MAC address over remote binding (optional)_
+'''
 
+# <!-- Wake-on-LAN:
 
+param_macAddress = Parameter({ 'title': 'MAC Address', 'schema': {'type': 'string', 'hint': '(or use MAC address binding if available)' }})
 
-### Parameters used by this Node
-param_macAddress = Parameter('{"title":"MAC Address","schema":{"type":"string"}}')
+local_event_MACAddress = LocalEvent({'group': 'Addressing', 'order': next_seq(), 'schema': { 'type': 'string' }})
 
+def remote_event_MACAddress(arg):
+  if not param_macAddress: # param takes precedence, set at main()
+    local_event_MACAddress.emit(arg)           
 
+_wol = UDP(dest='255.255.255.255:9', received=lambda arg: console.info('wol: received [%s]'),
+           sent=lambda arg: console.info('wol: sent packet (size %s)' % len(arg)))
 
-### Functions used by this Node
-def sendMagicPacket(dst_mac_addr):
-    # addr is delimited by ":" or "-" 
-    if re.match("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$", dst_mac_addr.lower()):
-      addr_byte = re.split(':|-', dst_mac_addr.upper())
-    # addr is undelimited
-    elif re.match("^([0-9A-Fa-f]{12})$", dst_mac_addr.lower()):
-      addr_byte = re.findall('..', dst_mac_addr.upper())
-    else:
-      raise ValueError('Incorrect MAC address format')
-    hw_addr = struct.pack('BBBBBB', int(addr_byte[0], 16), int(addr_byte[1], 16), int(addr_byte[2], 16), int(addr_byte[3], 16), int(addr_byte[4], 16), int(addr_byte[5], 16))
+def sendMagicPacket():
+    macAddr = local_event_MACAddress.getArg() # will be parameter of remote event
+    
+    if is_blank(macAddr):
+      return console.warn('No MAC address to use; cannot perform WOL operation')
+    
+    hw_addr = macAddr.replace('-', '').replace(':', '').decode('hex')
     macpck = '\xff' * 6 + hw_addr * 16
-    scks = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    scks.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    scks.sendto(macpck, ('<broadcast>', 9))
+    _wol.send(macpck)
 
-
+# -->
 
 ### Local actions this Node provides
 def local_action_PowerOn(arg = None):
@@ -36,15 +37,14 @@ def local_action_PowerOn(arg = None):
 def local_action_SendWOL(arg = None):
   """{"group": "Power"}"""
   print 'Sending WOL magic packet'
-  sendMagicPacket(param_macAddress)
+  sendMagicPacket()
   
 remote_action_PowerOff = RemoteAction()
 
 ### Main
 def main(arg = None):
-  # Start your script here.
-  print 'Nodel script started.'
-  
+  if param_macAddress: # parameter specified?
+    local_event_MACAddress.emit(param_macAddress)
   
 local_event_Status = LocalEvent({'group': 'Status', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
         'level': {'type': 'integer', 'order': 1},
