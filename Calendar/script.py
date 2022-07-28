@@ -363,11 +363,12 @@ def local_action_ProcessActiveNow(arg=None):
 # this action is called by the user to force states instead of only respecting changes in state
 def local_action_ForceActiveNow(arg=None):
   warnings = []
-
+  
+  global _lastInstant
+  
   now = date_now()
   items = processAllActiveItems(date_now(), warnings, fromInstant=_lastInstant)
-
-  global _lastInstant
+  
   _lastInstant = now
 
   local_event_ActiveNow.emit(items)
