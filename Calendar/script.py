@@ -508,7 +508,7 @@ def processAllActiveItems(instant, warnings, fromInstant=None):
  
   fromInstantMillis = fromInstant.getMillis() if fromInstant else None
   if fromInstantMillis != None:
-    console.info('Polling between: %s  and: %s' % (fromInstantMillis, instantMillis))
+    console.info('Polling between: %s  and: %s' % (fromInstant, instant))
     
   # consolidates all available calendar sources
   for sourceInfo in param_scheduleSources:
