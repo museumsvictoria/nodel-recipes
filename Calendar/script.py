@@ -5,7 +5,7 @@
 A stateful multi-calendar / scheduling node that takes in event streams from sources (e.g. see *Microsoft Exchange Schedule Retriever* recipe).
 
 
-  * _rev 5_ bugfix: momentary events some times do not fire (interference with actual scheduler and agenda generation)
+  * _rev 6_ bugfix: momentary events some times do not fire (interference with actual scheduler and agenda generation)
   * _rev 3_ support for "momentary" events (not stateful) when "start time" strictly equals "end time" e.g. `{ start: "... 02:45:00", end: "... 02:45:00", title: "{ Power: Off }" }`
   * _rev 3_ "Agenda" signal for usable, MARKDOWN formatted, future agenda (use `<panel>` element in Frontend) highlighting active items and red-flagging errors
   * _rev 3_ minor: polling every 2.5 mins now (was incorrectly 5 mins)
@@ -398,10 +398,10 @@ def local_action_ProcessActiveFuture(arg=None):
   
   warnings = list()
 
+  fromInstant = None
   for instant in instantsList:
-    fromInstant = None
     result.append({ 'instant': str(instant), 
-                    'items': processAllActiveItems(instant, warnings, fromInstant=lastInstantd) })
+                    'items': processAllActiveItems(instant, warnings, fromInstant=fromInstant) })
     fromInstant = instant
 
   if len(warnings) > 0:
