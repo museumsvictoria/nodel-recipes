@@ -1,16 +1,16 @@
 '''
-_(rev 4)_
+_(rev 14)_
 
 **Sony SSIP & IRCC protocols** for displays
 
-* Tested with Sony FW-85BZ40H
+* Tested with Sony FW-85BZ40H, FWD-55X80J
 
-Resources:
-
- * the script contains some protocol examples, otherwise see [command-definitions](https://pro-bravia.sony.net/develop/integrate/ssip/command-definitions/), [ip-control](https://pro-bravia.sony.net/develop/integrate/ip-control/)
+The script contains some protocol examples, otherwise see [command-definitions](https://pro-bravia.sony.net/develop/integrate/ssip/command-definitions/) or [ip-control](https://pro-bravia.sony.net/develop/integrate/ip-control/).
  
-_rev 4: exclusive IR control_
+_changelog_
 
+ * _rev 14: input naming, dynamic IP addressing, SendIR action to reduce binding_
+ * _rev 4: exclusive IR control_
 '''
 
 DEFAULT_TCPPORT = 20060
@@ -23,7 +23,8 @@ param_macAddress = Parameter({ 'schema': { 'type': 'string' }})
 
 param_inputsInUse = Parameter({ 'title': 'Inputs In Use', 'schema': { 'type': 'array', 'items': { 'type': 'object', 'properties': {
   'code': { 'type': 'string', 'hint': '(e.g. "10000000x" is HDMIx)', 'order': 1 },
-  'label': { 'type': 'string', 'order': 2 }}}}})
+  'name': { 'type': 'string', 'hint': '(optional, affects binding names, e.g. "HDMI 1")', 'order': 1 },  
+  'label': { 'type': 'string', 'hint': '(descriptive only e.g. "Chromecast")', 'order': 2 }}}}})
 
 param_PresharedKey = Parameter({ 'title': 'Preshared-key (if used)', 'schema': { 'type': 'string' } })
 
@@ -45,17 +46,40 @@ def main():
   if param_disabled:
     return console.warn('Disabled! nothing to do')
   
-  if is_blank(param_ipAddress):
-    return console.warn('No IP address set; nothing to do')
-  
   initInputsInUse()
-  
-  dest = '%s:%s' % (param_ipAddress, DEFAULT_TCPPORT)
   
   local_event_TCPConnection.emit('Disconnected')
   
+  ipAddr = param_ipAddress
+  
+  if is_blank(ipAddr):
+    ipAddr = local_event_IPAddress.getArg()
+    
+  if is_blank(ipAddr):
+    console.warn('No IP address - will wait for binding or to be parameter to be set')
+    return
+  
+  local_event_IPAddress.emit(ipAddr)
+    
+  dest = '%s:%s' % (ipAddr, DEFAULT_TCPPORT)
   console.info('Will connect to [%s]' % dest)
   _tcp.setDest(dest)
+  
+# <!-- dynamic IP addressing
+
+local_event_IPAddress = LocalEvent({ 'group': 'Addressing', 'schema': { 'type': 'string' }})
+
+def remote_event_IPAddress(arg):
+  if is_blank(param_ipAddress):
+    oldIP = local_event_IPAddress.getArg()
+    if oldIP != arg:
+      console.info('IP address update to %s, previously %s' % (arg, oldIP))
+      local_event_IPAddress.emit(arg)
+      dest = '%s:%s' % (arg, DEFAULT_TCPPORT)
+      console.info('Will connect to [%s]' % dest)
+      _tcp.setDest(dest)
+
+# -->
   
 def initInputsInUse():
   if len(param_inputsInUse or EMPTY) == 0:
@@ -66,22 +90,24 @@ def initInputsInUse():
     
 def initInputInUse(info):
   code = info['code']
+  nameOrCode = code if is_blank(info['name']) else info['name']
   label = info['label']
+  title = '%s' % nameOrCode if is_blank(info['label']) else '%s ("%s")' % (nameOrCode, label)
   
-  e = Event('Input %s' % code, { 'title': '%s ("%s")' % (code, label), 'group': 'Inputs In Use', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
+  e = Event('Input %s' % nameOrCode, { 'title': title, 'group': 'Inputs In Use', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
   
   def handler(arg):    
     if 'On' not in local_event_Power.getArg():
-      console.info('Input%s "%s" called, power was not on, powering on!' % (code, label))
+      console.info('Input %s called, power was not on, powering on!' % title)
       Power.call('On')
     else:
-      console.info('Input%s "%s" called' % (code, label))
+      console.info('Input %s called' % title)
       
     Input.call(code)
   
-  a = Action('Input %s' % code, handler, {  'title': '%s ("%s")' % (code, label), 'group': 'Inputs In Use', 'order': next_seq() })
+  a = Action('Input %s' % nameOrCode, handler, {  'title': title, 'group': 'Inputs In Use', 'order': next_seq() })
   
-  local_event_Input.addEmitHandler(lambda arg: e.emit(code in arg))
+  local_event_Input.addEmitHandler(lambda arg: e.emit(code == arg))
 
 # <!-- operations, protocols & TCP
 
@@ -396,14 +422,23 @@ def initIRCode(cmd):
     if not is_blank(param_PresharedKey):
       headers['X-Auth-PSK'] = param_PresharedKey
       
-    get_url('http://%s/sony/ircc' % param_ipAddress, headers=headers, 
+    get_url('http://%s/sony/ircc' % local_event_IPAddress.getArg(), headers=headers, 
             contentType='text/xml; charset=UTF-8', 
             post=IR_SOAP_BODY.replace('$IRCODE', code))
     
-    global _lastIRCommand
+    # used here to prevent any clash with Input or Power managed commands
+    global _lastIRCommand 
     _lastIRCommand = system_clock()
   
   a = Action('IR %s' % cmd, handler, { 'title': '"%s"' % cmd, 'order': next_seq(), 'group': 'IR commands' })
+  
+@local_action({ 'group': 'IR commands', 'order': 0, 'schema': { 'type': 'string', 'hint': '(case insensitive, one of "Num1", "Num2", etc.)' }})
+def SendIR(arg):
+  a = lookup_local_action('IR %s' % arg)
+  if a == None:
+    return console.warn('Command %s not found' % arg)
+  
+  a.call()
 
 # -->
 
