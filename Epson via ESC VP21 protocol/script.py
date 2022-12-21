@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
-'''Epson (see script for links to manual, and considerations for special models, etc.)'''
+'''
+Epson (see script for links to manual, and considerations for special models, etc.)
+
+* _rev 2 allows dynamic IP addressing_
+
+'''
 
 # -  http://download.epson.com.sg/manuals/User%20manual-EB-GG6170-G6070W-G6270W-G6450WU-G6570WU-G6770WU.pdf
 
