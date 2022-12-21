@@ -49,7 +49,7 @@ def remote_event_IPAddress(ipAddr):
   if is_blank(param_ipAddress):
     old = local_event_IPAddress.getArg()
     if old != ipAddr:
-      console.info('IP address update to %s (was %s)' % (ipAddr, old))
+      console.info('IP address updated to %s (was %s)' % (ipAddr, old))
       local_event_IPAddress.emit(ipAddr)
       dest = '%s:%s' % (ipAddr, param_TCPPortForSerial or TCP_PORT)
       console.info('Will connect to [%s]' % dest)
@@ -424,9 +424,10 @@ def local_action_PollSignalPresenceFallbackViaWeb():
   if local_event_ShowLog.getArg():
     print 'HTTP: polling URL [%s]' % URL
   
-  infoHTMLPage = get_url(URL % param_ipAddress, username='EPSONWEB', password=param_WebPassword or DEFAULT_WEBPASSWORD,
+  ipAddr = local_event_IPAddress.getArg()
+  infoHTMLPage = get_url(URL % ipAddr, username='EPSONWEB', password=param_WebPassword or DEFAULT_WEBPASSWORD,
                          headers={'Cookie': 'value=971F9C4BAB285D19B7F8437D6AB01B61A9083BDE1F2F4643',
-                           'Referer': 'http://%s/webconf/index2.html' % param_ipAddress})
+                           'Referer': 'http://%s/webconf/index2.html' % ipAddr})
   
   if '&#45;&nbsp;x' in infoHTMLPage:
     signalPresence = False
