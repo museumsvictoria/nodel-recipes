@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Ubiquity switch control using **Unifi-Controller API**
+Ubiquiti switch control using **Unifi-Controller API**
 
 This is roughly written and provides read-only information for IP address information by port and by MAC. It also attempts to show when devices appear and disappear on and off the network. 
 
