@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
-'''Epson (see script for links to manual, and considerations for special models, etc.)'''
+'''
+Epson (see script for links to manual, and considerations for special models, etc.)
+
+* _rev 2 allows dynamic IP addressing_
+
+'''
 
 # -  http://download.epson.com.sg/manuals/User%20manual-EB-GG6170-G6070W-G6270W-G6450WU-G6570WU-G6770WU.pdf
 
@@ -40,8 +45,20 @@ TCP_PORT = 3629
 MAX_VOL = 243
 
 param_disabled = Parameter({ "title":"Disabled?", "order": next_seq(), "schema": { "type":"boolean" }})
-param_ipAddress = Parameter({ "title":"IP address", "order": next_seq(), "schema": { "type":"string" }})
+param_ipAddress = Parameter({ "title":"IP address", "order": next_seq(), "schema": { "type":"string", "hint": "(overrides bindings use)" }})
 param_TCPPortForSerial = Parameter({'title': 'TCP Port if using Serial Bridge', 'schema': {'type': 'integer', 'hint': u'0 (default not in use or e.g. 4999 for Global Caché)'}})
+
+local_event_IPAddress = LocalEvent({ "schema": { "type": "string" }})
+
+def remote_event_IPAddress(ipAddr):
+  if is_blank(param_ipAddress):
+    old = local_event_IPAddress.getArg()
+    if old != ipAddr:
+      console.info('IP address updated to %s (was %s)' % (ipAddr, old))
+      local_event_IPAddress.emit(ipAddr)
+      dest = '%s:%s' % (ipAddr, param_TCPPortForSerial or TCP_PORT)
+      console.info('Will connect to [%s]' % dest)
+      tcp.setDest(dest)
 
 DEFAULT_LAMPHOURUSE = 1800
 param_warningThresholds = Parameter({'title': 'Warning thresholds', 'schema': {'type': 'object', 'properties': {
@@ -72,16 +89,25 @@ def main(arg = None):
   lampUseHoursThreshold = (param_warningThresholds or {}).get('lampUseHours') or lampUseHoursThreshold
   
   dump_message()
-  
-  if param_TCPPortForSerial: # using Serial Bridge?
-    tcpAddress = '%s:%s'% (param_ipAddress, param_TCPPortForSerial)
-    console.info('Will connect via Serial Bridge on [%s]' % tcpAddress)
+
+  if is_blank(param_ipAddress):
+    ipAddr = local_event_IPAddress.getArg()
+  else:
+    ipAddr = param_ipAddress
+    local_event_IPAddress.emit(ipAddr)
+
+  if is_blank(ipAddr):
+    console.warn('No IP address update received or configured; will wait...')
+
+  else:
+    if param_TCPPortForSerial: # using Serial Bridge?
+      dest = '%s:%s'% (ipAddr, param_TCPPortForSerial)
+      console.info('Will connect via Serial Bridge on [%s]' % dest)
+    else:                      # direct
+      dest = '%s:%s'% (ipAddr, TCP_PORT)
+      console.info('Will connect directly to projector at [%s]' % dest)
     
-  else:                      # direct
-    tcpAddress = '%s:%s'% (param_ipAddress, TCP_PORT)
-    console.info('Will connect directly to projector at [%s]' % tcpAddress)
-    
-  tcp.setDest(tcpAddress)
+    tcp.setDest(dest)
 
 # [ desired power ----
 
@@ -403,9 +429,10 @@ def local_action_PollSignalPresenceFallbackViaWeb():
   if local_event_ShowLog.getArg():
     print 'HTTP: polling URL [%s]' % URL
   
-  infoHTMLPage = get_url(URL % param_ipAddress, username='EPSONWEB', password=param_WebPassword or DEFAULT_WEBPASSWORD,
+  ipAddr = local_event_IPAddress.getArg()
+  infoHTMLPage = get_url(URL % ipAddr, username='EPSONWEB', password=param_WebPassword or DEFAULT_WEBPASSWORD,
                          headers={'Cookie': 'value=971F9C4BAB285D19B7F8437D6AB01B61A9083BDE1F2F4643',
-                           'Referer': 'http://%s/webconf/index2.html' % param_ipAddress})
+                           'Referer': 'http://%s/webconf/index2.html' % ipAddr})
   
   if '&#45;&nbsp;x' in infoHTMLPage:
     signalPresence = False

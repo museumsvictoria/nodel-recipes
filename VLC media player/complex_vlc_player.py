@@ -41,7 +41,7 @@ class Main:
         new_position = event.u.new_position * 100
         new_position = int(new_position)
         # Emit complete whole integer changes only
-        if ((new_position > self.current_position) or (new_position is 0)):
+        if ((new_position > self.current_position) or (new_position == 0)):
             self.current_position = new_position
             self.position.emit(self.current_position)
 
@@ -91,7 +91,7 @@ class Main:
         teaser_behaviour = False
         if 'teaser' in config["paramValues"]:
             teaser = config["paramValues"]["teaser"]
-            if self.medialist.count() is 1 or teaser is True:
+            if self.medialist.count() == 1 or teaser is True:
                 self.medialist.item_at_index(0).add_option('input-repeat=65535')
                 teaser_behaviour = True
 
