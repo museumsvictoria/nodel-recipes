@@ -3,31 +3,38 @@
 '''
 Ubiquiti switch control using **Unifi-Controller API**
 
+`rev 5 2023.01.16`
+
 This is roughly written and provides read-only information for IP address information by port and by MAC. It also attempts to show when devices appear and disappear on and off the network. 
 
 Part of it has been written using this incomplete reference - [unifi-controller/api](https://ubntwiki.com/products/software/unifi-controller/api).
 
-It logs in using the "api" user.
-
 See script for possible **TODOs**.
-
-_(rev 4: added IP by port)_
 '''
 
-param_IPAddress = Parameter({ 'schema': { 'type': 'string' } })
+'''
+rev 5 (2023.01.16) changelog:
+- Specify an alternative authenticated user in the parameters.
+'''
 
-param_Password = Parameter({ 'schema': { 'type': 'string', 'format': 'password' }})
+DEFAULT_USERNAME = 'api'
+
+param_IPAddress = Parameter({ 'schema': { 'type': 'string' }, 'order': next_seq() })
+
+param_Username = Parameter({ 'schema': { 'type': 'string', 'hint': DEFAULT_USERNAME }, 'order': next_seq()})
+
+param_Password = Parameter({ 'schema': { 'type': 'string', 'format': 'password' }, 'order': next_seq()})
 
 param_IgnoreList = Parameter({'schema': { 'type': 'array', 'items': { 'type': 'object', 'properties': {
-  'mac': { 'type': 'string', 'order': 1, 'required': True },
-  'note': { 'type': 'string', 'order': 2 }}}}})
+  'mac': { 'type': 'string', 'order': next_seq(), 'required': True },
+  'note': { 'type': 'string', 'order': next_seq()}}}}})
 
 param_InterestingHosts = Parameter({'schema': { 'type': 'array', 'items': { 'type': 'object', 'properties': {
-  'label': { 'type': 'string', 'order': 1, 'required': True },
-  'mac': { 'title': 'MAC (ideally)', 'type': 'string', 'order': 2 },
-  'hostname': { 'title': '(otherwise) hostname', 'type': 'string', 'order': 3 },
-  'ip': { 'title': '(otherwise) IP', 'type': 'string', 'order': 4 },
-  'note': { 'title': 'Any notes', 'type': 'string', 'order': 5 }}}}})
+  'label': { 'type': 'string', 'order': next_seq(), 'required': True },
+  'mac': { 'title': 'MAC (ideally)', 'type': 'string', 'order': next_seq()},
+  'hostname': { 'title': '(otherwise) hostname', 'type': 'string', 'order': next_seq()},
+  'ip': { 'title': '(otherwise) IP', 'type': 'string', 'order': next_seq() },
+  'note': { 'title': 'Any notes', 'type': 'string', 'order': next_seq()}}}}})
 
 _ignoreSet_bySimpleMAC = set()
 
@@ -300,7 +307,7 @@ local_event_AccessCookie = LocalEvent({ 'group': 'Auth', 'schema': { 'type': 'st
 
 def getCookieToken():
   url = 'https://%s%s' % (param_IPAddress, API_AUTH_PREFIX)
-  post = json_encode({ 'username': 'api', 'password': param_Password })
+  post = json_encode({ 'username': (param_Username or DEFAULT_USERNAME), 'password': param_Password })
   
   log(3, 'authenticating with url:\"%s\" post:\"%s\"' % (url, post))
   
