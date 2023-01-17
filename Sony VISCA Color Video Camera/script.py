@@ -1,12 +1,33 @@
 '''
-With this recipe, you can control pan/tilt and preset of Sony VISCA Color Video Camera.
+VISCA camera control incl. PTZ and presets.
+
+Has worked fully or partially with:
+
+ * Sony VISCA camers
+ * BirdDog
+ * Network Devices - VISCA port: 1259, HTTP URL: "http://$IP_ADDR/css/login.css", token: "loginbg0.png")
+
+changelog
+
+* _rev 2: added params for HTTP based TOKEN status monitoring_
+
 '''
-
-
-# <!-- parameters
 
 param_disabled = Parameter({'desc': 'Disables this node?', 'schema': {'type': 'boolean'}})
 param_ipAddress = Parameter({'schema': {'type': 'string'}})
+
+local_event_IPAddress = LocalEvent({ 'schema': { 'type': 'string' }})
+
+def remote_event_IPAddress(arg):
+  if is_blank(param_ipAddress):
+    old = local_event_IPAddress.getArg()
+    if arg != old:
+      console.info('IP address updated! was %s, new %s' % (old, arg))
+      local_event_IPAddress.emit(arg)
+      target = "%s:%s" % (arg, _port)
+      console.info('Will connect to [%s]' % target)      
+      udp.setDest(target)
+      resetSequenceNo()
 
 _port = 52381
 param_port = Parameter({'schema': {'type': 'integer', 'hint': '(default is %s)' % _port}})
@@ -14,12 +35,14 @@ param_port = Parameter({'schema': {'type': 'integer', 'hint': '(default is %s)' 
 _viscaAddress = 1
 param_viscaAddress = Parameter({'schema': {'type': 'integer', 'hint': '(default is %s)' % _viscaAddress}})
 
+DEF_STATUS_URL = "http://$IP_ADDR/login"
+DEF_STATUS_TOKEN = "birddog_p200.png"
+param_StatusHTTP = Parameter({ 'title': 'Status via HTTP', 'desc': 'Sometimes the VISCA protocol does not respond so there is no way to confirm status other than HTTP.', 
+                                'schema': { 'type': 'object', 'properties': { 
+                                  'url': { 'type': 'string', 'hint': '(def. "%s")' % DEF_STATUS_URL, 'order': next_seq() },
+                                  'token': { 'type': 'string', 'hint': '(def. "%s")' % DEF_STATUS_TOKEN, 'order': next_seq() }}}})
 
 def main():
-    if not param_ipAddress:
-      console.warn('IP address not configured')
-      return
-    
     if param_port: # 0 is not allowed here
       global _port
       _port = param_port
@@ -28,13 +51,17 @@ def main():
       global _viscaAddress
       _viscaAddress = param_viscaAddress
       
-    target = "%s:%s" % (param_ipAddress, _port)
-    console.info('Will connect to [%s]' % target)
+    ipAddr = local_event_IPAddress.getArg() if is_blank(param_ipAddress) else param_ipAddress
     
+    if is_blank(ipAddr):
+      console.warn('No IP address configured or updated; will wait...')
+      return
+      
+    target = "%s:%s" % (ipAddr, _port)
+    console.info('Will connect to [%s]' % target)
     udp.setDest(target)
 
     resetSequenceNo()
-    
 
 def udp_received(src, data):
     log(2, 'udp_recv %s (from %s)' % (':'.join([b.encode('hex') for b in data]), src))
@@ -308,16 +335,24 @@ def ptz_focus_near(arg):
 @local_action({'group': 'Status', 'order': next_seq()})
 def httpPoll():
   # look for this token if result to be sure
-  TOKEN = 'birddog_p200.png'
+  token = (param_StatusHTTP or EMPTY).get('token')
+  token = DEF_STATUS_TOKEN if is_blank(token) else token
   
-  url = 'http://%s/login' % param_ipAddress
+  url = (param_StatusHTTP or EMPTY).get('url')
+  url = DEF_STATUS_URL if is_blank(url) else url
+  
+  ipAddr = local_event_IPAddress.getArg()
+  if is_blank(ipAddr):
+    return
+    
+  url = url.replace("$IP_ADDR", ipAddr)
 
   try:
     log(2, 'httpPoll %s' % url)
     resp = get_url(url, connectTimeout=5)
     
-    if TOKEN not in resp:
-      console.warn('unexpected response! did not find token [%s] in response from %s' % (TOKEN, url))
+    if token not in resp:
+      console.warn('unexpected response! did not find token [%s] in response from %s' % (token, url))
       return
     
     global _lastReceive
