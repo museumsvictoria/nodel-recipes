@@ -64,6 +64,24 @@ _items_byID = { } # e.g. { '6131a8cc4b4aae0405d399a5': { 'id': '6131a8cc4b4aae04
                   #                                      'firstSeen': '2021-01-02...', 'timestamp': '2021....'
                   #                                      'rates': (14941, 9086,1239591,2015989), # tx_packets, rx_packets, tx_bytes, rx_bytes ... }
 
+_devices_byMAC = { } # e.g. { '3e:2f:b5:28:27:c2': { 'id': '613
+
+'''
+# List all devices on site. Basic information only (mac, type, model).
+@local_action({ 'title': 'stat/device-basic (List all devices - basic)', 'group': 'Operations' })
+'''
+
+# List all devices on site. Can be filtered by POSTing {"macs": ["mac1", ... ]}.
+@local_action({ 'title': 'stat/device (List all devices)', 'group': 'Operations' })
+def statDevice(macs = None):
+  if macs == None:
+    result = callAPI('s/default/stat/device')
+  else:
+    result = callAPI('s/default/stat/device', arg = {"macs": macs}, contentType='application/json') # arg = {"macs": ["70:a7:41:e5:d3:89"]}
+
+  _devices_byMAC = result
+
+# List of all _active_ clients on the site and their associated information.
 @local_action({ 'title': 'stat/sta (List active clients)', 'group': 'Operations' })
 def statSta():
   result = callAPI('s/default/stat/sta')
@@ -304,6 +322,7 @@ nodetoolkit.getHttpClient().setIgnoreSSL(True)           # ignores any cert issu
 nodetoolkit.getHttpClient().setIgnoreRedirects(True)     # do not follow redirects (direct ops only)
 
 local_event_AccessCookie = LocalEvent({ 'group': 'Auth', 'schema': { 'type': 'string' } })
+local_event_CSRFToken = LocalEvent({ 'group': 'Auth', 'schema': { 'type': 'string' } })
 
 def getCookieToken():
   url = 'https://%s%s' % (param_IPAddress, API_AUTH_PREFIX)
@@ -321,6 +340,10 @@ def getCookieToken():
   # e.g. TOKEN=eyJhbG...LONG...asdf; path=/; samesite=strict; secure; httponly
   cookie = resp.get('Set-cookie')[0].split(';')[0] # grab only 'TOKEN=...' part
   local_event_AccessCookie.emit(cookie)
+  
+  # e.g. b5247804-7ea5-4980-b26f-55a1f45ad247 (anti-forgery token for website protection; needed for repeat requests).
+  csrf_token = resp.get('X-csrf-token')[0]
+  local_event_CSRFToken.emit(csrf_token)
 
 _lastReceive = 0
   
@@ -352,8 +375,7 @@ def callAPI(apiMethod, arg=None, contentType=None, leaveAsRaw=False):
       log(3, 'calling with url:"%s" contentType:%s' % (url, contentType))
       if post != None: log(3, '      post:"%s"' % (post))
       
-      rawResult = get_url(url, post=post, contentType=contentType)
-                         #  headers = { 'Cookie': local_event_AccessCookie.getArg() })
+      rawResult = get_url(url, post=post, contentType=contentType, headers={'Cookie': local_event_AccessCookie.getArg(), 'x-csrf-token': local_event_CSRFToken.getArg()})
       
       if leaveAsRaw:
         log(2, 'got raw result: %s%s' % (rawResult[:30], '...' if len(rawResult) > 30 else ''))
