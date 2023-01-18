@@ -36,6 +36,11 @@ param_InterestingHosts = Parameter({'schema': { 'type': 'array', 'items': { 'typ
   'ip': { 'title': '(otherwise) IP', 'type': 'string', 'order': next_seq() },
   'note': { 'title': 'Any notes', 'type': 'string', 'order': next_seq()}}}}})
 
+param_InterestingSwitches = Parameter({'schema': { 'type': 'array', 'items': { 'type': 'object', 'properties': {
+  'label': { 'title': 'Label', 'type': 'string', 'order': next_seq()},
+  'mac': { 'title': 'MAC', 'type': 'string', 'order': next_seq(), 'required': True},
+  }}}})
+
 _ignoreSet_bySimpleMAC = set()
 
 def main():
@@ -66,18 +71,15 @@ _items_byID = { } # e.g. { '6131a8cc4b4aae0405d399a5': { 'id': '6131a8cc4b4aae04
 
 _devices_byMAC = { } # e.g. { '3e:2f:b5:28:27:c2': { 'id': '613
 
-'''
-# List all devices on site. Basic information only (mac, type, model).
-@local_action({ 'title': 'stat/device-basic (List all devices - basic)', 'group': 'Operations' })
-'''
 
 # List all devices on site. Can be filtered by POSTing {"macs": ["mac1", ... ]}.
 @local_action({ 'title': 'stat/device (List all devices)', 'group': 'Operations' })
-def statDevice(macs = None):
-  if macs == None:
+def statDevice():
+  if is_empty(param_InterestingSwitches):
     result = callAPI('s/default/stat/device')
   else:
-    result = callAPI('s/default/stat/device', arg = {"macs": macs}, contentType='application/json') # arg = {"macs": ["70:a7:41:e5:d3:89"]}
+    sanitised_macs = [ convert_mac_address(item['mac']) for item in param_InterestingSwitches ]
+    result = callAPI('s/default/stat/device', arg = {"macs": sanitised_macs}, contentType='application/json') # arg = {"macs": ["70:a7:41:e5:d3:89"]}
 
   _devices_byMAC = result
 
@@ -474,6 +476,8 @@ def announce(message):
 #   --data-raw '{"port_overrides":[{"port_idx":44,"poe_mode":"auto","portconf_id":"60c5ae683e27d303a66a602c","port_security_mac_address":[],"stp_port_mode":true,"autoneg":true,"port_security_enabled":false},{"speed":100,"port_idx":29,"poe_mode":"auto","portconf_id":"60c5ae683e27d303a66a602c","full_duplex":true,"port_security_mac_address":[],"stp_port_mode":true,"autoneg":false,"port_security_enabled":false},{"port_idx":37,"poe_mode":"auto","portconf_id":"60c5ae683e27d303a66a602c","port_security_mac_address":[],"stp_port_mode":true,"autoneg":true}]}' \
 #   --compressed \
 #   --insecure
+
+# <!-- utilities
   
 def dumpResponse(ctx, resp):
   if local_event_LogLevel.getArg() < 3:
@@ -502,6 +506,15 @@ def formatMillis(millis):
   if mins < 60:        return '<%s mins' % mins
   if mins < 60*24:     return '%sh %sm' % (mins/60, mins%60)
   else:                return '%sd %sh' % ((mins/60)/24, (mins/60)%24)
+
+def convert_mac_address(mac_address):
+    # remove all non-hex characters
+    cleaned_mac = ''.join([c for c in mac_address if c in '0123456789abcdefABCDEF'])
+    # add colons every 2 characters
+    formatted_mac = ':'.join([cleaned_mac[i:i+2] for i in range(0, 12, 2)])
+    return formatted_mac.lower()
+
+# --!>
 
 # <!-- logging
 
