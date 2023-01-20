@@ -56,8 +56,13 @@ def main():
   
   console.info('Will connect to %s...' % param_IPAddress)
   
+  # reset access cookie
   local_event_AccessCookie.emit(None)
+
+  # record switches managed by this unifi controller
+  lookup_local_action('statDeviceBasic').call()
   
+  # regularly record all devices on site
   timer_pollStat.start()
   
 _lastSetOfDetails = set() # holds the previous details, e.g. [ '22:cc:aa... MYHOSTNAME ... ', 'ee:aa... ']
@@ -69,21 +74,43 @@ _items_byID = { } # e.g. { '6131a8cc4b4aae0405d399a5': { 'id': '6131a8cc4b4aae04
                   #                                      'firstSeen': '2021-01-02...', 'timestamp': '2021....'
                   #                                      'rates': (14941, 9086,1239591,2015989), # tx_packets, rx_packets, tx_bytes, rx_bytes ... }
 
-_devices_byMAC = { } # e.g. { '3e:2f:b5:28:27:c2': { 'id': '613
+# List all switches on site by requesting an outline of all devices via 'stat/device-basic' API and parsing by device type.
+@local_action({ 'title': 'stat/device-basic (List all site devices with simple keys)', 'group': 'Operations' })
+def statDeviceBasic():
+  result = callAPI('s/default/stat/device-basic')  # expecting: {"meta":{"rc":"ok"},"data":[{"mac":"70:a7:41:ed:ba:25","state":1,"adopted":true,"disabled":false,"type":"udm","model":"UDMPRO","name":"Warders"}, ...
+  
+  global _active_switches_byMAC
+  
+  _active_switches_byMAC = { }
+  
+  for item in result['data']:
+    if item.get('type') == 'usw': # only interested in switches
+      _active_switches_byMAC[item.get('mac')] = item
 
-
-# List all devices on site. Can be filtered by POSTing {"macs": ["mac1", ... ]}.
+# List of all devices on site. Can be filtered by POSTing {"macs": ["mac1", ... ]}.
 @local_action({ 'title': 'stat/device (List all devices)', 'group': 'Operations' })
 def statDevice():
+
+  # if no switches specified in parameters, then get all devices
   if is_empty(param_InterestingSwitches):
     result = callAPI('s/default/stat/device')
+
+  # otherwise, get only the specified switches
   else:
+    # sanitise MAC addresses and filter out any that are not managed by this controller
     sanitised_macs = [ convert_mac_address(item['mac']) for item in param_InterestingSwitches ]
-    result = callAPI('s/default/stat/device', arg = {"macs": sanitised_macs}, contentType='application/json') # arg = {"macs": ["70:a7:41:e5:d3:89"]}
+    valid_macs = [ mac for mac in sanitised_macs if mac in _active_switches_byMAC ]
+
+    if sanitised_macs != valid_macs:
+      console.warn('Some of the specified switch MAC addresses are not managed by this controller. Will ignore them.')
+
+    result = callAPI('s/default/stat/device', arg = {"macs": valid_macs}, contentType='application/json') # arg = {"macs": ["70:a7:41:e5:d3:89"]}
+
+  global _devices_byMAC
 
   _devices_byMAC = result
 
-# List of all _active_ clients on the site and their associated information.
+# List all 'active' clients on the site and their associated information.
 @local_action({ 'title': 'stat/sta (List active clients)', 'group': 'Operations' })
 def statSta():
   result = callAPI('s/default/stat/sta')
