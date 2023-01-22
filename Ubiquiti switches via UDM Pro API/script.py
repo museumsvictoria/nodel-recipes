@@ -43,6 +43,13 @@ param_InterestingSwitches = Parameter({'schema': { 'type': 'array', 'items': { '
 
 _ignoreSet_bySimpleMAC = set()
 
+# An Enum-style class for time constants
+class Time:
+    SECOND = 1
+    MINUTE = SECOND * 60
+    HOUR = MINUTE * 60
+    DAY = HOUR * 24
+
 def main():
   if is_blank(param_IPAddress):
     return console.warn('No IP address specified')
@@ -62,12 +69,17 @@ def main():
   # record switches managed by this unifi controller
   lookup_local_action('statDeviceBasic').call()
   
-  # regularly record all devices on site
+  # regularly record all clients on site
   timer_pollStat.start()
+
+  # regularly poll all switches for details
+  timer_pollSwitches.start()
   
 _lastSetOfDetails = set() # holds the previous details, e.g. [ '22:cc:aa... MYHOSTNAME ... ', 'ee:aa... ']
 
 _loadedOnce = False # only want to notify when things change (init. in 'statSta' method)
+
+_loadedSwitchesOnce = False # only want to create the switch events once
 
 _items_byID = { } # e.g. { '6131a8cc4b4aae0405d399a5': { 'id': '6131a8cc4b4aae0405d399a5', 'mac': '3e:2f:b5:28:27:c2',
                   #                                      'network': 'Security', 'sw_port': 3, 'wired_rate_mbps': ...
@@ -79,17 +91,18 @@ _items_byID = { } # e.g. { '6131a8cc4b4aae0405d399a5': { 'id': '6131a8cc4b4aae04
 def statDeviceBasic():
   result = callAPI('s/default/stat/device-basic')  # expecting: {"meta":{"rc":"ok"},"data":[{"mac":"70:a7:41:ed:ba:25","state":1,"adopted":true,"disabled":false,"type":"udm","model":"UDMPRO","name":"Warders"}, ...
   
-  global _active_switches_byMAC
+  global _active_switch_profiles_byMAC
   
-  _active_switches_byMAC = { }
+  _active_switch_profiles_byMAC = { }
   
   for item in result['data']:
     if item.get('type') == 'usw': # only interested in switches
-      _active_switches_byMAC[item.get('mac')] = item
+      _active_switch_profiles_byMAC[item.get('mac')] = item
 
 # List of all devices on site. Can be filtered by POSTing {"macs": ["mac1", ... ]}.
 @local_action({ 'title': 'stat/device (List all devices)', 'group': 'Operations' })
 def statDevice():
+  log(3, 'Calling /stat/device API...')
 
   # if no switches specified in parameters, then get all devices
   if is_empty(param_InterestingSwitches):
@@ -98,17 +111,83 @@ def statDevice():
   # otherwise, get only the specified switches
   else:
     # sanitise MAC addresses and filter out any that are not managed by this controller
-    sanitised_macs = [ convert_mac_address(item['mac']) for item in param_InterestingSwitches ]
-    valid_macs = [ mac for mac in sanitised_macs if mac in _active_switches_byMAC ]
+    sanitised_macs = [ sanitise_mac(item['mac']) for item in param_InterestingSwitches ]
+    valid_macs = [ mac for mac in sanitised_macs if mac in _active_switch_profiles_byMAC ]
 
     if sanitised_macs != valid_macs:
       console.warn('Some of the specified switch MAC addresses are not managed by this controller. Will ignore them.')
 
     result = callAPI('s/default/stat/device', arg = {"macs": valid_macs}, contentType='application/json') # arg = {"macs": ["70:a7:41:e5:d3:89"]}
 
-  global _devices_byMAC
+  global _active_switch_state_byMAC
 
-  _devices_byMAC = result
+  _active_switch_state_byMAC = result
+
+# Iterate over all switches and populate the switch events.
+def populateSwitchEvents(arg = None):
+  log(3, 'Populating switch events based of results of /stat/device API in _active_switch_state_byMAC...')
+  
+  # if no switches are active, then return
+  global _active_switch_state_byMAC
+  
+  if _active_switch_state_byMAC == None:
+    return
+  
+  # iterate over all switches
+  for item in _active_switch_state_byMAC['data']:
+    # example { ip=10.97.10.50, mac=70:a7:41:e5:d3:89, model=US624P, port_table=[{port_poe=true, ...}, ...], ... }
+    mac = item.get('mac')
+    # model = item.get('model')
+    port_table = item.get('port_table')
+    ports = dict()
+
+    # describe switch event schema
+    switch_label = (getSwitchLabelByMAC(mac) or 'Switch')
+    group_name = '%s %s - POE' % (switch_label, mac)
+
+    # get state of ports in port table
+    for port in port_table:
+      port_id = port.get('port_idx')
+      # add port to ports dict
+      ports[port.get('port_idx')] = port.get('port_poe')
+
+      # create local event for poe state, a simple event intended to be compatible with simple power on/off enum practice
+      event_poeStateByPort = lookup_local_event('Switch%sPort%sPOEState' % (mac, port_id))
+      if event_poeStateByPort == None:
+        if port.get('port_poe') == True:
+          log(5, 'Generating local event for POE state of port %s on switch %s...' % (port_id, mac))
+          event_name = "Switch%sPort%sPOEState" % (mac, port_id)
+          event_poeStateByPort = create_local_event(event_name, {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': port_id, 'schema': {'type': 'string', 'enum': ['Off', 'On']}})
+
+      # create local event for poe info, e.g. current in watts and operational mode
+      event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (mac, port_id))
+      if event_poeInfoByPort == None:
+        if port.get('port_poe') == True: # only create event if port is POE enabled
+          event_name = "Switch%sPort%sPOEInfo" % (mac, port_id)
+          event_schema = {'title': 'Info', 'type': 'object', 'properties': {
+            'poe_mode': {'title': 'Mode', 'type': 'string', 'enum': ['off', 'auto', 'passv24', 'passthrough']},
+            'poe_power': {'title': 'Current (W)', 'type': 'number'}
+          }}
+          event_poeInfoByPort = create_local_event(event_name, {'title': 'Port %s POE Info' % port_id, 'group': group_name, 'order': port_id, 'schema': event_schema})
+
+      # emit event if poe state has changed
+      poe_enable = port.get('port_poe')
+      if poe_enable:
+
+        # emit poe info
+        poe_info = {'poe_mode': port.get('poe_mode'), 'poe_power': port.get('poe_power')}
+        event_poeInfoByPort.emitIfDifferent(poe_info)
+
+        # emit poe state
+        poe_state = 'On' if port.get('poe_enable') else 'Off'
+        event_poeStateByPort.emitIfDifferent(poe_state)
+
+def getSwitchLabelByMAC(mac):
+  for item in param_InterestingSwitches:
+    if sanitise_mac(item.get('mac')) == mac:
+      return item.get('label')
+
+timer_pollSwitches = Timer(lambda: [lookup_local_action('statDevice').call(), populateSwitchEvents()], intervalInSeconds=Time.MINUTE, firstDelayInSeconds=Time.SECOND * 10, stopped=True) # every 60 secs, first after 5,
 
 # List all 'active' clients on the site and their associated information.
 @local_action({ 'title': 'stat/sta (List active clients)', 'group': 'Operations' })
@@ -245,7 +324,8 @@ def statSta():
     ipByPortKey = 'Switch %s Port %s IP' % (sw_mac, sw_port)
     eIPbyPort = lookup_local_event(ipByPortKey)
     if eIPbyPort == None:
-      eIPbyPort = create_local_event(ipByPortKey, { 'title': 'Port %s IP' % sw_port, 'group': 'Switch %s' % sw_mac, 'order': sw_port, 'schema': { 'type': 'string' } })
+      sw_label = (getSwitchLabelByMAC(sw_mac) or 'Switch')
+      eIPbyPort = create_local_event(ipByPortKey, { 'title': 'Port %s IP' % sw_port, 'group': '%s %s - Client(s)' % (sw_label, sw_mac), 'order': sw_port, 'schema': { 'type': 'string' } })
     
     eIPbyPort.emit(ip)
     
@@ -534,7 +614,7 @@ def formatMillis(millis):
   if mins < 60*24:     return '%sh %sm' % (mins/60, mins%60)
   else:                return '%sd %sh' % ((mins/60)/24, (mins/60)%24)
 
-def convert_mac_address(mac_address):
+def sanitise_mac(mac_address):
     # remove all non-hex characters
     cleaned_mac = ''.join([c for c in mac_address if c in '0123456789abcdefABCDEF'])
     # add colons every 2 characters
