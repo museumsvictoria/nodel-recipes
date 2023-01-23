@@ -3,9 +3,11 @@
 '''
 Ubiquiti switch control using **Unifi-Controller API**
 
-`rev 5 2023.01.16`
+`rev 5 2023.01.24`
 
-This is roughly written and provides read-only information for IP address information by port and by MAC. It also attempts to show when devices appear and disappear on and off the network. 
+- This is roughly written and provides read-only information for IP address information by port and by MAC.
+- It also attempts to show when devices appear and disappear on and off the network. 
+- It also provides actions to turn on/off ports and signals which monitor their POE status.
 
 Part of it has been written using this incomplete reference - [unifi-controller/api](https://ubntwiki.com/products/software/unifi-controller/api).
 
@@ -13,8 +15,13 @@ See script for possible **TODOs**.
 '''
 
 '''
-rev 5 (2023.01.16) changelog:
+changelog:
 - Specify an alternative authenticated user in the parameters.
+- Label switches with a 'label' field in the 'param_InterestingSwitches' parameter.
+- Added a 'statDeviceBasic' & 'statDevice' to list all devices on site (including switches).
+- Maintain list of all _portOverrides (e.g. { '3e:2f:b5:28:27:c2': [{"port_idx":2,"poe_mode":"auto"},{"poe_mode":"off","port_idx":3}]}}) and use to override the port details.
+- Regularly poll state of switches (every 5 minutes) to get the latest port details.
+- Provide actions to turn on/off ports.
 '''
 
 import time
@@ -45,7 +52,6 @@ param_InterestingSwitches = Parameter({'schema': { 'type': 'array', 'items': { '
 
 _ignoreSet_bySimpleMAC = set()
 
-# An Enum-style class for time constants
 class Time:
     SECOND = 1
     MINUTE = SECOND * 60
@@ -81,27 +87,29 @@ _lastSetOfDetails = set() # holds the previous details, e.g. [ '22:cc:aa... MYHO
 
 _loadedOnce = False # only want to notify when things change (init. in 'statSta' method)
 
-_loadedSwitchesOnce = False # only want to create the switch events once
-
 _items_byID = { } # e.g. { '6131a8cc4b4aae0405d399a5': { 'id': '6131a8cc4b4aae0405d399a5', 'mac': '3e:2f:b5:28:27:c2',
                   #                                      'network': 'Security', 'sw_port': 3, 'wired_rate_mbps': ...
                   #                                      'firstSeen': '2021-01-02...', 'timestamp': '2021....'
                   #                                      'rates': (14941, 9086,1239591,2015989), # tx_packets, rx_packets, tx_bytes, rx_bytes ... }          
 
+_portOverrides = { } # e.g. { '3e:2f:b5:28:27:c2': [{"port_idx":2,"poe_mode":"auto"},{"poe_mode":"off","port_idx":3}]}}                  
+
 # List all switches on site by requesting an outline of all devices via 'stat/device-basic' API and parsing by device type.
+# It's a simple request to get the MAC address of all switches, which is then used to form a filtered request to the controller to retrieve the full details of each switch.
 @local_action({ 'title': 'stat/device-basic (List all site devices with simple keys)', 'group': 'Operations', 'order': next_seq()})
 def statDeviceBasic():
   result = callAPI('s/default/stat/device-basic')  # expecting: {"meta":{"rc":"ok"},"data":[{"mac":"70:a7:41:ed:ba:25","state":1,"adopted":true,"disabled":false,"type":"udm","model":"UDMPRO","name":"Warders"}, ...
   
-  global _active_switch_profiles_byMAC
+  global _activeSwitchProfilesByMac
   
-  _active_switch_profiles_byMAC = { }
+  _activeSwitchProfilesByMac = { }
   
   for item in result['data']:
     if item.get('type') == 'usw': # only interested in switches
-      _active_switch_profiles_byMAC[item.get('mac')] = item
+      _activeSwitchProfilesByMac[item.get('mac')] = item
 
 # List of all devices on site. Can be filtered by POSTing {"macs": ["mac1", ... ]}.
+# Returns a large amount of data, easily 100Kb, so filtering is recommended.
 @local_action({ 'title': 'stat/device (List all devices)', 'group': 'Operations', 'order': next_seq()})
 def statDevice():
   log(3, 'Calling /stat/device API...')
@@ -113,60 +121,60 @@ def statDevice():
   # otherwise, get only the specified switches
   else:
     # sanitise MAC addresses and filter out any that are not managed by this controller
-    sanitised_macs = [ sanitise_mac(item['mac']) for item in param_InterestingSwitches ]
-    valid_macs = [ mac for mac in sanitised_macs if mac in _active_switch_profiles_byMAC ]
+    sanitised_macs = [ sanitiseMac(item['mac']) for item in param_InterestingSwitches ]
+    valid_macs = [ mac for mac in sanitised_macs if mac in _activeSwitchProfilesByMac ]
 
     if sanitised_macs != valid_macs:
       console.warn('Some of the specified switch MAC addresses are not managed by this controller. Will ignore them.')
 
     result = callAPI('s/default/stat/device', arg = {"macs": valid_macs}, contentType='application/json') # arg = {"macs": ["70:a7:41:e5:d3:89"]}
 
-  global _active_switch_state_byMAC
+  global _activeSwitchStateByMac
 
-  _active_switch_state_byMAC = result
+  _activeSwitchStateByMac = result
 
 # Iterate over all switches and populate the switch events.
+# This is called by the timer_pollSwitches timer.
 def populateSwitchEvents(arg = None):
   log(3, 'Populating switch events based of results of /stat/device API in _active_switch_state_byMAC...')
   
   # if no switches are active, then return
-  global _active_switch_state_byMAC
+  global _activeSwitchStateByMac
   
-  if _active_switch_state_byMAC == None:
+  if _activeSwitchStateByMac == None:
     return
   
   # iterate over all switches
-  for item in _active_switch_state_byMAC['data']:
+  for switch in _activeSwitchStateByMac['data']:
     # example { ip=10.97.10.50, mac=70:a7:41:e5:d3:89, model=US624P, port_table=[{port_poe=true, ...}, ...], ... }
-    mac = item.get('mac')
-    port_table = item.get('port_table')
+    switch_mac = switch.get('mac')
+    switch_port_table = switch.get('port_table')
 
     # describe switch event schema
-    switch_id = item.get('_id')
-    switch_label = (getSwitchLabelByMAC(mac) or 'Switch')
-    group_name = '%s %s - POE' % (switch_label, mac)
+    switch_id = switch.get('_id')
+    switch_label = (getSwitchLabelByMAC(switch_mac) or 'Switch')
+    group_name = '%s %s - POE' % (switch_label, switch_mac)
 
     # get state of ports in port table
-    for port in port_table:
+    for port in switch_port_table:
       port_id = port.get('port_idx')
 
       if port.get('port_poe') == True: # only interested in POE ports
         
-        event_poeStateByPort = lookup_local_event('Switch%sPort%sPOEState' % (mac, port_id))
-        event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (mac, port_id))
+        event_poeStateByPort = lookup_local_event('Switch%sPort%sPOEState' % (switch_mac, port_id))
+        event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (switch_mac, port_id))
 
         if (event_poeInfoByPort or event_poeStateByPort) == None:
-          log(5, '+local event & action for port %s poe on switch %s...' % (port_id, mac))
+          log(5, '+local event & action for port %s poe on switch %s...' % (port_id, switch_mac))
           
           # create local event for POE state
-          event_poeStateByPort = create_poe_state_local_event(mac, port_id, group_name)
+          event_poeStateByPort = createPoeStateLocalEvent(switch_mac, port_id, group_name)
 
           # create local action for POE state
-          create_poe_state_local_action(mac, port_id, group_name, switch_id)
+          createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id)
 
           # create local event for POE info
-          event_poeInfoByPort = create_poe_info_local_event(mac, port_id, group_name)
-
+          event_poeInfoByPort = createPoeInfoLocalEvent(switch_mac, port_id, group_name)
 
         # emit poe info
         poe_info = {'poe_enable': port.get('poe_enable'), 'poe_mode': port.get('poe_mode'), 'poe_power': port.get('poe_power')}
@@ -176,47 +184,70 @@ def populateSwitchEvents(arg = None):
         poe_state = 'On' if port.get('poe_mode') == 'auto' else 'Off'
         event_poeStateByPort.emitIfDifferent(poe_state)
 
+    # update port overrides
+    _portOverrides[switch_mac] = switch.get('port_overrides')
 
-poe_queue  = dict() # holds the queue of API PUT calls to make for POE control
+portOverrideQueue = dict() # holds the queue of API PUT calls to make for POE control
 
-def overwrite_poe(switch_id, data):
-  callAPI('s/default/rest/device/%s' % (switch_id), arg = {"port_overrides":data}, contentType='application/json', method='PUT')
-  log(5, "%s - %s" % (switch_id, data))
+def overrideSwitchPortState(switch_id, port_overrides):
+  callAPI('s/default/rest/device/%s' % (switch_id), arg = {"port_overrides":port_overrides}, contentType='application/json', method='PUT')
+  log(3, "[call] %s - %s" % (switch_id, port_overrides))
 
-def process_poe_queue():
-  for mac, switch_data in poe_queue.items():
-    switch_id = switch_data['id']
-    port_overwrites = switch_data['port_overwrites']
-    num_port_overwrites = len(port_overwrites)
-    overwrite_poe(switch_id, port_overwrites)
+def processPortOverrideQueue():
+  if is_empty(portOverrideQueue):
+    return
 
-    poe_queue_timer.stop()
+  # iterate over all switches, pop the switch off the queue, and make the API call
+  while portOverrideQueue:
+    mac, switch_data = portOverrideQueue.popitem()
+    switch_id = switch_data['id']  # retrieve the switch_id (needed for API), and requested port overrides
+    queued_overrides = switch_data['port_overrides']
+    num_port_overrides = len(queued_overrides)
 
-    log(2, "%s" % ('Writing %s POE port state%s to [%s].' % (num_port_overwrites, 's' if num_port_overwrites > 1 else '', mac)))
-  
+    # retrieve current overrides
+    current_overrides = _portOverrides.get(mac).clone() if mac in _portOverrides else dict()
+    updated_overrides = current_overrides.clone()  # to avoid modifying a collection while iterating over it we make a clone
+
+    # merge current overrides with requested overrides
+    for queued in queued_overrides:
+      for n, current in enumerate(current_overrides):
+
+        # match port_idx between current and queued (requested) overrides
+        is_match = False
+        if current['port_idx'] == queued['port_idx']:
+          is_match = True
+
+          # if the requested override is different to the current override, then update the current override
+          if queued['poe_mode'] != current['poe_mode']:
+            updated_overrides[n] = queued
+          
+          # we have a match, so we can break out of the loop
+          break
+
+      # if we didn't find a match, then add the requested override to the list of overrides
+      if is_match == False:
+        updated_overrides.add(queued)  # this is a java.util.ArrayList, so we can use the add() method
+
+    # provide the merged overrides to the switch
+    overrideSwitchPortState(switch_id, updated_overrides)  # current overrides have been merged with queued overrides
+
+    # update our local copy of the port overrides incase a new override is requested before we have a chance to poll the updated state
+    _portOverrides[mac] = updated_overrides
+
+    log(2, "%s" % ('Writing %s port state%s to [%s].' % (num_port_overrides, 's' if num_port_overrides > 1 else '', mac)))
+
+  # reset the timer, polling the switch immediately
   timer_pollSwitches.reset()
   call(pollSwitches, delay=Time.SECOND)
 
-poe_queue_timer = Timer(process_poe_queue, intervalInSeconds=Time.SECOND, firstDelayInSeconds=Time.SECOND, stopped=True)
+timer_poeQueue = Timer(processPortOverrideQueue, intervalInSeconds=Time.SECOND, firstDelayInSeconds=Time.SECOND, stopped=True)
 
-# time_to_live is the time period after which an item will be removed from the dictionary (in seconds)
-def remove_expired_items(time_to_live = 60):
-    current_time = time.time()
-    expired_items = []
-    for mac, switch_data in poe_queue.items():
-        if current_time - switch_data["timestamp"] > time_to_live:
-            expired_items.append(mac)
-    for mac in expired_items:
-        poe_queue.pop(mac, None)
-
-expiration_timer = Timer(remove_expired_items, intervalInSeconds=Time.MINUTE * 5, firstDelayInSeconds=Time.SECOND, stopped=False)
-
-def create_poe_state_local_event(mac, port_id, group_name):
-  event_name = "Switch%sPort%sPOEState" % (mac, port_id)
+def createPoeStateLocalEvent(switch_mac, port_id, group_name):
+  event_name = "Switch%sPort%sPOEState" % (switch_mac, port_id)
   return create_local_event(event_name, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
-def create_poe_state_local_action(mac, port_id, group_name, switch_id):
-  action_name = "Switch%sPort%sPOEState" % (mac, port_id)
+def createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id):
+  action_name = "Switch%sPort%sPOEState" % (switch_mac, port_id)
   def action_handler(arg):
     
     # queue up the API call to make later, so we don't flood the controller with API calls
@@ -224,20 +255,20 @@ def create_poe_state_local_action(mac, port_id, group_name, switch_id):
     updated_port_state = {"port_idx":port_id,"poe_mode": 'auto' if arg == 'On' else 'off'}
     timestamp = time.time()
 
-    if mac not in poe_queue:
-      poe_queue[mac] = {"id": switch_id, "port_overwrites": [], "timestamp": timestamp}
+    if switch_mac not in portOverrideQueue:
+      portOverrideQueue[switch_mac] = {"id": switch_id, "port_overrides": [], "timestamp": timestamp}
     else:
-      for idx, port in enumerate(poe_queue[mac]["port_overwrites"]):
+      for idx, port in enumerate(portOverrideQueue[switch_mac]["port_overrides"]):
         if port['port_idx'] == port_id:
-          poe_queue[mac]["port_overwrites"][idx] = updated_port_state
-          poe_queue_timer.start()
+          portOverrideQueue[switch_mac]["port_overrides"][idx] = updated_port_state
+          timer_poeQueue.start()
           return
-    poe_queue[mac]["port_overwrites"].append(updated_port_state)
-    poe_queue_timer.start()
+    portOverrideQueue[switch_mac]["port_overrides"].append(updated_port_state)
+    timer_poeQueue.start()
 
   create_local_action(action_name, handler = action_handler, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
-def create_poe_info_local_event(mac, port_id, group_name):
+def createPoeInfoLocalEvent(mac, port_id, group_name):
   event_name = "Switch%sPort%sPOEInfo" % (mac, port_id)
   event_schema = {'title': 'Info', 'type': 'object', 'properties': {
     'poe_enable': {'title': 'Active', 'type': 'boolean'},
@@ -247,15 +278,14 @@ def create_poe_info_local_event(mac, port_id, group_name):
   return create_local_event(event_name, {'title': 'Port %s POE Info' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': event_schema})
 
 def getSwitchLabelByMAC(mac):
-  for item in param_InterestingSwitches:
-    if sanitise_mac(item.get('mac')) == mac:
+  for item in param_InterestingSwitches or []:
+    if sanitiseMac(item.get('mac')) == mac:
       return item.get('label')
 
 def pollSwitches():
   call(func=lambda: lookup_local_action('statDevice').call(), complete=populateSwitchEvents)
 
-timer_pollSwitches = Timer(pollSwitches, intervalInSeconds=Time.MINUTE, firstDelayInSeconds=Time.SECOND * 10, stopped=True) # every 60 secs, first after 5,
-
+timer_pollSwitches = Timer(pollSwitches, intervalInSeconds=Time.MINUTE * 5, firstDelayInSeconds=Time.SECOND * 10, stopped=True) # every 60 secs, first after 5,
 
 # List all 'active' clients on the site and their associated information.
 @local_action({ 'title': 'stat/sta (List active clients)', 'group': 'Operations', 'order': next_seq()})
@@ -682,7 +712,7 @@ def formatMillis(millis):
   if mins < 60*24:     return '%sh %sm' % (mins/60, mins%60)
   else:                return '%sd %sh' % ((mins/60)/24, (mins/60)%24)
 
-def sanitise_mac(mac_address):
+def sanitiseMac(mac_address):
     # remove all non-hex characters
     cleaned_mac = ''.join([c for c in mac_address if c in '0123456789abcdefABCDEF'])
     # add colons every 2 characters
