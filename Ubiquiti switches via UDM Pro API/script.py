@@ -142,6 +142,7 @@ def populateSwitchEvents(arg = None):
     ports = dict()
 
     # describe switch event schema
+    switch_id = item.get('_id')
     switch_label = (getSwitchLabelByMAC(mac) or 'Switch')
     group_name = '%s %s - POE' % (switch_label, mac)
 
@@ -151,36 +152,50 @@ def populateSwitchEvents(arg = None):
       # add port to ports dict
       ports[port.get('port_idx')] = port.get('port_poe')
 
-      # create local event for poe state, a simple event intended to be compatible with simple power on/off enum practice
-      event_poeStateByPort = lookup_local_event('Switch%sPort%sPOEState' % (mac, port_id))
-      if event_poeStateByPort == None:
-        if port.get('port_poe') == True:
-          log(5, 'Generating local event for POE state of port %s on switch %s...' % (port_id, mac))
-          event_name = "Switch%sPort%sPOEState" % (mac, port_id)
-          event_poeStateByPort = create_local_event(event_name, {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': port_id, 'schema': {'type': 'string', 'enum': ['Off', 'On']}})
+      if port.get('port_poe') == True: # only interested in POE ports
+        
+        event_poeStateByPort = lookup_local_event('Switch%sPort%sPOEState' % (mac, port_id))
+        event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (mac, port_id))
 
-      # create local event for poe info, e.g. current in watts and operational mode
-      event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (mac, port_id))
-      if event_poeInfoByPort == None:
-        if port.get('port_poe') == True: # only create event if port is POE enabled
-          event_name = "Switch%sPort%sPOEInfo" % (mac, port_id)
-          event_schema = {'title': 'Info', 'type': 'object', 'properties': {
-            'poe_mode': {'title': 'Mode', 'type': 'string', 'enum': ['off', 'auto', 'passv24', 'passthrough']},
-            'poe_power': {'title': 'Current (W)', 'type': 'number'}
-          }}
-          event_poeInfoByPort = create_local_event(event_name, {'title': 'Port %s POE Info' % port_id, 'group': group_name, 'order': port_id, 'schema': event_schema})
+        if (event_poeInfoByPort or event_poeStateByPort) == None:
+          log(5, 'Generating local event & action for POE state of port %s on switch %s...' % (port_id, mac))
+          
+          # create local event for POE state
+          event_poeStateByPort = create_poe_state_local_event(mac, port_id, group_name)
 
-      # emit event if poe state has changed
-      poe_enable = port.get('port_poe')
-      if poe_enable:
+          # create local action for POE state
+          create_poe_state_local_action(mac, port_id, group_name, switch_id)
+
+          # create local event for POE info
+          event_poeInfoByPort = create_poe_info_local_event(mac, port_id, group_name)
+
 
         # emit poe info
-        poe_info = {'poe_mode': port.get('poe_mode'), 'poe_power': port.get('poe_power')}
+        poe_info = {'poe_enable': port.get('poe_enable'), 'poe_mode': port.get('poe_mode'), 'poe_power': port.get('poe_power')}
         event_poeInfoByPort.emitIfDifferent(poe_info)
 
         # emit poe state
-        poe_state = 'On' if port.get('poe_enable') else 'Off'
+        poe_state = 'On' if port.get('poe_mode') == 'auto' else 'Off'
         event_poeStateByPort.emitIfDifferent(poe_state)
+
+def create_poe_state_local_event(mac, port_id, group_name):
+  event_name = "Switch%sPort%sPOEState" % (mac, port_id)
+  return create_local_event(event_name, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+def create_poe_state_local_action(mac, port_id, group_name, switch_id):
+  action_name = "Switch%sPort%sPOEState" % (mac, port_id)
+  def action_handler(arg):
+    callAPI('s/default/rest/device/%s' % (switch_id), arg = {"port_overrides":[{"port_idx":port_id,"poe_mode": 'auto' if arg == 'On' else 'off'}]}, contentType='application/json', method='PUT')
+  create_local_action(action_name, handler = action_handler, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+def create_poe_info_local_event(mac, port_id, group_name):
+  event_name = "Switch%sPort%sPOEInfo" % (mac, port_id)
+  event_schema = {'title': 'Info', 'type': 'object', 'properties': {
+    'poe_enable': {'title': 'Active', 'type': 'boolean'},
+    'poe_mode': {'title': 'Mode', 'type': 'string', 'enum': ['off', 'auto', 'passv24', 'passthrough']},
+    'poe_power': {'title': 'Current (W)', 'type': 'number'}
+  }}
+  return create_local_event(event_name, {'title': 'Port %s POE Info' % port_id, 'group': group_name, 'order': port_id, 'schema': event_schema})
 
 def getSwitchLabelByMAC(mac):
   for item in param_InterestingSwitches:
@@ -456,7 +471,7 @@ def getCookieToken():
 
 _lastReceive = 0
   
-def callAPI(apiMethod, arg=None, contentType=None, leaveAsRaw=False):
+def callAPI(apiMethod, arg=None, contentType=None, leaveAsRaw=False, method=None):
   log(2, 'callAPI:%s arg:"%s", contentType:%s' % (apiMethod, arg, contentType))
     
   if is_blank(param_IPAddress):
@@ -484,7 +499,7 @@ def callAPI(apiMethod, arg=None, contentType=None, leaveAsRaw=False):
       log(3, 'calling with url:"%s" contentType:%s' % (url, contentType))
       if post != None: log(3, '      post:"%s"' % (post))
       
-      rawResult = get_url(url, post=post, contentType=contentType, headers={'Cookie': local_event_AccessCookie.getArg(), 'x-csrf-token': local_event_CSRFToken.getArg()})
+      rawResult = get_url(url, method=method, post=post, contentType=contentType, headers={'Cookie': local_event_AccessCookie.getArg(), 'x-csrf-token': local_event_CSRFToken.getArg()})
       
       if leaveAsRaw:
         log(2, 'got raw result: %s%s' % (rawResult[:30], '...' if len(rawResult) > 30 else ''))
