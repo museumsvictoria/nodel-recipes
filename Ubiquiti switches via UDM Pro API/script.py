@@ -17,6 +17,8 @@ rev 5 (2023.01.16) changelog:
 - Specify an alternative authenticated user in the parameters.
 '''
 
+import time
+
 DEFAULT_USERNAME = 'api'
 
 param_IPAddress = Parameter({ 'schema': { 'type': 'string' }, 'order': next_seq() })
@@ -84,10 +86,10 @@ _loadedSwitchesOnce = False # only want to create the switch events once
 _items_byID = { } # e.g. { '6131a8cc4b4aae0405d399a5': { 'id': '6131a8cc4b4aae0405d399a5', 'mac': '3e:2f:b5:28:27:c2',
                   #                                      'network': 'Security', 'sw_port': 3, 'wired_rate_mbps': ...
                   #                                      'firstSeen': '2021-01-02...', 'timestamp': '2021....'
-                  #                                      'rates': (14941, 9086,1239591,2015989), # tx_packets, rx_packets, tx_bytes, rx_bytes ... }
+                  #                                      'rates': (14941, 9086,1239591,2015989), # tx_packets, rx_packets, tx_bytes, rx_bytes ... }          
 
 # List all switches on site by requesting an outline of all devices via 'stat/device-basic' API and parsing by device type.
-@local_action({ 'title': 'stat/device-basic (List all site devices with simple keys)', 'group': 'Operations' })
+@local_action({ 'title': 'stat/device-basic (List all site devices with simple keys)', 'group': 'Operations', 'order': next_seq()})
 def statDeviceBasic():
   result = callAPI('s/default/stat/device-basic')  # expecting: {"meta":{"rc":"ok"},"data":[{"mac":"70:a7:41:ed:ba:25","state":1,"adopted":true,"disabled":false,"type":"udm","model":"UDMPRO","name":"Warders"}, ...
   
@@ -100,7 +102,7 @@ def statDeviceBasic():
       _active_switch_profiles_byMAC[item.get('mac')] = item
 
 # List of all devices on site. Can be filtered by POSTing {"macs": ["mac1", ... ]}.
-@local_action({ 'title': 'stat/device (List all devices)', 'group': 'Operations' })
+@local_action({ 'title': 'stat/device (List all devices)', 'group': 'Operations', 'order': next_seq()})
 def statDevice():
   log(3, 'Calling /stat/device API...')
 
@@ -137,9 +139,7 @@ def populateSwitchEvents(arg = None):
   for item in _active_switch_state_byMAC['data']:
     # example { ip=10.97.10.50, mac=70:a7:41:e5:d3:89, model=US624P, port_table=[{port_poe=true, ...}, ...], ... }
     mac = item.get('mac')
-    # model = item.get('model')
     port_table = item.get('port_table')
-    ports = dict()
 
     # describe switch event schema
     switch_id = item.get('_id')
@@ -149,8 +149,6 @@ def populateSwitchEvents(arg = None):
     # get state of ports in port table
     for port in port_table:
       port_id = port.get('port_idx')
-      # add port to ports dict
-      ports[port.get('port_idx')] = port.get('port_poe')
 
       if port.get('port_poe') == True: # only interested in POE ports
         
@@ -158,7 +156,7 @@ def populateSwitchEvents(arg = None):
         event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (mac, port_id))
 
         if (event_poeInfoByPort or event_poeStateByPort) == None:
-          log(5, 'Generating local event & action for POE state of port %s on switch %s...' % (port_id, mac))
+          log(5, '+local event & action for port %s poe on switch %s...' % (port_id, mac))
           
           # create local event for POE state
           event_poeStateByPort = create_poe_state_local_event(mac, port_id, group_name)
@@ -178,15 +176,66 @@ def populateSwitchEvents(arg = None):
         poe_state = 'On' if port.get('poe_mode') == 'auto' else 'Off'
         event_poeStateByPort.emitIfDifferent(poe_state)
 
+
+poe_queue  = dict() # holds the queue of API PUT calls to make for POE control
+
+def overwrite_poe(switch_id, data):
+  callAPI('s/default/rest/device/%s' % (switch_id), arg = {"port_overrides":data}, contentType='application/json', method='PUT')
+  log(5, "%s - %s" % (switch_id, data))
+
+def process_poe_queue():
+  for mac, switch_data in poe_queue.items():
+    switch_id = switch_data['id']
+    port_overwrites = switch_data['port_overwrites']
+    num_port_overwrites = len(port_overwrites)
+    overwrite_poe(switch_id, port_overwrites)
+
+    poe_queue_timer.stop()
+
+    log(2, "%s" % ('Writing %s POE port state%s to [%s].' % (num_port_overwrites, 's' if num_port_overwrites > 1 else '', mac)))
+  
+  timer_pollSwitches.reset()
+  call(pollSwitches, delay=Time.SECOND)
+
+poe_queue_timer = Timer(process_poe_queue, intervalInSeconds=Time.SECOND, firstDelayInSeconds=Time.SECOND, stopped=True)
+
+# time_to_live is the time period after which an item will be removed from the dictionary (in seconds)
+def remove_expired_items(time_to_live = 60):
+    current_time = time.time()
+    expired_items = []
+    for mac, switch_data in poe_queue.items():
+        if current_time - switch_data["timestamp"] > time_to_live:
+            expired_items.append(mac)
+    for mac in expired_items:
+        poe_queue.pop(mac, None)
+
+expiration_timer = Timer(remove_expired_items, intervalInSeconds=Time.MINUTE * 5, firstDelayInSeconds=Time.SECOND, stopped=False)
+
 def create_poe_state_local_event(mac, port_id, group_name):
   event_name = "Switch%sPort%sPOEState" % (mac, port_id)
-  return create_local_event(event_name, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+  return create_local_event(event_name, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 def create_poe_state_local_action(mac, port_id, group_name, switch_id):
   action_name = "Switch%sPort%sPOEState" % (mac, port_id)
   def action_handler(arg):
-    callAPI('s/default/rest/device/%s' % (switch_id), arg = {"port_overrides":[{"port_idx":port_id,"poe_mode": 'auto' if arg == 'On' else 'off'}]}, contentType='application/json', method='PUT')
-  create_local_action(action_name, handler = action_handler, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+    
+    # queue up the API call to make later, so we don't flood the controller with API calls
+    # also, the controller seems to reset the port state to the previous state if we make too many API calls too quickly
+    updated_port_state = {"port_idx":port_id,"poe_mode": 'auto' if arg == 'On' else 'off'}
+    timestamp = time.time()
+
+    if mac not in poe_queue:
+      poe_queue[mac] = {"id": switch_id, "port_overwrites": [], "timestamp": timestamp}
+    else:
+      for idx, port in enumerate(poe_queue[mac]["port_overwrites"]):
+        if port['port_idx'] == port_id:
+          poe_queue[mac]["port_overwrites"][idx] = updated_port_state
+          poe_queue_timer.start()
+          return
+    poe_queue[mac]["port_overwrites"].append(updated_port_state)
+    poe_queue_timer.start()
+
+  create_local_action(action_name, handler = action_handler, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 def create_poe_info_local_event(mac, port_id, group_name):
   event_name = "Switch%sPort%sPOEInfo" % (mac, port_id)
@@ -195,17 +244,21 @@ def create_poe_info_local_event(mac, port_id, group_name):
     'poe_mode': {'title': 'Mode', 'type': 'string', 'enum': ['off', 'auto', 'passv24', 'passthrough']},
     'poe_power': {'title': 'Current (W)', 'type': 'number'}
   }}
-  return create_local_event(event_name, {'title': 'Port %s POE Info' % port_id, 'group': group_name, 'order': port_id, 'schema': event_schema})
+  return create_local_event(event_name, {'title': 'Port %s POE Info' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': event_schema})
 
 def getSwitchLabelByMAC(mac):
   for item in param_InterestingSwitches:
     if sanitise_mac(item.get('mac')) == mac:
       return item.get('label')
 
-timer_pollSwitches = Timer(lambda: [lookup_local_action('statDevice').call(), populateSwitchEvents()], intervalInSeconds=Time.MINUTE, firstDelayInSeconds=Time.SECOND * 10, stopped=True) # every 60 secs, first after 5,
+def pollSwitches():
+  call(func=lambda: lookup_local_action('statDevice').call(), complete=populateSwitchEvents)
+
+timer_pollSwitches = Timer(pollSwitches, intervalInSeconds=Time.MINUTE, firstDelayInSeconds=Time.SECOND * 10, stopped=True) # every 60 secs, first after 5,
+
 
 # List all 'active' clients on the site and their associated information.
-@local_action({ 'title': 'stat/sta (List active clients)', 'group': 'Operations' })
+@local_action({ 'title': 'stat/sta (List active clients)', 'group': 'Operations', 'order': next_seq()})
 def statSta():
   result = callAPI('s/default/stat/sta')
   
@@ -445,8 +498,8 @@ from org.nodel.net.NodelHTTPClient import urlEncodeQuery
 nodetoolkit.getHttpClient().setIgnoreSSL(True)           # ignores any cert issues
 nodetoolkit.getHttpClient().setIgnoreRedirects(True)     # do not follow redirects (direct ops only)
 
-local_event_AccessCookie = LocalEvent({ 'group': 'Auth', 'schema': { 'type': 'string' } })
-local_event_CSRFToken = LocalEvent({ 'group': 'Auth', 'schema': { 'type': 'string' } })
+local_event_AccessCookie = LocalEvent({ 'group': 'Auth', 'schema': { 'type': 'string' }, 'order': next_seq() })
+local_event_CSRFToken = LocalEvent({ 'group': 'Auth', 'schema': { 'type': 'string' }, 'order': next_seq() })
 
 def getCookieToken():
   url = 'https://%s%s' % (param_IPAddress, API_AUTH_PREFIX)
