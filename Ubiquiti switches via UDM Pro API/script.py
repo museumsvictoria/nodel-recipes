@@ -24,8 +24,6 @@ changelog:
 - Provide actions to turn on/off ports.
 '''
 
-import time
-
 DEFAULT_USERNAME = 'api'
 
 param_IPAddress = Parameter({ 'schema': { 'type': 'string' }, 'order': next_seq() })
@@ -73,6 +71,7 @@ def main():
   
   # reset access cookie
   local_event_AccessCookie.emit(None)
+  local_event_CSRFToken.emit(None)
 
   # record switches managed by this unifi controller
   lookup_local_action('statDeviceBasic').call()
@@ -533,11 +532,18 @@ local_event_CSRFToken = LocalEvent({ 'group': 'Auth', 'schema': { 'type': 'strin
 
 def getCookieToken():
   url = 'https://%s%s' % (param_IPAddress, API_AUTH_PREFIX)
-  post = json_encode({ 'username': (param_Username or DEFAULT_USERNAME), 'password': param_Password })
+  post = json_encode({ 'username': (param_Username or DEFAULT_USERNAME), 'password': param_Password, 'remember': True })
   
   log(3, 'authenticating with url:\"%s\" post:\"%s\"' % (url, post))
   
-  resp = get_url(url, post=post, contentType='application/json', fullResponse=True)
+  csrf_token = local_event_CSRFToken.getArg()
+
+  if csrf_token != None:
+    # we've previously logged in, so we have a csrf token
+    resp = get_url(url, post=post, contentType='application/json', fullResponse=True, headers = {'x-csrf-token': csrf_token})
+  else:
+    # first time, we're not logged in yet, so no csrf token
+    resp = get_url(url, post=post, contentType='application/json', fullResponse=True)
   
   if resp.statusCode != 200:
     return console.warn('Failed to login, resp code was %s' % resp.statusCode)
@@ -612,7 +618,6 @@ def announce(message):
   
   # allow for other messaging mechanisms
 
-  
 # TODO: Control POE port state:
 # e.g. turning port 44 POE off
 # curl 'https://10.0.0.1/proxy/network/api/s/default/rest/device/613815fd4b4aae0405d50313' \
