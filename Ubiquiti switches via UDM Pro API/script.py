@@ -252,10 +252,9 @@ def createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id):
     # queue up the API call to make later, so we don't flood the controller with API calls
     # also, the controller seems to reset the port state to the previous state if we make too many API calls too quickly
     updated_port_state = {"port_idx":port_id,"poe_mode": 'auto' if arg == 'On' else 'off'}
-    timestamp = time.time()
 
     if switch_mac not in portOverrideQueue:
-      portOverrideQueue[switch_mac] = {"id": switch_id, "port_overrides": [], "timestamp": timestamp}
+      portOverrideQueue[switch_mac] = {"id": switch_id, "port_overrides": []}
     else:
       for idx, port in enumerate(portOverrideQueue[switch_mac]["port_overrides"]):
         if port['port_idx'] == port_id:
