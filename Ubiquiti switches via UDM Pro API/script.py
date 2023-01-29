@@ -3,15 +3,13 @@
 '''
 Ubiquiti switch control using **Unifi-Controller API**
 
-`rev 5 2023.01.24`
+`rev 5 2023.01.30`
 
 - This is roughly written and provides read-only information for IP address information by port and by MAC.
 - It also attempts to show when devices appear and disappear on and off the network. 
-- It also provides actions to turn on/off ports and signals which monitor their POE status.
+- It also provides actions to turn on/off ports and events which monitor their POE state.
 
 Part of it has been written using this incomplete reference - [unifi-controller/api](https://ubntwiki.com/products/software/unifi-controller/api).
-
-See script for possible **TODOs**.
 '''
 
 '''
@@ -144,12 +142,10 @@ def populateSwitchEvents(arg = None):
     return
   
   # iterate over all switches
+  # example { ip=10.97.10.50, mac=70:a7:41:e5:d3:89, model=US624P, port_table=[{port_poe=true, ...}, ...], ... }
   for switch in _activeSwitchStateByMac['data']:
-    # example { ip=10.97.10.50, mac=70:a7:41:e5:d3:89, model=US624P, port_table=[{port_poe=true, ...}, ...], ... }
     switch_mac = switch.get('mac')
     switch_port_table = switch.get('port_table')
-
-    # describe switch event schema
     switch_id = switch.get('_id')
     switch_label = (getSwitchLabelByMAC(switch_mac) or 'Switch')
     group_name = '%s %s - POE' % (switch_label, switch_mac)
@@ -157,31 +153,26 @@ def populateSwitchEvents(arg = None):
     # get state of ports in port table
     for port in switch_port_table:
       port_id = port.get('port_idx')
-
-      if port.get('port_poe') == True: # only interested in POE ports
+      if port.get('port_poe') != True:
+        continue # only interested in POE ports
         
-        event_poeStateByPort = lookup_local_event('Switch%sPort%sPOEState' % (switch_mac, port_id))
-        event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (switch_mac, port_id))
+      event_poeStateByPort = lookup_local_event('Switch%sPort%sPOEState' % (switch_mac, port_id))
+      event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (switch_mac, port_id))
 
-        if (event_poeInfoByPort or event_poeStateByPort) == None:
-          log(5, '+local event & action for port %s poe on switch %s...' % (port_id, switch_mac))
-          
-          # create local event for POE state
-          event_poeStateByPort = createPoeStateLocalEvent(switch_mac, port_id, group_name)
+      # if events/actions don't exist yet, then create them
+      if (event_poeInfoByPort or event_poeStateByPort) == None:
+        log(5, '+local event & action for port %s poe on switch %s...' % (port_id, switch_mac))
+        event_poeStateByPort = createPoeStateLocalEvent(switch_mac, port_id, group_name)
+        createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id)
+        event_poeInfoByPort = createPoeInfoLocalEvent(switch_mac, port_id, group_name)
 
-          # create local action for POE state
-          createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id)
+      # emit poe info
+      poe_info = {'poe_enable': port.get('poe_enable'), 'poe_mode': port.get('poe_mode'), 'poe_power': port.get('poe_power')}
+      event_poeInfoByPort.emitIfDifferent(poe_info)
 
-          # create local event for POE info
-          event_poeInfoByPort = createPoeInfoLocalEvent(switch_mac, port_id, group_name)
-
-        # emit poe info
-        poe_info = {'poe_enable': port.get('poe_enable'), 'poe_mode': port.get('poe_mode'), 'poe_power': port.get('poe_power')}
-        event_poeInfoByPort.emitIfDifferent(poe_info)
-
-        # emit poe state
-        poe_state = 'On' if port.get('poe_mode') == 'auto' else 'Off'
-        event_poeStateByPort.emitIfDifferent(poe_state)
+      # emit poe state
+      poe_state = 'On' if port.get('poe_mode') == 'auto' else 'Off'
+      event_poeStateByPort.emitIfDifferent(poe_state)
 
     # update port overrides
     _portOverrides[switch_mac] = switch.get('port_overrides')
@@ -614,77 +605,7 @@ def callAPI(apiMethod, arg=None, contentType=None, leaveAsRaw=False, method=None
                     
 def announce(message):
   console.info(message)
-  
   # allow for other messaging mechanisms
-
-# TODO: Control POE port state:
-# e.g. turning port 44 POE off
-# curl 'https://10.0.0.1/proxy/network/api/s/default/rest/device/613815fd4b4aae0405d50313' \
-#   -X 'PUT' \
-#   -H 'authority: 10.0.0.1' \
-#   -H 'accept: application/json, text/plain, */*' \
-#   -H 'accept-language: en-AU,en;q=0.9' \
-#   -H 'cache-control: no-cache' \
-#   -H 'content-type: application/json' \
-#   -H 'cookie: TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....yNn0._bxvqGV9yOWPoU8HJZVu632-S4cWdMaj0taAxpVWVzI' \
-#   -H 'origin: https://10.0.0.1' \
-#   -H 'pragma: no-cache' \
-#   -H 'referer: https://10.0.0.1/network/default/devices/24:5a:4c:12:7e:0d/ports/configurations' \
-#   -H 'sec-ch-ua: "Not?A_Brand";v="8", "Chromium";v="108", "Google Chrome";v="108"' \
-#   -H 'sec-ch-ua-mobile: ?0' \
-#   -H 'sec-ch-ua-platform: "Windows"' \
-#   -H 'sec-fetch-dest: empty' \
-#   -H 'sec-fetch-mode: cors' \
-#   -H 'sec-fetch-site: same-origin' \
-#   -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36' \
-#   -H 'x-csrf-token: 4ae3ba8b-a2c5-4473-b0d1-15dfad062b9a' \
-#   --data-raw '{"port_overrides":[{"port_idx":44,"poe_mode":"off","portconf_id":"60c5ae683e27d303a66a602c","port_security_mac_address":[],"stp_port_mode":true,"autoneg":true,"port_security_enabled":false},{"speed":100,"port_idx":29,"poe_mode":"auto","portconf_id":"60c5ae683e27d303a66a602c","full_duplex":true,"port_security_mac_address":[],"stp_port_mode":true,"autoneg":false,"port_security_enabled":false},{"port_idx":37,"poe_mode":"auto","portconf_id":"60c5ae683e27d303a66a602c","port_security_mac_address":[],"stp_port_mode":true,"autoneg":true}]}' \
-#   --compressed \
-#   --insecure
-#
-# # turning back on
-#   curl 'https://10.0.0.1/proxy/network/api/s/default/stat/device/24:5a:4c:12:7e:0d' \
-#   -H 'authority: 10.0.0.1' \
-#   -H 'accept: application/json, text/plain, */*' \
-#   -H 'accept-language: en-AU,en;q=0.9' \
-#   -H 'cache-control: no-cache' \
-#   -H 'cookie: TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....yNn0._bxvqGV9yOWPoU8HJZVu632-S4cWdMaj0taAxpVWVzI' \
-#   -H 'pragma: no-cache' \
-#   -H 'referer: https://10.0.0.1/network/default/devices/24:5a:4c:12:7e:0d/ports/configurations' \
-#   -H 'sec-ch-ua: "Not?A_Brand";v="8", "Chromium";v="108", "Google Chrome";v="108"' \
-#   -H 'sec-ch-ua-mobile: ?0' \
-#   -H 'sec-ch-ua-platform: "Windows"' \
-#   -H 'sec-fetch-dest: empty' \
-#   -H 'sec-fetch-mode: cors' \
-#   -H 'sec-fetch-site: same-origin' \
-#   -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36' \
-#   -H 'x-csrf-token: 4ae3ba8b-a2c5-4473-b0d1-15dfad062b9a' \
-#   --compressed \
-#   --insecure
-#
-# # turning back on
-# curl 'https://10.0.0.1/proxy/network/api/s/default/rest/device/613815fd4b4aae0405d50313' \
-#   -X 'PUT' \
-#   -H 'authority: 10.0.0.1' \
-#   -H 'accept: application/json, text/plain, */*' \
-#   -H 'accept-language: en-AU,en;q=0.9' \
-#   -H 'cache-control: no-cache' \
-#   -H 'content-type: application/json' \
-#   -H 'cookie: TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....yNn0._bxvqGV9yOWPoU8HJZVu632-S4cWdMaj0taAxpVWVzI' \
-#   -H 'origin: https://10.0.0.1' \
-#   -H 'pragma: no-cache' \
-#   -H 'referer: https://10.0.0.1/network/default/devices/24:5a:4c:12:7e:0d/ports/configurations' \
-#   -H 'sec-ch-ua: "Not?A_Brand";v="8", "Chromium";v="108", "Google Chrome";v="108"' \
-#   -H 'sec-ch-ua-mobile: ?0' \
-#   -H 'sec-ch-ua-platform: "Windows"' \
-#   -H 'sec-fetch-dest: empty' \
-#   -H 'sec-fetch-mode: cors' \
-#   -H 'sec-fetch-site: same-origin' \
-#   -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36' \
-#   -H 'x-csrf-token: 4ae3ba8b-a2c5-4473-b0d1-15dfad062b9a' \
-#   --data-raw '{"port_overrides":[{"port_idx":44,"poe_mode":"auto","portconf_id":"60c5ae683e27d303a66a602c","port_security_mac_address":[],"stp_port_mode":true,"autoneg":true,"port_security_enabled":false},{"speed":100,"port_idx":29,"poe_mode":"auto","portconf_id":"60c5ae683e27d303a66a602c","full_duplex":true,"port_security_mac_address":[],"stp_port_mode":true,"autoneg":false,"port_security_enabled":false},{"port_idx":37,"poe_mode":"auto","portconf_id":"60c5ae683e27d303a66a602c","port_security_mac_address":[],"stp_port_mode":true,"autoneg":true}]}' \
-#   --compressed \
-#   --insecure
 
 # <!-- utilities
   
