@@ -115,6 +115,24 @@ local_event_AudioMeter = LocalEvent({ 'title': 'Audio Meter (Peak in dB, hardwar
 # mute, volume and meter --!>
 
 
+# <!- MAC address(es)
+
+from org.nodel.discovery import TopologyWatcher
+
+def emit_macAddresses():
+  for i, intf in enumerate(TopologyWatcher.shared().getMACAddresses() or EMPTY): # returns strings
+    name = 'MAC Address %s' % (i+1)
+    e = lookup_local_event(name)
+    if e == None:
+      e = create_local_event(name, { 'group': 'Network Info', 'order': next_seq(), 'schema': { 'type': 'string', 'desc': 'Ensure correct one for Wake-on-LAN use' } })
+    
+    e.emit(intf)
+
+macEmitter = Timer(emit_macAddresses, 60, 10) # every minute, first after 10s
+    
+# -->
+
+
 # <!- status
 
 local_event_Status = LocalEvent({ 'group': 'Status', 'order': next_seq(), 'schema': { 'type': 'object', 'properties': {
