@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
@@ -11,6 +11,11 @@ using System.Management;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
+// rev. 4: gracefully handles missing audio hardware
+//   - if missing at start, will check every min for presence
+//   - if found but then goes missing/problematic, will gracefully shutdown avoiding
+//     any potentional for memory leaks
+//
 // rev. 3: fixed partial screenshot capture when DPI not 100%
 
 class ComputerController
@@ -29,9 +34,7 @@ class ComputerController
 
         PollCPU();
 
-        PollVolumeAndMuteChanges();
-
-        PollAudioMeter();
+        TryPollAudio();
 
         TakeScreenshots();
 
@@ -194,11 +197,26 @@ class ComputerController
         [PreserveSig] int GetVolumeRange([Out] [MarshalAs(UnmanagedType.R4)] out float volumeMin, [Out] [MarshalAs(UnmanagedType.R4)] out float volumeMax, [Out] [MarshalAs(UnmanagedType.R4)] out float volumeStep);
     }
 
+    public enum DEVICE_STATE : uint
+    {
+        DEVICE_STATE_ACTIVE = 0x00000001,
+        DEVICE_STATE_DISABLED = 0x00000002,
+        DEVICE_STATE_NOTPRESENT = 0x00000004,
+        DEVICE_STATE_UNPLUGGED = 0x00000008,
+        DEVICE_STATEMASK_ALL = 0x0000000f
+    }
+
     [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IMMDevice
     {
         [return: MarshalAs(UnmanagedType.IUnknown)]
         object Activate([MarshalAs(UnmanagedType.LPStruct)] Guid iid, int dwClsCtx, IntPtr pActivationParams);
+
+        int f(); //  ... unused COM method.
+
+        int GetId([Out][MarshalAs(UnmanagedType.LPWStr)] out string ppstrId);
+
+        int GetState([Out][MarshalAs(UnmanagedType.U4)] out DEVICE_STATE pdwState);
     }
 
     [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -213,14 +231,17 @@ class ComputerController
 
     #endregion
 
-    static bool s_mute = Audio.Mute;
+    static bool s_mute;
 
-    static float s_volume = Audio.Volume;
+    static float s_volume;
 
-    static float s_volumeScalar = Audio.VolumeScalar;
+    static float s_volumeScalar;
 
     static void EmitVolumeRange()
     {
+        if (!Audio.TryAudioDevice())
+            return;
+
         float min, max, step;
         Audio.GetVolumeRange(out min, out max, out step);
         Console.WriteLine("{{ event: VolumeRange, arg: {{ min: {0:0.00}, max: {1:0.00}, step:{2:0.00} }} }}", min, max, step);
@@ -228,52 +249,101 @@ class ComputerController
 
     static void EmitMute()
     {
+        if (!Audio.TryAudioDevice())
+            return;
+
         Console.WriteLine("{ event: Mute, arg: " + (Audio.Mute ? "true" : "false") + " }");
     }
 
     static void EmitVolume()
     {
+        if (!Audio.TryAudioDevice())
+            return;
+
         Console.WriteLine("{{ event: Volume, arg: {0:0.00} }}", Audio.Volume);
     }
 
     static void EmitVolumeScalar()
     {
+        if (!Audio.TryAudioDevice())
+            return;
+
         Console.WriteLine("{{ event: VolumeScalar, arg: {0:0.0} }}", Audio.VolumeScalar);
+    }
+
+    static async void TryPollAudio()
+    {
+        while (s_running)
+        {
+            if (Audio.TryAudioDevice())
+            {
+                // at this point if audio goes wrong the process will self-terminate
+                // rather than risk resource leaks caused by audio hardware COM references
+
+                Console.WriteLine("// audio hardware found; will exit if audio state changes or problems occur");
+
+                PollVolumeAndMuteChanges();
+
+                PollAudioMeter();
+
+                return;
+            }
+
+            Console.WriteLine("// ...checking for audio hardware every 60s");
+
+            await Task.Delay(60000); // check every min
+        }
     }
 
     static async void PollVolumeAndMuteChanges()
     {
-        Console.WriteLine("// ...polling volume and mute changes every 2.5s");
+        Console.WriteLine("// ...polling volume and mute changes every 5s");
 
-        // initial announcement
-        EmitVolumeRange();
-        EmitMute();
-        EmitVolume();
-        EmitVolumeScalar();
-
-        while (s_running)
+        try
         {
-            // emit values if changed
+            // initial announcement
+            EmitVolumeRange();
+            EmitMute();
+            EmitVolume();
+            EmitVolumeScalar();
 
-            var mute = Audio.Mute;
-            if (s_mute != mute)
+            while (s_running)
             {
-                s_mute = mute;
-                EmitMute();
+                // emit values if changed
+
+                var mute = Audio.Mute;
+                if (s_mute != mute)
+                {
+                    s_mute = mute;
+                    EmitMute();
+                }
+
+                // only need to poll volume (scalar is linked)
+                float volume = Audio.Volume;
+                if (s_volume != volume)
+                {
+                    s_volume = volume;
+                    EmitVolume();
+
+                    // scalar will have changed too
+                    EmitVolumeScalar();
+                }
+
+                await Task.Delay(5000); // check every 5 seconds
+
+                var deviceState = Audio.GetDeviceState();
+                if (deviceState != DEVICE_STATE.DEVICE_STATE_ACTIVE)
+                {
+                    Console.WriteLine("// device audio state is not active, is " + deviceState);
+                    throw new Exception("Audio device not active anymore");
+                }
             }
-
-            // only need to poll volume (scalar is linked)
-            float volume = Audio.Volume;
-            if (s_volume != volume)
-            {
-                s_volume = volume;
-                EmitVolume();
-
-                // scalar will have changed too
-                EmitVolumeScalar();
-            }
-
-            await Task.Delay(2500); // check every 2.5 seconds
+        }
+        catch (Exception)
+        {
+            // likely problem with audio device, so shutdown
+            Console.WriteLine("// problem, audio device issue? exiting...");
+            Environment.Exit(-1);
         }
     }
 
@@ -281,20 +351,51 @@ class ComputerController
     {
         Console.WriteLine("// ...polling audio peak meter every 0.75s");
 
-        while (s_running)
+        try
         {
-            Console.WriteLine("{{ event: AudioMeter, arg: {0:0.00} }}", Audio.Meter);
-            await Task.Delay(750); // check every 0.75 seconds
+
+            while (s_running)
+            {
+                Console.WriteLine("{{ event: AudioMeter, arg: {0:0.00} }}", Audio.Meter);
+                await Task.Delay(750); // check every 0.75 seconds
+            }
+        }
+        catch (Exception)
+        {
+            // likely problem with audio device, so shutdown
+            Console.WriteLine("// problem, audio device issue? exiting...");
+            Environment.Exit(-1);
         }
     }
 
     public class Audio
     {
-        private static IMMDevice device = GetDefaultDevice();
-        private static IAudioEndpointVolume endpointVolume = Audio.ActivateEndpointVolume(device);
-        private static IAudioMeterInformation meterInformation = Audio.ActivateMeterInformation(device);
+        // use of static field and methods is done as cautious approach to COM integration
 
-        private static IMMDevice GetDefaultDevice()
+        private static IMMDevice device;
+        private static IAudioEndpointVolume endpointVolume;
+        private static IAudioMeterInformation meterInformation;
+
+        public static bool TryAudioDevice()
+        {
+            try
+            {
+                if (device != null)
+                    return true;
+
+                device = GetDefaultDevice();
+
+                endpointVolume = Audio.ActivateEndpointVolume(device);
+                meterInformation = Audio.ActivateMeterInformation(device);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        static IMMDevice GetDefaultDevice()
         {
             var enumerator = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator;
             return enumerator.GetDefaultAudioEndpoint(/*eRender*/ 0, /*eMultimedia*/ 1);
@@ -313,6 +414,16 @@ class ComputerController
         public static void GetVolumeRange(out float min, out float max, out float step) // dB
         {
             Marshal.ThrowExceptionForHR(Audio.endpointVolume.GetVolumeRange(out min, out max, out step));
+        }
+
+        public static DEVICE_STATE GetDeviceState()
+        {
+            DEVICE_STATE pdwState; Marshal.ThrowExceptionForHR(device.GetState(out pdwState)); return pdwState;
+        }
+
+        public static string GetDeviceId()
+        {
+            string pdwState; Marshal.ThrowExceptionForHR(device.GetId(out pdwState)); return pdwState;
         }
 
         public static float Volume // dB
@@ -352,7 +463,7 @@ class ComputerController
     #endregion
 
     #region Screenshots
-    
+
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     public static extern bool SetProcessDPIAware();
 
@@ -551,7 +662,7 @@ class ComputerController
                     {
                         var value = entry.Value;
                         var text = value as String;
-                        
+
                         if (text != null)
                             text = STRIP_EXTRANEOUS.Replace(text, "").Trim().Replace("  ", " ");
 
@@ -580,7 +691,7 @@ class ComputerController
         {
             if (c == '"')
                 sb.Append("\\\"");  // escape the essential 
-            else if (c == '\\') 
+            else if (c == '\\')
                 sb.Append("\\\\");
             else if (c == '\n')     // ...and line control related
                 sb.Append("\\n");
