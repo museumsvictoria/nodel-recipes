@@ -1,4 +1,8 @@
-'''OSC Client Node'''
+'''
+OSC Client Node
+
+`rev 2 2023.02.07`
+'''
 
 '''
 https://www.music.mcgill.ca/~gary/306/week9/osc.html
@@ -11,31 +15,37 @@ The address pattern is a string that starts with a '/', followed by a message ro
 OSC addresses follow a URL or directory tree structure, such as /voices/synth1/osc1/modfreq.
 '''
 
-### Libraries required by this Node
-import OSC
+# Libraries required by this Node
 
 
-### Parameters used by this Node
+# Parameters used by this Node
+import os                          # working directory
+from java.io import File           # reading files
+from org.nodel.io import Stream    # reading files
+from org.nodel.core import Nodel   # for host path
 DEFAULT_IPADDRESS = "127.0.0.1"
 DEFAULT_PORT = 9000
 
-param_ipAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string', 'hint': DEFAULT_IPADDRESS}, 'order':next_seq()})
-param_port = Parameter({'title': 'Port', 'schema': {'type': 'integer', 'hint': DEFAULT_PORT}, 'order':next_seq()})
+param_ipAddress = Parameter({'title': 'IP address', 'schema': {
+                            'type': 'string', 'hint': DEFAULT_IPADDRESS}, 'order': next_seq()})
+param_port = Parameter({'title': 'Port', 'schema': {
+                       'type': 'integer', 'hint': DEFAULT_PORT}, 'order': next_seq()})
 
 param_patterns = Parameter({'title': 'Patterns', 'order': next_seq(), 'schema': {'type': 'array', 'items': {
-        'type': 'object', 'title': 'Pattern', 'properties': {
-          'label': {'type': 'string', 'title': 'Label', 'hint': 'Foobar', 'order': next_seq()},
-          'address': {'type': 'string', 'title': 'Address', 'hint': '/foo/bar', 'order': next_seq()}                                                             
-        } } } })
+    'type': 'object', 'title': 'Pattern', 'properties': {
+            'label': {'type': 'string', 'title': 'Label', 'hint': 'Foobar', 'order': next_seq()},
+        'address': {'type': 'string', 'title': 'Address', 'hint': '/foo/bar', 'order': next_seq()}
+    }}}})
 
 
-### Functions used by this Node
+# Functions used by this Node
 def get_float(arg):
   # cust to reduce integers to decimal
   if arg > 1:
     arg = float(arg)
     arg = arg / 100
   return arg
+
 
 def create_client_action(pattern):
 
@@ -44,7 +54,8 @@ def create_client_action(pattern):
     oscmsg.setAddress(pattern['address'])
     if arg:
       if isinstance(arg, int):
-        arg = get_float(arg) # last minute have to add this, remove from generic client
+        # last minute have to add this, remove from generic client
+        arg = get_float(arg)
       else:
         arg = get_number(arg)
       oscmsg.append(arg)
@@ -53,38 +64,46 @@ def create_client_action(pattern):
     udp.send(oscmsg.getBinary())
 
   create_local_action(
-    name='%s' % pattern['label'],
-    metadata=basic_meta('%s' % pattern['label'], '%s' % pattern['address']),
-    handler=default_handler
+      name='%s' % pattern['label'],
+      metadata=basic_meta('%s' % pattern['label'], '%s' % pattern['address']),
+      handler=default_handler
   )
 
 
-### UDP utility utilised by this Node
-udp = UDP(ready = lambda: console.info('UDP ready. %s' % udp.getDest()))
+# <-- UDP
 
+udp = UDP(ready=lambda: console.info('UDP ready. %s' % udp.getDest()))
 
-### Main
-def main(arg = None):
+# -->
+
+# <-- main
+
+def main(arg=None):
   print 'Nodel script started.'
 
-  udp.setDest((param_ipAddress or DEFAULT_IPADDRESS) + ':' + str(param_port or DEFAULT_PORT))
+  udp.setDest((param_ipAddress or DEFAULT_IPADDRESS) +
+              ':' + str(param_port or DEFAULT_PORT))
 
   # Generate pattern-matching local actions
   if not is_empty(param_patterns):
     for pattern in param_patterns:
       create_client_action(pattern)
 
-### Utilities
+# -->
+
+# <-- utilities
+
 def basic_meta(label, address):
   return {
-    'title': '%s' % label,
-    'group': 'Patterns',
-    'order': next_seq(),
-    'schema': {
-      'type': 'string',
-      'title': '%s' % address
-    }
+      'title': '%s' % label,
+      'group': 'Patterns',
+      'order': next_seq(),
+      'schema': {
+          'type': 'string',
+          'title': '%s' % address
+      }
   }
+
 
 def get_number(s):
   if is_number(s):
@@ -92,14 +111,18 @@ def get_number(s):
   else:
     return s
 
+
 def is_number(s):
     try:
         float(s)
         return True
     except ValueError:
         return False
-      
-# Customisation
+    
+# -->
+
+# <-- customisation
+
 def meta(name):
   console.log('Creating %s action.' % name.lower())
   return {
@@ -111,28 +134,70 @@ def meta(name):
       'order': next_seq(),
       'group': name
   }
-  
+
+
 def handlePower(arg):
-  if arg =='On':
+  if arg == 'On':
     lookup_local_action('Play').call()
     lookup_local_event('Power').emit('On')
-  elif arg =='Off':
+  elif arg == 'Off':
     lookup_local_action('Pause').call()
     lookup_local_event('Power').emit('Off')
-      
+
+
 create_local_action('Power', handlePower, meta('Power'))
 
+
 def handleMuting(arg):
-  if arg =='On':
+  if arg == 'On':
     lookup_local_action('Power').call('Off')
-  elif arg =='Off':
+  elif arg == 'Off':
     lookup_local_action('Power').call('On')
-      
+
+
 create_local_action('Muting', handleMuting, meta('Muting'))
 
-local_event_Power = LocalEvent({"title":"Power","schema":{"type":"string", "enum":['On','Off']},"group":"Power","order": next_seq()})
+local_event_Power = LocalEvent({"title": "Power", "schema": {
+                               "type": "string", "enum": ['On', 'Off']}, "group": "Power", "order": next_seq()})
 
 # vol cust
-local_event_Volume = LocalEvent({"title":"Volume","schema":{"type":"integer"},"group":"Volume","order": next_seq()})
-  
+local_event_Volume = LocalEvent({"title": "Volume", "schema": {
+                                "type": "integer"}, "group": "Volume", "order": next_seq()})
 
+# -->
+
+# <-- retrieve and write OSC dependency
+PYOSC_URL = 'https://raw.githubusercontent.com/ptone/pyosc/master/OSC.py'
+
+
+def retrieve_osc_dependency():
+  resp = get_url(PYOSC_URL, fullResponse=True)
+  if resp.statusCode != 200:
+    raise Exception(
+        "Failed to retrieve OSC dependency, got status code: " + str(resp.statusCode))
+
+  return resp.content
+
+
+def write_osc_file(content):
+  rootDir = File(_node.getRoot(), '')
+  dstFile = File(rootDir, 'OSC.py')
+
+  try:
+    Stream.writeFully(dstFile, content.encode("utf-8"))
+    console.info('"OSC.py" dependency retrieved, restarting node...')
+    _node.restart()
+  except Exception, e:
+    console.error('Failed to write the OSC.py file: ', e)
+
+
+@after_main
+def check_for_osc_dependency():
+  try:
+    import OSC
+  except ImportError:
+    console.info('No OSC dependency found, retrieving...')
+    content = retrieve_osc_dependency()
+    write_osc_file(content)
+
+# -->
