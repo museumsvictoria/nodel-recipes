@@ -2,6 +2,11 @@
 OSC Client Node
 
 `rev 2 2023.02.07`
+
+- Unidirectional only.
+- Turn OSC messages (address pattern + optional argument) into local actions via parameters.
+- Send custom OSC messages via a custom local action.
+
 '''
 
 '''
