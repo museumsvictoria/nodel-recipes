@@ -21,7 +21,7 @@ Useful links:
 CHANGELOG:
 
 - added support for stream rate adjustments
-- included custom script to handle V2 firmware (which has a different endpoint and HTTP scheme)
+- included custom script which support V2 firmware for the Ethergate series (which has a different endpoint and HTTP scheme)
 
 TODO:
 
