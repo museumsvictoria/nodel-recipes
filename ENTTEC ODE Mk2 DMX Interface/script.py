@@ -1,6 +1,8 @@
 '''
 **ENTTEC ODE Mk2**, DMX lighting with Artnet - [info](https://www.enttec.com/product/controls/dmx-ethernet-lighting-control/ethernet-to-dmx-interface/).
 
+`rev 13 2023.03.06`
+
 * loads channels buffer on first use; unused channels will be left unchanged.
 * smoothing is done over 1200 ms @ 20 Hz unless overridden
 
@@ -13,12 +15,18 @@ Useful links:
 
 * [ArtNet DMX Packet definition](https://art-net.org.uk/structure/streaming-packets/artdmx-packet-definition/)
 * Example multichannel fixtures - [ShowPro Hercules](https://www.showtech.com.au/webdata/LEDSET005/downloads/Hercules%20-%20User%20Manual.pdf) and [BT320 LED Flat Par 18x 6W 4-in-1](https://www.tronios.com/fileuploader/download/download/?d=0&file=custom%2Fupload%2F151.316+BT320+LED+Flat+Par+18x6W+RGBW+4-1+V1.0.pdf)
+'''
+
+'''
+CHANGELOG:
+
+- added support for stream rate adjustments
+- included custom script to handle V2 firmware (which has a different endpoint and HTTP scheme)
 
 TODO:
 
-* discovery using MAC via broadcast UDP
+- discovery using MAC via broadcast UDP
 
-_rev 12_
 '''
 
 param_ipAddress = Parameter({ 'schema': { 'type': 'string' }})
@@ -36,6 +44,10 @@ param_rgbChannels = Parameter({ 'title': 'RGB+ Channels', 'schema': { 'type': 'a
   'num': { 'title': 'first channel num.', 'type': 'integer', 'hint': '(1 means first)' },
   'channels': { 'type': 'string', 'hint': '(e.g. "rgbwaiD")', 'desc': 'Refer to light manaul for applicable multi-channel modes, e.g. "w" - white, "a" - amber", "i" - infrared, "D" - dimmer, etc' }
 }}}})
+
+DEFAULT_STREAM_RATE = 20 # (Hz) e.g. 20/sec (0.05)
+
+param_streamRate = Parameter({'title': 'Stream rate (Hz)', 'schema': {'type': 'integer', 'hint': '%s' % DEFAULT_STREAM_RATE, 'default': DEFAULT_STREAM_RATE, 'min': 1, 'max': 44}})
 
 _rawChannels = None # must be either None or a full array of channel values
 
@@ -60,6 +72,10 @@ def main():
       
   console.info('Raw channel values will be synced before faders will be operational...')
   timer_syncOnce.start()
+
+  # update stream rate
+  if param_streamRate:
+    timer_streamer.setInterval(1.0 / param_streamRate)
   
 # -->
 
@@ -241,7 +257,7 @@ def stream():
   
   sendDmx(0, 0, _rawChannels)
 
-timer_streamer = Timer(stream, 0.05, 5) # 20/sec (0.05), first after 5s 
+timer_streamer = Timer(stream, intervalInSeconds=(1.0 / DEFAULT_STREAM_RATE), firstDelayInSeconds=5)
 
 # <!-- protocol & operation
 
