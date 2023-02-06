@@ -15,10 +15,8 @@ The address pattern is a string that starts with a '/', followed by a message ro
 OSC addresses follow a URL or directory tree structure, such as /voices/synth1/osc1/modfreq.
 '''
 
-# Libraries required by this Node
+# <-- parameters
 
-
-# Parameters used by this Node
 import os                          # working directory
 from java.io import File           # reading files
 from org.nodel.io import Stream    # reading files
@@ -37,15 +35,10 @@ param_patterns = Parameter({'title': 'Patterns', 'order': next_seq(), 'schema': 
         'address': {'type': 'string', 'title': 'Address', 'hint': '/foo/bar', 'order': next_seq()}
     }}}})
 
+# -->
 
-# Functions used by this Node
-def get_float(arg):
-  # cust to reduce integers to decimal
-  if arg > 1:
-    arg = float(arg)
-    arg = arg / 100
-  return arg
 
+# <-- functions
 
 def create_client_action(pattern):
 
@@ -68,6 +61,8 @@ def create_client_action(pattern):
       metadata=basic_meta('%s' % pattern['label'], '%s' % pattern['address']),
       handler=default_handler
   )
+
+# -->
 
 
 # <-- UDP
@@ -104,13 +99,18 @@ def basic_meta(label, address):
       }
   }
 
-
 def get_number(s):
   if is_number(s):
     return int(s) if s.isdecimal() else float(s)
   else:
     return s
-
+  
+def get_float(arg):
+  # cust to reduce integers to decimal
+  if arg > 1:
+    arg = float(arg)
+    arg = arg / 100
+  return arg
 
 def is_number(s):
     try:
