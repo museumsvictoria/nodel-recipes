@@ -8,7 +8,7 @@ param_version = Parameter({'title': 'Firmware version', 'schema': {'type': 'stri
 # It (strangely) uses HTTP/0.9 to communicate with the device.
 def v2firmware_get_url(address):
 
-    if param_version == 'ENTTEC DIN Ethergate Firmware V2.x':
+    if param_version == FIRMWARE_VERSIONS[0]:
 
       # Ignore default recipe address
       address = 'http://%s:80/index.html?buffer1.cgi' % _ipAddress
@@ -41,4 +41,4 @@ def v2firmware_get_url(address):
 # Replace the default get_url function with the custom one
 original_get_url = globals().get("get_url", None)
 def get_url(address):
-    return v2firmware_get_url(address) if param_version == 'V2.x' else original_get_url(address)
+    return v2firmware_get_url(address) if param_version == FIRMWARE_VERSIONS[0] else original_get_url(address)
