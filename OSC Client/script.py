@@ -182,7 +182,7 @@ def write_osc_file(content):
   try:
     Stream.writeFully(dstFile, content.encode("utf-8"))
     console.info('"OSC.py" dependency retrieved, restarting node...')
-    call(lambda: _node.restart(), delay = 1) # need a brief pause to allow the file to be written
+    call(lambda: _node.restart(), delay = 2.5) # need a brief pause to allow the file to be written
   except Exception, e:
     console.error('Failed to write the OSC.py file: ', e)
 
