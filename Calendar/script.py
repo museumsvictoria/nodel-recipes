@@ -2,14 +2,20 @@
 # (utf-8 for agenda mark-down)
 
 '''
-A Calendar / Scheduling node that takes in multiple sources (e.g. see *Microsoft Exchange Schedule Retriever* recipe)
+A stateful multi-calendar / scheduling node that takes in event streams from sources (e.g. see *Microsoft Exchange Schedule Retriever* recipe).
 
-* rev. 2
-    * support for "momentary" events (not stateful) when "start time" strictly equals "end time" e.g. "{ Power: Off }"
-    * "Agenda" signal for usable, MARKDOWN formatted, future agenda (use `<panel>` element in Frontend)
-    * minor: polling every 2.5 mins now (was incorrectly 5 mins)
+
+  * _rev 6_ bugfix: momentary events some times do not fire (interference with actual scheduler and agenda generation)
+  * _rev 3_ support for "momentary" events (not stateful) when "start time" strictly equals "end time" e.g. `{ start: "... 02:45:00", end: "... 02:45:00", title: "{ Power: Off }" }`
+  * _rev 3_ "Agenda" signal for usable, MARKDOWN formatted, future agenda (use `<panel>` element in Frontend) highlighting active items and red-flagging errors
+  * _rev 3_ minor: polling every 2.5 mins now (was incorrectly 5 mins)
+  
 '''
 
+# CUSTOM:
+def remote_event_LightingSignal(arg):
+  console.warn('LIGHTING_SIGNAL FIRED! ARG:[%s]' % arg)
+  
 param_members = Parameter({'title': 'Member hierarchy', 'schema': {'type': 'array', 'items': {
         'type': 'object', 'properties': {
           'name': {'type': 'string', 'order': 1},
@@ -339,10 +345,19 @@ def handleScheduleSourceFeed(sourceInfo, items):
   
   lookup_local_action('ProcessActiveNow').call()
 
+# the last time a poll was done (used to assist with momentary events i.e. startTime == endTime (zero-length).
+_lastInstant = None # (date time obj based)
+
+# this action is called continuously by the quantised timer
 def local_action_ProcessActiveNow(arg=None):
   warnings = []
-  
-  items = processAllActiveItems(date_now(), warnings)
+
+  global _lastInstant
+
+  now = date_now()
+  items = processAllActiveItems(now, warnings, fromInstant=_lastInstant)
+
+  _lastInstant = now
 
   local_event_ActiveNow.emit(items)
 
@@ -350,15 +365,22 @@ def local_action_ProcessActiveNow(arg=None):
   
   quantisePollNow()
   
+# this action is called by the user to force states instead of only respecting changes in state
 def local_action_ForceActiveNow(arg=None):
   warnings = []
   
-  items = processAllActiveItems(date_now(), warnings)
+  global _lastInstant
+  
+  now = date_now()
+  items = processAllActiveItems(date_now(), warnings, fromInstant=_lastInstant)
+  
+  _lastInstant = now
 
   local_event_ActiveNow.emit(items)
 
   applyStateList(items, force=True)
 
+# this action is used to update the agenda and forwarn of inconsistent event data
 def local_action_ProcessActiveFuture(arg=None):
   instantsSet = set()
   instantsList = list()
@@ -380,9 +402,11 @@ def local_action_ProcessActiveFuture(arg=None):
   
   warnings = list()
 
+  fromInstant = None
   for instant in instantsList:
     result.append({ 'instant': str(instant), 
-                    'items': processAllActiveItems(instant, warnings) })
+                    'items': processAllActiveItems(instant, warnings, fromInstant=fromInstant) })
+    fromInstant = instant
 
   if len(warnings) > 0:
     message = ', '.join(['["%s" when:%s, title:"%s", calendar:%s]' % (warning['message'], 
@@ -477,20 +501,19 @@ def emitAgenda(fullList):
       
       lines.append(line)
   
-  local_event_Agenda.emit('\r\n'.join(lines))
+  if len(fullList) == 0:
+    lines.append('No upcoming events')
   
-# the last time a poll was done (used to assist with zero-length items i.e. startTime == endTime)
-_lastInstantMillis = None # (date time millis based)
+  local_event_Agenda.emit('\r\n'.join(lines))
 
-def processAllActiveItems(instant, warnings):
-  global _lastInstantMillis
-
+def processAllActiveItems(instant, warnings, fromInstant=None):
   instantMillis = instant.getMillis()
 
   activeItems = list()
  
-  if _lastInstantMillis != None:
-    console.info('Polling between: %s  and: %s' % (date_instant(_lastInstantMillis), date_instant(instantMillis)))
+  fromInstantMillis = fromInstant.getMillis() if fromInstant else None
+  if fromInstantMillis != None:
+    console.info('Polling between: %s  and: %s' % (fromInstant, instant))
     
   # consolidates all available calendar sources
   for sourceInfo in param_scheduleSources:
@@ -505,9 +528,9 @@ def processAllActiveItems(instant, warnings):
       
       momentary = False
       
-      if _lastInstantMillis != None and startMillis == endMillis: # check if it's a momentary event
+      if fromInstantMillis != None and startMillis == endMillis: # check if it's a momentary event
         # check if active
-        if not (startMillis > _lastInstantMillis and startMillis <= instantMillis):
+        if not (startMillis > fromInstantMillis and startMillis <= instantMillis):
           # is not within poll period i.e. start is not between current instant and end of last instant
           continue
           
@@ -560,8 +583,6 @@ def processAllActiveItems(instant, warnings):
                          'message': warning})
 
       activeItems.append(activeItem)
-      
-  _lastInstantMillis = instantMillis
   
   return activeItems
 
