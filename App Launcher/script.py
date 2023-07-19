@@ -361,25 +361,26 @@ def decodeArgList(argsString):
   
   escaping = False
   quoting = False
+  specialQuoting = False
   
   currentArg = list()
   
   for c in argsString:
-    if escaping:
+    if escaping and not specialQuoting:
       escaping = False
 
-      if c == ' ' or c == '"': # put these away immediately (space-delimiter or quote)
+      if c == ' ' or c == '"' or c == "'": # put these away immediately (space-delimiter or quote)
         currentArg.append(c)
         continue      
       
-    if c == '\\':
+    if c == '\\' and not specialQuoting:
       escaping = True
       continue
       
     # not escaping or dealt with special characters, can deal with any char now
     
     if c == ' ': # delimeter?
-      if not quoting: 
+      if not quoting and not specialQuoting: 
         # hit the space delimeter (outside of quotes)
         if len(currentArg) > 0:
           argsList.append(''.join(currentArg))
@@ -400,6 +401,16 @@ def decodeArgList(argsString):
         
       else:
         quoting = True # open quote
+  
+    if c == "'": # special quoting?
+      if specialQuoting: # close quote
+        specialQuoting = False
+        argsList.append(''.join(currentArg))
+        del currentArg[:]
+        continue
+        
+      else:
+        specialQuoting = True # open quote
   
   if len(currentArg) > 0:
       argsList.append(''.join(currentArg))
