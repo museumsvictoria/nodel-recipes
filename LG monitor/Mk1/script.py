@@ -483,8 +483,6 @@ def initAudioMute():
 
 # <!-- volume
 
-# Volume ---
-
 @after_main
 def initVolumeOperation():
   volEvent = Event('Volume', { 'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'integer' }})
