@@ -51,8 +51,8 @@ param_oldScreenBehaviour = Parameter({'title': 'Old screen behaviour?', 'desc': 
 
 param_inputsInUse = Parameter({ 'title': 'Inputs In Use', 'schema': { 'type': 'array', 'items': { 'type': 'object', 'properties': {
   'inputCode': { 'type': 'string', 'hint': '(e.g. "a0" is HDMI1, see info header)', 'order': 1 },
-  'name': { 'type': 'string', 'hint': '(optional, affects binding names, e.g. "HDMI 1")', 'order': 1 },  
-  'label': { 'type': 'string', 'hint': '(descriptive only e.g. "Matrix Switcher Output 2")', 'order': 2 }}}}})
+  'name': { 'type': 'string', 'hint': '(optional, affects binding names, e.g. "HDMI 1")', 'order': 2 },  
+  'label': { 'type': 'string', 'hint': '(descriptive only e.g. "Matrix Switcher Output 2")', 'order': 3 }}}}})
 
 wol = UDP( dest='255.255.255.255:9',
           sent=lambda arg: console.info('wol: sent [%s]' % arg),
