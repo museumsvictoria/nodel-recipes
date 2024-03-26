@@ -163,7 +163,9 @@ def PowerOff():
   doPower(False)
 
 def doPower(state):
-  local_event_DesiredPower.emit('On' if state else 'Off')
+  arg = 'On' if state else 'Off'
+  console.info("Power(%s) called" % arg)
+  local_event_DesiredPower.emit(arg)
 
   local_event_LastPowerRequest.emit(str(date_now()))
   
