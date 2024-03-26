@@ -1,5 +1,5 @@
 '''
-**LG** monitors with serial or LAN control. For some older monitors certain functions will not work and report "no positive acknowledgement" in the console.
+**LG display** with serial or LAN control. For some older monitors certain functions will not work and report "no positive acknowledgement" in the console.
 
 `REV 4.240326`
 
