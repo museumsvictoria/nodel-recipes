@@ -136,8 +136,7 @@ def attachPowerEmitHandlers():
         # they disappear off the network
         power.emit('Off')
         
-    # custom:
-    powerArg = power.getArg()
+    powerArg = power.getArg() or EMPTY
     local_event_PowerOn.emit('On' in powerArg)
     local_event_PowerOff.emit('Off' in powerArg)
         
