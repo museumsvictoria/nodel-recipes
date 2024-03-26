@@ -779,4 +779,4 @@ def log(level, msg):
   if local_event_LogLevel.getArg() >= level:
     console.log(('  ' * level) + msg)
 
-# --!>  
+# --!>
