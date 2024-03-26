@@ -1,7 +1,7 @@
 '''
-_(rev. 3)_
+**LG display** with serial or LAN control. For some older monitors certain functions will not work and report "no positive acknowledgement" in the console.
 
-A recipe for most **LG** monitors support serial or LAN control. For some older monitors certain functions will not work and report "no positive acknowledgement" in the console.
+`REV 4.240326`
 
 **POSSIBLE INPUT CODES**
   
@@ -22,6 +22,7 @@ A recipe for most **LG** monitors support serial or LAN control. For some older 
 
 **REVISION HISTORY**
 
+ * rev. 4: discrete inputs, discrete power states, volume
  * rev. 3: IP address using binding
     * **Input Code** tidy up
     * added **Audio Mute**
@@ -31,7 +32,6 @@ A recipe for most **LG** monitors support serial or LAN control. For some older 
 '''
 
 DEFAULT_ADMINPORT = 9761
-DEFAULT_BROADCASTIP = '192.168.1.255'
 
 # general device status
 local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'type': 'object', 'title': 'Status', 'properties': {
@@ -43,19 +43,25 @@ DEFAULT_SET_ID = '001' # sometimes this is 01
 
 param_ipAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string', 'hint': '(overrides binding)'}})
 param_setID = Parameter({'title': 'Set ID (hex)', 'desc': 'with 2 leading zeros (on most models), e.g. 001...9, a, b, c, d, e, f, 010 (= decimal 16) or sometimes without leading zeros', 'schema': {'type': 'string', 'hint': 'e.g. 001, 01f (set 31), sometimes no leading zeros, etc.'}})
-param_broadcastIPAddress = Parameter({'title': 'Broadcast IP address', 'schema': {'type': 'string', 'hint': DEFAULT_BROADCASTIP}})
 param_adminPort = Parameter({'title': 'Admin port', 'schema': {'type': 'integer', 'hint': DEFAULT_ADMINPORT}})
 param_macAddress = Parameter({'title': 'MAC address (for Wake-on-LAN)', 'schema': {'type': 'string'}})
 param_useSerialGateway = Parameter({'title': 'Use serial gateway node? (when daisy-chaining)', 'schema': {'type': 'boolean'}})
 
 param_oldScreenBehaviour = Parameter({'title': 'Old screen behaviour?', 'desc': 'Ignore "screenPowerOff" (backlight control), "automaticStandby"', 'schema': {'type': 'boolean'}})
 
-wol = UDP( # dest='10.65.255.255:9999' % , # set after main
+param_inputsInUse = Parameter({ 'title': 'Inputs In Use', 'schema': { 'type': 'array', 'items': { 'type': 'object', 'properties': {
+  'inputCode': { 'type': 'string', 'hint': '(e.g. "a0" is HDMI1, see info header)', 'order': 1 },
+  'name': { 'type': 'string', 'hint': '(optional, affects binding names, e.g. "HDMI 1")', 'order': 2 },  
+  'label': { 'type': 'string', 'hint': '(descriptive only e.g. "Matrix Switcher Output 2")', 'order': 3 }}}}})
+
+wol = UDP( dest='255.255.255.255:9',
           sent=lambda arg: console.info('wol: sent [%s]' % arg),
           ready=lambda: console.info('wol: ready (ignored if serial)'), received=lambda arg: console.info('wol: received [%s]'))
 
 POWER_STATES = ['On', 'Input Waiting', 'Unknown', 'Turning On', 'Turning Off', 'Off']
 local_event_Power = LocalEvent({'title': 'Power', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': POWER_STATES + ['Partially On', 'Partially Off']}})
+local_event_PowerOn = LocalEvent({ 'group': 'Power', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
+local_event_PowerOff = LocalEvent({ 'group': 'Power', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
 local_event_DesiredPower = LocalEvent({'title': 'Desired', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}}) 
 local_event_LastPowerRequest = LocalEvent({'title': 'Last request', 'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string'}}) 
 
@@ -128,27 +134,43 @@ def attachPowerEmitHandlers():
         # they disappear off the network
         power.emit('Off')
         
+    powerArg = power.getArg() or EMPTY
+    local_event_PowerOn.emit('On' in powerArg)
+    local_event_PowerOff.emit('Off' in powerArg)
+        
   # attach handlers
   desired.addEmitHandler(handler)
   mainPower.addEmitHandler(handler)
   screenPowerOff.addEmitHandler(handler)
 
-def powerHandler(state=''):
-  if state.lower() == 'on':
-    local_event_DesiredPower.emit('On')
-    
-  elif state.lower() == 'off':
-    local_event_DesiredPower.emit('Off')
-    
+@local_action({'group': 'Power', 'order': next_seq(), 'schema': { 'type': 'string', 'enum': [ 'On', 'Off' ] }})
+def Power(arg):
+  lcState = str(arg).lower().strip()
+
+  if lcState in ['true', 'on', '1']:
+    doPower(True)
+  elif lcState in ['false', 'off', '0']:
+    doPower(False)
   else:
-    console.warn('Unknown power state specified, must be On or Off')
-    return
-  
+    console.warn("Power: unknown arg - %s" % arg)
+
+@local_action({'group': 'Power', 'order': next_seq() })
+def PowerOn():
+  doPower(True)
+
+@local_action({'group': 'Power', 'order': next_seq() })
+def PowerOff():
+  doPower(False)
+
+def doPower(state):
+  arg = 'On' if state else 'Off'
+  console.info("Power(%s) called" % arg)
+  local_event_DesiredPower.emit(arg)
+
   local_event_LastPowerRequest.emit(str(date_now()))
   
   timer_powerSyncer.setDelay(0.1)
 
-Action('Power', powerHandler, {'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 # NOTE ABOUT POWER: 
 #       This uses the 'SCREEN OFF' command as opposed to the 'POWER' command so
@@ -243,6 +265,39 @@ timer_powerSyncer = Timer(syncPower, 60.0)
 
 
 # <!-- Input Code
+
+@after_main
+def initInputsInUse():
+  if len(param_inputsInUse or EMPTY) == 0:
+    return console.info('NOTE: No "Inputs In Use" were configured')
+  
+  for info in param_inputsInUse:
+    initInputInUse(info)
+    
+def initInputInUse(info):
+  code = info['inputCode']
+  nameOrCode = code if is_blank(info['name']) else info['name']
+  label = info['label']
+  title = '%s' % nameOrCode if is_blank(info['label']) else '%s ("%s")' % (nameOrCode, label)
+  
+  e = Event('Input %s' % nameOrCode, { 'title': title, 'group': 'Inputs In Use', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
+  
+  def handler(arg):    
+    if 'On' not in local_event_Power.getArg():
+      console.info('Input %s called, power was not on, powering on!' % title)
+      Power.call('On')
+    else:
+      console.info('Input %s called' % title)
+      
+    InputCode.call(code)
+  
+  a = Action('Input %s' % nameOrCode, handler, {  'title': title, 'group': 'Inputs In Use', 'order': next_seq() })
+  
+  def event_handler(arg):
+    e.emit(code == local_event_InputCode.getArg() and local_event_PowerOn.getArg())
+  
+  local_event_InputCode.addEmitHandler(event_handler)
+  local_event_PowerOn.addEmitHandler(event_handler)
 
 @local_action({ 'group': 'Input Code', 'order': next_seq(), 'schema': { 'type': 'string' }})
 def InputCode(arg):
@@ -426,7 +481,26 @@ def initAudioMute():
 
 # -->
 
+# <!-- volume
 
+@after_main
+def initVolumeOperation():
+  volEvent = Event('Volume', { 'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'integer' }})
+
+  def handle_VolData(data):
+    volEvent.emit(int(data, 16))
+
+  getVolAction = Action('Get Volume', lambda arg: transportRequest('get_vol', 'kf %s ff\r' % setID, lambda resp: checkHeaderAndHandleData(resp, 'f', handle_VolData)), 
+         { 'group': 'Audio', 'order': next_seq() })
+  
+  def action_handler(arg):
+    transportRequest('set_volume', 'kf %s %s\r' % (setID, '%0.2x' % arg), lambda resp: checkHeaderAndHandleData(resp, 'f', handle_VolData))
+
+  Action('Volume', action_handler, { 'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'integer' }})
+
+  Timer(lambda: getVolAction.call(), 15, 5) # every 15 seconds, first after 5
+  
+# -->
 
 # Abnormal state ---
 # (taken from 2nd manual)
@@ -620,9 +694,6 @@ def main(arg = None):
   else:
     console.log('Using serial gateway; make sure "Gateway" remote actions and events are specified')
   
-  # set WOL dest which can only be done during 'main'
-  wol.setDest('%s:9999' % param_broadcastIPAddress)
-
 def local_action_SendWOLPacket(arg=None):
   """{"title": "Send", "group": "Wake-on-LAN"}"""
   if is_blank(param_macAddress):
@@ -665,9 +736,9 @@ def statusCheck():
       if roughDiff < 60:
         message = 'Missing for approx. %s mins' % roughDiff
       elif roughDiff < (60*24):
-        message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+        message = 'Missing since %s' % previousContact.toString('h:mm a')
       else:
-        message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
+        message = 'Missing since %s' % previousContact.toString('h:mm a, E d-MMM')
       
     local_event_Status.emit({'level': 2, 'message': message})
     
@@ -706,4 +777,4 @@ def log(level, msg):
   if local_event_LogLevel.getArg() >= level:
     console.log(('  ' * level) + msg)
 
-# --!>  
+# --!>
