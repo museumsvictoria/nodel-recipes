@@ -32,7 +32,6 @@
 '''
 
 DEFAULT_ADMINPORT = 9761
-DEFAULT_BROADCASTIP = '192.168.1.255'
 
 # general device status
 local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'type': 'object', 'title': 'Status', 'properties': {
@@ -44,7 +43,6 @@ DEFAULT_SET_ID = '001' # sometimes this is 01
 
 param_ipAddress = Parameter({'title': 'IP address', 'schema': {'type': 'string', 'hint': '(overrides binding)'}})
 param_setID = Parameter({'title': 'Set ID (hex)', 'desc': 'with 2 leading zeros (on most models), e.g. 001...9, a, b, c, d, e, f, 010 (= decimal 16) or sometimes without leading zeros', 'schema': {'type': 'string', 'hint': 'e.g. 001, 01f (set 31), sometimes no leading zeros, etc.'}})
-param_broadcastIPAddress = Parameter({'title': 'Broadcast IP address', 'schema': {'type': 'string', 'hint': DEFAULT_BROADCASTIP}})
 param_adminPort = Parameter({'title': 'Admin port', 'schema': {'type': 'integer', 'hint': DEFAULT_ADMINPORT}})
 param_macAddress = Parameter({'title': 'MAC address (for Wake-on-LAN)', 'schema': {'type': 'string'}})
 param_useSerialGateway = Parameter({'title': 'Use serial gateway node? (when daisy-chaining)', 'schema': {'type': 'boolean'}})
@@ -496,7 +494,7 @@ def initVolumeOperation():
          { 'group': 'Audio', 'order': next_seq() })
   
   def action_handler(arg):
-    transportRequest('set_mute', 'kf %s %s\r' % (setID, '%0.2x' % arg), lambda resp: checkHeaderAndHandleData(resp, 'f', handle_VolData))
+    transportRequest('set_volume', 'kf %s %s\r' % (setID, '%0.2x' % arg), lambda resp: checkHeaderAndHandleData(resp, 'f', handle_VolData))
 
   Action('Volume', action_handler, { 'group': 'Audio', 'order': next_seq(), 'schema': {'type': 'integer' }})
 
@@ -738,9 +736,9 @@ def statusCheck():
       if roughDiff < 60:
         message = 'Missing for approx. %s mins' % roughDiff
       elif roughDiff < (60*24):
-        message = 'Missing since %s' % previousContact.toString('h:mm:ss a')
+        message = 'Missing since %s' % previousContact.toString('h:mm a')
       else:
-        message = 'Missing since %s' % previousContact.toString('h:mm:ss a, E d-MMM')
+        message = 'Missing since %s' % previousContact.toString('h:mm a, E d-MMM')
       
     local_event_Status.emit({'level': 2, 'message': message})
     
