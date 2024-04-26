@@ -1,5 +1,6 @@
 '''
 **Brightsign Node** <sup>v1.2</sup> 
+
 Requires the [Nodel Brightsign Plugin](https://github.com/museumsvictoria/nodel-recipes/tree/master/Brightsign)
 
 ---
