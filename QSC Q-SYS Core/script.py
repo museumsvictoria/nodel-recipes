@@ -9,10 +9,10 @@
  
 _changelog_
 
-* _rev. 7: tidyup_
-* _rev. 6b: add CoreState for redundant operation_
-* _rev. 4.230215: JP added "level" and "message" for Status backwards support_
-* _rev. 3.201015: JP added to repo_
+* _rev. 7.2405: tidyup_
+* _rev. 6: add CoreState for redundant operation_
+* _rev. 4.2302: JP added "level" and "message" for Status backwards support_
+* _rev. 3.2010: JP general updates_
 
 '''
 
