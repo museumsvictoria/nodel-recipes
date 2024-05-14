@@ -1,25 +1,24 @@
 '''
 **QSC Q-SYS Core**
 
- * drag-drop **External Controls.xml** into the node root and restart node
- * supports Core redundancy operation (see additional ingredient) via a third instance
- 
 `rev 7`
-'''
 
-* rev. 7: tidyup
-* rev. 6b: add CoreState for redundant operation
-* rev. 4: 15-02-2023 JP added "level" and "message" for Status backwards support
-* rev. 3, 15-Oct-2020
-'''
+ * drag-drop **External Controls.xml** into the node root and restart node
+ * supports Core redundancy via a third instance
+   * e.g. create 3 node for "DSP 1", "DSP 2" and "DSPs" where the latter has the Core 1 and Core 2 remote events filled in and External Controls.
+ 
+_changelog_
 
-# For interesting XML end-points, see bottom of script.
+* _rev. 7: tidyup_
+* _rev. 6b: add CoreState for redundant operation_
+* _rev. 4.230215: JP added "level" and "message" for Status backwards support_
+* _rev. 3.201015: JP added to repo_
+
+'''
 
 QSC_PORT = 1710
 
 disable_autoPoll = False
-
-# Script parameters ---
 
 param_disabled = Parameter({"order": 0, "title":"Disable communication", "group":"Comms", "schema":{"type":"boolean"}})
 param_ipAddress = Parameter({"order": 1, "title": "IP address", "desc": "The IP address to connect to.", "schema": {"type": "string" }, "value": "192.168.100.1", "order": 0})
@@ -497,8 +496,63 @@ def clearCoreStateOnTimeout():
     local_event_CoreState.emit("NODEL_NO_RESPONSE")
     
 Timer(clearCoreStateOnTimeout, 15, 5) # 15s period, first after 5
+
+# <!-- redundancy
+
+local_event_Core1IPAddress = LocalEvent({ 'group': 'Redundancy', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+def remote_event_Core1IPAddress(arg):
+  local_event_Core1IPAddress.emit(arg)
+
+local_event_Core2IPAddress = LocalEvent({ 'group': 'Redundancy', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+def remote_event_Core2IPAddress(arg):
+  local_event_Core2IPAddress.emit(arg)
+  
+local_event_LastActiveCore = LocalEvent({ 'group': 'Redundancy', 'order': next_seq(), 'schema': { 'type': 'integer' }})
+
+local_event_Core1State = LocalEvent({ 'group': 'Redundancy', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+def remote_event_Core1State(arg):
+  local_event_Core1State.emit(arg)
+  checkRedundancy()
+  
+local_event_Core2State = LocalEvent({ 'group': 'Redundancy', 'order': next_seq(), 'schema': { 'type': 'string' }})
+
+def remote_event_Core2State(arg):
+  local_event_Core2State.emit(arg)
+  checkRedundancy()
+
+def checkRedundancy():
+  active = None
+  
+  if local_event_Core1State.getArg() == 'Active':
+    active = 1
     
-# JSON-RPC functions -----------------
+  else:
+    if local_event_Core2State.getArg() == 'Active':
+      active = 2
+      
+  if active == None:
+    console.warn('No Core is actively claiming to be Active; not going to change anything...')
+    return
+  
+  if active == local_event_LastActiveCore.getArg():
+    # nothing to do!
+    return
+  
+  # otherwise, a change occurred!
+  
+  local_event_LastActiveCore.emit(active)
+  newAddr = lookup_local_event('Core %s IPAddress' % active).getArg()
+  console.info('Active Core has swapped to %s; changing address to %s' % (active, newAddr))
+  
+  SetIPAddress.call(newAddr)
+
+# -->
+
+
+# <!-- JSON-RPC functions
     
 NO_OBJ = {}
 
@@ -537,6 +591,8 @@ def get_error_message(code):
         message = "Unknown error code, '%s' returned." % code
         
     return message
+
+# --!>
 
   
 # <status and error reporting ---
