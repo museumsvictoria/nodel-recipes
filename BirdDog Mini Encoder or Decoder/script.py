@@ -1,5 +1,5 @@
 '''
-BirdDog Mini encoder/decoder
+**BirdDog Mini** encoder/decoder
 
 `rev 2.2405`
 
