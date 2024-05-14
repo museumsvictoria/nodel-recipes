@@ -6,6 +6,7 @@
  * drag-drop **External Controls.xml** into the node root and restart node
  * supports Core redundancy via a third instance
    * e.g. create 3 node for "DSP 1", "DSP 2" and "DSPs" where the latter has the Core 1 and Core 2 remote events filled in and External Controls.
+   * see [Q-SYS Core Redundany](https://q-syshelp.qsc.com/q-sys_8.2/Content/Redundancy/Redundancy_Core.htm)
  
 _changelog_
 
