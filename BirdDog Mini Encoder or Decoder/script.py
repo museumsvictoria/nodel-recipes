@@ -19,9 +19,9 @@ param_ipAddress = Parameter({'schema': {'type': 'string'}})
 param_sources   = Parameter({'schema': {'type': 'array', 'desc': '(use remote signal or this to override)', 'items': {'type': 'object', 'properties': {
                                'name': {'type': 'string', 'order': 1, 'hint': '(recommend using short consecutive letters or digits, e.g. "1", "2", or "A", "B")'},
                                'location': {'type': 'object', 'order': 2, 'properties': {
-                                       'ip':   {'type': 'string', 'order': 1},
-                                       'port': {'type': 'integer', 'order': 2},
-                                       'name': {'type': 'string', 'order': 3} }}}}}})
+                                       'ip':   {'type': 'string', 'order': 1, 'hint': '(e.g. 192.168.153.21)' },
+                                       'port': {'type': 'integer', 'order': 2, 'hint': '(e.g. 5962)' },
+                                       'name': {'type': 'string', 'order': 3, 'hint': '(e.g. "MM-LLENC01 (HDMI)")' }}}}}}})
 
 # -->
 
