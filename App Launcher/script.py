@@ -361,32 +361,30 @@ def decodeArgList(argsString):
   
   escaping = False
   quoting = False
-  specialQuoting = False
   
   currentArg = list()
   
   for c in argsString:
-    if escaping and not specialQuoting:
+    if escaping:
       escaping = False
-
-      if c == ' ' or c == '"' or c == "'": # put these away immediately (space-delimiter or quote)
-        currentArg.append(c)
-        continue      
-      
-    if c == '\\' and not specialQuoting:
+      currentArg.append('\\') # Add the backslash first
+      currentArg.append(c) # Add the escaped character
+      continue
+    
+    if c == '\\':
       escaping = True
       continue
-      
+    
     # not escaping or dealt with special characters, can deal with any char now
     
-    if c == ' ': # delimeter?
-      if not quoting and not specialQuoting: 
-        # hit the space delimeter (outside of quotes)
+    if c == ' ': # delimiter?
+      if not quoting:
+        # hit the space delimiter (outside of quotes)
         if len(currentArg) > 0:
           argsList.append(''.join(currentArg))
           del currentArg[:]
-          continue
-
+        continue
+    
     if c == ' ' and len(currentArg) == 0: # don't fill up with spaces
       pass
     else:
@@ -395,26 +393,16 @@ def decodeArgList(argsString):
     if c == '"': # quoting?
       if quoting: # close quote
         quoting = False
-        argsList.append(''.join(currentArg))
-        del currentArg[:]
+        if len(currentArg) > 0:
+          argsList.append(''.join(currentArg))
+          del currentArg[:]
         continue
-        
       else:
         quoting = True # open quote
   
-    if c == "'": # special quoting?
-      if specialQuoting: # close quote
-        specialQuoting = False
-        argsList.append(''.join(currentArg))
-        del currentArg[:]
-        continue
-        
-      else:
-        specialQuoting = True # open quote
-  
   if len(currentArg) > 0:
-      argsList.append(''.join(currentArg))
-
+    argsList.append(''.join(currentArg))
+  
   return argsList
 
 
