@@ -1,5 +1,5 @@
 '''
-**Brightsign Node** <sup>v1.3</sup> 
+**Brightsign Node** <sup>v1.4</sup> 
 
 Requires the [Nodel Brightsign Plugin](https://github.com/museumsvictoria/nodel-recipes/tree/master/Brightsign)
 
@@ -10,20 +10,22 @@ Monitors state of Brightsign, and allows remote control of Playback, Muting, and
 Sleep is the Brightsign's native 'Powersaving' mode, which disables all video and audio outputs and pauses playbacks, allowing screens to enter powersaving mode.
 
 '''
+### -------------------- SETUP -------------------- ###
+import socket
 
 ### -------------------- PARAMETERS AND VARIABLES -------------------- ###
 
 param_ipAddress = Parameter({'title': 'IP Address', 'order': next_seq(), 'required': True, 'schema': {'type': 'string', 'hint': '192.168.1.10'},
                            'desc': 'IP address of Brightsign'})
-param_ipPort = Parameter({'title': 'Port', 'order': next_seq(), 'required': True, 'schema': {'type': 'string', 'hint': '8081'},
+param_scriptPort = Parameter({'title': 'Port', 'order': next_seq(), 'required': True, 'schema': {'type': 'string', 'hint': '8081'},
                            'desc': 'Port of Brightsign '})
-port = "8081"
+param_udpPort = Parameter({'title': 'Port', 'order': next_seq(), 'required': True, 'schema': {'type': 'string', 'hint': '5000'},
+                           'desc': 'Port of Brightsign '})
+scriptPort = "8081"
+udpPort ="5000"
 fullAddress = ""
 inSync = False
 status_check_interval = 15
-
-statusCheck_timer = Timer(status_get, status_check_interval)
-status_timer = Timer(statusCheck, status_check_interval)
 
 
 ### -------------------- EVENTS -------------------- ###
@@ -62,10 +64,10 @@ local_event_DesiredMute = LocalEvent({'group': 'Volume', 'order': next_seq(),'sc
 def Power(arg):
   if arg == "On":
     lookup_local_event('DesiredPower').emit("On")
-    send_get("/playback?sleep=false")
+    sendGet("/playback?sleep=false")
   elif arg == "Off":
     lookup_local_event('DesiredPower').emit("Off")
-    send_get("/playback?sleep=true")
+    sendGet("/playback?sleep=true")
 
 @local_action({'group': 'Power', 'title': 'On', 'order': next_seq()})  
 def Wake(arg = None):
@@ -80,12 +82,12 @@ def Sleep(arg = None):
 @local_action({'group': 'Playback', 'title': 'Play', 'order': next_seq()})  
 def Play(arg = None):
   lookup_local_event('DesiredPlayback').emit("Playing")
-  send_get("/playback?playback=play")
+  sendget("/playback?playback=play")
 
 @local_action({'group': 'Playback', 'title': 'Pause', 'order': next_seq()})  
 def Pause(arg = None):
   lookup_local_event('DesiredPlayback').emit("Paused")
-  send_get("/playback?playback=pause")
+  sendget("/playback?playback=pause")
 # Playback/>
 
 # <Volume
@@ -94,22 +96,22 @@ def Volume(arg):
     if arg == None or arg < 0 or arg > 100:
       console.warn('Volume: no arg or outside 0 - 100')
       return
-    send_get("/volume?%s" % arg)
+    sendGet("/volume?%s" % arg)
 
 @local_action({'group': 'Power', 'title': 'Reboot', 'order': next_seq()})  
 def Reboot(arg = None):
   console.log("Sending Reboot")
-  send_get("/reboot?reboot=true")
+  sendGet("/reboot?reboot=true")
 
 @local_action({'group': 'Volume', 'title': 'Mute', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})  
 def Mute(arg):
   if arg == "On":
     local_event_DesiredMute.emit("On")
-    send_get("/mute?mute")
+    sendGet("/mute?mute")
 
   elif arg == "Off":
     local_event_DesiredMute.emit("Off")
-    send_get("/mute?unmute")
+    sendGet("/mute?unmute")
 
 @local_action({'group': 'Volume', 'title': 'Mute On', 'order': next_seq()})
 def MuteOn():
@@ -122,16 +124,15 @@ def MuteOff():
 
 @local_action({'group': 'Status', 'title': 'Get Status', 'order': next_seq()})
 def GetStatus():
-  status_get()
-
+  playerStatusGet()
 
 ### -------------------- MAIN FUNCTIONS -------------------- ###
 
-def send_get(value):
+def sendGet(value):
   global fullAddress
   try: 
     resp = get_url(fullAddress + value, fullResponse=True)
-    status_get()
+    playerStatusGet()
   except: 
     console.error("Failed to Connect")
   else:
@@ -140,8 +141,19 @@ def send_get(value):
     if resp.statusCode != 200:
       console.error("Failed to send.")
 
-  
-def status_get():
+def send_udp_string(msg):
+  #open socket
+  sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  try:
+    sock.sendto(msg, (param_ipAddress, udpPort))
+  except socket.error, msg:
+    print "error: %s\n" % msg
+    local_event_Error.emit(msg)
+  finally:
+    if sock:
+      sock.close()
+      
+def playerStatusGet():
   global fullAddress
   try:
     resp = get_url(fullAddress + "/status", method='GET', contentType='application/json', fullResponse=True)
@@ -190,17 +202,21 @@ def status_get():
 
 # Script Entrypoint
 def main(arg = None):
-  global port, fullAddress
+  global scriptPort, udpPort, fullAddress
   if is_blank(param_ipAddress):
     console.error('No Address has been specified, nothing to do!')
     return
-  if is_blank(param_ipPort):
-    console.info('No Port has been specified, assuming 8081')
+  if is_blank(param_scriptPort):
+    console.info('No Script Port has been specified, assuming 8081')
   else:
-    port = param_ipPort
+    scriptPort = param_scriptPort
+  if is_blank(param_udpPort):
+    console.info('No UDP Port has been specified, assuming 5000')
+  else:
+    udpPort = param_udpPort
 
-  fullAddress = "http://%s:%s" % (param_ipAddress, port)
-    
+  fullAddress = "http://%s:%s" % (param_ipAddress, scriptPort)
+  
   console.log("Brightsign script started.")
 
 
@@ -219,7 +235,7 @@ local_event_Status = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), '
         'level': {'type': 'integer', 'order': 1},
         'message': {'type': 'string', 'order': 2}}}})
   
-def statusCheck():
+def nodeStatusCheck():
   diff = (system_clock() - _lastReceive)/1000.0 # (in secs)
   now = date_now()
   
@@ -251,6 +267,9 @@ def statusCheck():
     local_event_Status.emit({'level': 0, 'message': 'OK'})
 
 # --->
+
+playerStatus_timer = Timer(playerStatusGet, status_check_interval)
+nodeStatus_timer = Timer(nodeStatusCheck, status_check_interval)
 
 # <!-- logging
 
