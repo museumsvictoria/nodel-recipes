@@ -15,16 +15,16 @@ import socket
 
 ### -------------------- PARAMETERS AND VARIABLES -------------------- ###
 
-param_ipAddress = Parameter({'title': 'IP Address', 'order': next_seq(), 'required': True, 'schema': {'type': 'string', 'hint': '192.168.1.10'},
-                           'desc': 'IP address of Brightsign'})
-param_scriptPort = Parameter({'title': 'Port', 'order': next_seq(), 'required': True, 'schema': {'type': 'string', 'hint': '8081'},
-                           'desc': 'Port of Brightsign '})
-param_udpPort = Parameter({'title': 'Port', 'order': next_seq(), 'required': True, 'schema': {'type': 'string', 'hint': '5000'},
-                           'desc': 'Port of Brightsign '})
+param_playerConfig = Parameter({'title': 'Brightsign Config', 'schema': {'type': 'object', 'properties': {
+           'ipAddress': {'title': 'IP Address', 'type': 'string', 'hint': '192.168.1.10', 'order': 1},
+           'scriptPort': {'title': 'Script Port', 'type': 'string', 'hint': '8081', 'order': 2},
+           'udpPort': {'title': 'UDP Port', 'type': 'integer', 'hint': '5000', 'order': 3},
+        }}})
+
 scriptPort = "8081"
-udpPort ="5000"
+udpPort = 5000
+ipAddress = ""
 fullAddress = ""
-inSync = False
 status_check_interval = 15
 
 
@@ -82,12 +82,12 @@ def Sleep(arg = None):
 @local_action({'group': 'Playback', 'title': 'Play', 'order': next_seq()})  
 def Play(arg = None):
   lookup_local_event('DesiredPlayback').emit("Playing")
-  sendget("/playback?playback=play")
+  sendGet("/playback?playback=play")
 
 @local_action({'group': 'Playback', 'title': 'Pause', 'order': next_seq()})  
 def Pause(arg = None):
   lookup_local_event('DesiredPlayback').emit("Paused")
-  sendget("/playback?playback=pause")
+  sendGet("/playback?playback=pause")
 # Playback/>
 
 # <Volume
@@ -145,7 +145,7 @@ def send_udp_string(msg):
   #open socket
   sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
   try:
-    sock.sendto(msg, (param_ipAddress, udpPort))
+    sock.sendto(msg, (ipAddress, udpPort))
   except socket.error, msg:
     print "error: %s\n" % msg
     local_event_Error.emit(msg)
@@ -202,20 +202,16 @@ def playerStatusGet():
 
 # Script Entrypoint
 def main(arg = None):
-  global scriptPort, udpPort, fullAddress
-  if is_blank(param_ipAddress):
+  global ipAddress, scriptPort, udpPort, fullAddress
+  if is_blank((param_playerConfig or {}).get('ipAddress')):
     console.error('No Address has been specified, nothing to do!')
     return
-  if is_blank(param_scriptPort):
-    console.info('No Script Port has been specified, assuming 8081')
   else:
-    scriptPort = param_scriptPort
-  if is_blank(param_udpPort):
-    console.info('No UDP Port has been specified, assuming 5000')
-  else:
-    udpPort = param_udpPort
+    ipAddress = (param_playerConfig or {}).get('ipAddress')
+  scriptPort = (param_playerConfig or {}).get('scriptPort') or scriptPort
+  udpPort = (param_playerConfig or {}).get('udpPort') or udpPort
 
-  fullAddress = "http://%s:%s" % (param_ipAddress, scriptPort)
+  fullAddress = "http://%s:%s" % (ipAddress, scriptPort)
   
   console.log("Brightsign script started.")
 
