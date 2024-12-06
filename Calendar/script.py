@@ -4,7 +4,11 @@
 '''
 A stateful multi-calendar / scheduling node that takes in event streams from sources (e.g. see *Microsoft Exchange Schedule Retriever* recipe).
 
+`rev 7`
 
+NOTE: by design, when this calendar (re)starts after config changes, it will automatically propagate remote actions. To avoid this behaviour, use the **Supress next propagation?** action.
+
+  * _rev 7.241206_ "Suppress next propagation?" action
   * _rev 6_ bugfix: momentary events some times do not fire (interference with actual scheduler and agenda generation)
   * _rev 3_ support for "momentary" events (not stateful) when "start time" strictly equals "end time" e.g. `{ start: "... 02:45:00", end: "... 02:45:00", title: "{ Power: Off }" }`
   * _rev 3_ "Agenda" signal for usable, MARKDOWN formatted, future agenda (use `<panel>` element in Frontend) highlighting active items and red-flagging errors
@@ -62,6 +66,12 @@ local_event_Agenda = LocalEvent({'group': 'Info', 'schema': {'type': 'string', '
 
 local_event_Debug = LocalEvent({'title': 'Debug level', 'group': 'Debug', 'schema': {'type': 'integer'}})
 
+local_event_SuppressNextPropagation = LocalEvent({'title': 'Suppress Next Propagation?', 'order': 0, 'group': 'Info', 'schema': {'type': 'boolean'}})
+
+@local_action({ 'title': 'Suppress Next Propagation?', 'order': 0})
+def SuppressNextPropagation():
+  local_event_SuppressNextPropagation.emit(True)
+
 # signal types by name
 signalTypes = {}
 
@@ -103,6 +113,12 @@ members = {}
 # States with warnings will be skipped
 
 def applyStateList(states, force=False):
+  # opt-ing out of next propagation?
+  suppressNextPropagation = local_event_SuppressNextPropagation.getArg()
+  if suppressNextPropagation:
+    # clear flag
+    local_event_SuppressNextPropagation.emit(False)
+  
   stateTrees = {}
   
   def lockAndTraverse(state, member, momentary, traverseOnly=False):
@@ -186,10 +202,12 @@ def applyStateList(states, force=False):
     
       actionName = '%s Propagate %s' % (name, signalName)
       arg = {'state': state, 'noPropagate': not memberInfo['isEdge']}
-      
-      print '%s... "%s": %s' % ('Reverting' if reverting else 'Forcing', actionName, arg)
 
-      lookup_remote_action(actionName).call(arg)
+      if suppressNextPropagation:
+        print 'Ignoring... "%s": %s' % (actionName, arg)
+      else:
+        print '%s... "%s": %s' % ('Reverting' if reverting else 'Forcing', actionName, arg)
+        lookup_remote_action(actionName).call(arg)
       
       lookup_local_event('%s %s' % (name, signalName)).emit(state)
     
@@ -264,21 +282,27 @@ def main():
   for signalType in param_signalTypes:
     signalName = signalType['name']
     lastTrees[signalName] = createNewTree()
-    
-  delay = quantisePollNow()
+
+  # give at least 20s for opportunity to suppress initial propagation
+  delay = quantisePollNow(minDelay=20)
   
   console.info('Scheduler started! (polling on half-minute boundaries first one in %.1f seconds)' % delay)
+
+  console.info("NOTE: 'Suppress Next Propagation' can be used to avoid any initial actions being called just after (re)starts.")
   
   # check the active future ones every 5 mins (after 30s at first)
   Timer(lambda: lookup_local_action('ProcessActiveFuture').call(), 2.5*60, 30)
   
 # schedules the next poll on sharp 30s wall-clock edges
-def quantisePollNow():
+def quantisePollNow(minDelay=0):
   halfMinRemainder = 30 - (date_now().getMillis() % 30000) / 1000.0   # is in secs
-  timer_poller.setDelay(halfMinRemainder)
+
+  delay = max(minDelay, halfMinRemainder)
+
+  timer_poller.setDelay(delay)
 
   # return what is the delay
-  return halfMinRemainder
+  return delay
 
 # establish a timer that will be manually quantised on 30s edges
 def handlePollTimer():
