@@ -3,7 +3,7 @@ _(rev 15)_
 
 **Sony SSIP & IRCC protocols** for displays
 
-* Tested with Sony FW-85BZ40H, FWD-55X80J
+* Tested with Sony FW-85BZ40H, FWD-55X80J, FW-100BZ40J
 
 The script contains some protocol examples, otherwise see [command-definitions](https://pro-bravia.sony.net/develop/integrate/ssip/command-definitions/) or [ip-control](https://pro-bravia.sony.net/develop/integrate/ip-control/).
  
