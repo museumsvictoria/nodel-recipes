@@ -1,9 +1,10 @@
 '''
 **BlackMagic** Videohub 10x10 and others.
 
-Actions and signals are dynamically created when a connection is first made.
+Actions and signals are dynamically created when a connection is first made. The "Route" actions and signals are simply named "Output X" where X is the output number starting from 1. The signal's value 
+is the input it's routed to, starting from 1.
 
-See [VideohubDeveloperInformation.pdf](https://documents.blackmagicdesign.com/DeveloperManuals/VideohubDeveloperInformation.pdf)
+Protocol reference - [VideohubDeveloperInformation.pdf](https://documents.blackmagicdesign.com/DeveloperManuals/VideohubDeveloperInformation.pdf)
 
 `rev 1`
 
@@ -11,11 +12,6 @@ See [VideohubDeveloperInformation.pdf](https://documents.blackmagicdesign.com/De
  * _TODO: direct cross-point switching_
 
 '''
-
-# param_Inputs = Parameter({ "schema": { "type": "array", "items": { "type": "object", "properties": { 
-#                              "num": { "type": "integer", "order": 1, "hint": "(starts from 1)" },
-#                              "label": { "type": "string","order": 2, "hint": "(does not affect bindings)" }
-#                          }}}})
 
 TCP_PORT = 9990
 
@@ -61,14 +57,13 @@ def parseLine(line):
     return
   
   if line == "ACK":
-    # heart beat and keep-alive
-    console.info("Acknowledgement received!")
+    # heartbeat and keep-alive
     global _lastReceive
     _lastReceive = system_clock()
     return
   
   elif line == "NAK":
-    console.info("!!Negative acknowledgement received!!")
+    console.warn("!! Negative acknowledgement received !!")
     return
 
   if _lastSection == "VIDEO OUTPUT ROUTING":
@@ -107,7 +102,10 @@ def tryInitInput(num, label):
   
   if eLabel == None:
     title = "Input %s Label" % num
-    eLabel = create_local_event("Input %s Label" % num, { "title": title, "group": "Inputs", "schema": { "type": "string", "order": next_seq() }})
+    
+    eLabel = create_local_event("Input %s Label" % num, { "title": title, "group": "Input Labels", "schema": { "type": "string", "order": next_seq()+9000}})
+    
+    aLabel = create_local_action("Input %s Label" % num, lambda arg: doSetInputLabel(num, arg), { "title": title, "group": "Input Labels", "schema": { "type": "string", "order": next_seq()+9000 }})
     
   eLabel.emit(label)
   
@@ -115,15 +113,16 @@ def tryInitOutput(num, label):
   eLabel = lookup_local_event("Output %s Label" % num)
   
   if eLabel == None:
-    title = "Input %s Label" % num
+    title = "Output %s Label" % num
     group = "Output %s - %s" % (num, label)
-    eLabel = create_local_event("Output %s Label" % num, { "title": title, "group": group, "schema": { "type": "string", "order": next_seq() }})
-    eState = create_local_event("Output %s" % num, { "title": '"%s"' % label, "group": group, "schema": { "type": "integer", "order": next_seq() }})
     
-    def a_handler(arg):
-      doRoute(num, arg) # arg is the input here
+    eLabel = create_local_event("Output %s Label" % num, { "title": title, "group": "Output Labels", "schema": { "type": "string", "order": next_seq()+9000 }})
     
-    aSwitch = create_local_action("Output %s" % num, a_handler, { "title": '"%s"' % label, "group": group, "schema": { "type": "integer", "order": next_seq() }})
+    aLabel = create_local_action("Output %s Label" % num, lambda arg: doSetOutputLabel(num, arg), { "title": title, "group": "Output Labels", "schema": { "type": "string", "order": next_seq()+9000 }})
+    
+    eRoute = create_local_event("Output %s" % num, { "title": '"%s"' % label, "group": group, "schema": { "type": "integer", "order": next_seq() }})
+    
+    aRoute = create_local_action("Output %s" % num, lambda arg: doRoute(num, arg), { "title": '"%s"' % label, "group": group, "schema": { "type": "integer", "order": next_seq() }})
     
   eLabel.emit(label)
   
@@ -136,6 +135,20 @@ _pinger = Timer(sendPing, 30, stopped=True) # ping every 30s, will only start af
 def doRoute(o, i):
   console.info("VIDEO OUTPUT ROUTING: %s %s" % (o, i))
   _tcp.send("VIDEO OUTPUT ROUTING:\n%s %s\n\n" % (o-1, i-1))
+  
+def doSetOutputLabel(o, label):
+  if is_blank(label):
+    return console.warn("label missing")
+  
+  console.info("OUTPUT LABELS: %s %s" % (o, label))
+  _tcp.send("OUTPUT LABELS:\n%s %s\n\n" % (o-1, label))
+  
+def doSetInputLabel(i, label):
+  if is_blank(label):
+    return console.warn("label missing")
+  
+  console.info("INPUT LABELS: %s %s" % (i, label))
+  _tcp.send("INPUT LABELS:\n%s %s\n\n" % (i-1, label))  
     
 def tcp_connected():
   console.info("CONNECTED")
