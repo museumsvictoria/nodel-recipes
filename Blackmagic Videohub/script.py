@@ -54,6 +54,10 @@ def parseLine(line):
   if line.endswith(":"):
     _lastSection = line[:-1]
     console.info("Retrieving %s..." % _lastSection)
+    
+    if _lastSection == "END PRELUDE":
+      console.info("Done.")
+    
     return
   
   if line == "ACK":
