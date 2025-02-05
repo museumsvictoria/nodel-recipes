@@ -1,5 +1,5 @@
 '''
-**BlackMagic** Videohub 10x10 and others.
+**BlackMagic** Videohub 10x10 and likely other models.
 
 Actions and signals are dynamically created when a connection is first made. The "Route" actions and signals are simply named "Output X" where X is the output number starting from 1. The signal's value 
 is the input it's routed to, starting from 1.
