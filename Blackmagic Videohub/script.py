@@ -9,7 +9,7 @@ Protocol reference - [VideohubDeveloperInformation.pdf](https://documents.blackm
 `rev 1`
 
  * _r1.250109 created._
- * _TODO: direct cross-point switching_
+ * _TODO: discrete cross-point switching_
 
 '''
 
@@ -261,7 +261,7 @@ def log(level, msg):
 # <status and error reporting ---
 
 # for comms drop-out
-_lastReceive = system_clock()
+_lastReceive = system_clock() - 999999
 
 # roughly, the last contact  
 local_event_LastContactDetect = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), 'title': 'Last contact detect', 'schema': {'type': 'string'}})
@@ -301,9 +301,10 @@ def formatPeriod(dateObj):
   now = date_now()
   diff = (now.getMillis() - dateObj.getMillis()) / 1000 / 60 # in mins
   
-  if diff == 0:             return 'for <1 min'
+  if diff <= 1:             return 'for <1 min'
   elif diff < 60:           return 'for <%s mins' % diff
-  elif diff < 60*24:        return 'since %s' % dateObj.toString('h:mm:ss a')
-  else:                     return 'since %s' % dateObj.toString('E d-MMM h:mm a')
+  elif diff < 60*24:        return 'since %s' % dateObj.toString('h:mm a')
+  elif diff < 365*60*24:    return 'since %s' % dateObj.toString('E d-MMM h:mm a')
+  else:                     return 'for more than a year'
 
 # --->
