@@ -55,6 +55,8 @@ _ignoreSet_bySimpleMAC = set()
 
 _activeSwitchProfilesByMac = {}
 
+_activeSwitchStateByMac = {}
+
 class Time:
     SECOND = 1
     MINUTE = SECOND * 60
@@ -168,7 +170,7 @@ def populateSwitchEvents(arg = None):
       event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (switch_mac, port_id))
 
       # if events/actions don't exist yet, then create them
-      if (event_poeInfoByPort or event_poeStateByPort) == None:
+      if event_poeInfoByPort is None or event_poeStateByPort is None:
         log(5, '+local event & action for port %s poe on switch %s...' % (port_id, switch_mac))
         event_poeStateByPort = createPoeStateLocalEvent(switch_mac, port_id, group_name)
         createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id)
