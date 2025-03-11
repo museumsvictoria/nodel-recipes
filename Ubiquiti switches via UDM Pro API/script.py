@@ -48,6 +48,8 @@ param_InterestingSwitches = Parameter({'schema': { 'type': 'array', 'items': { '
 
 _ignoreSet_bySimpleMAC = set()
 
+_activeSwitchProfilesByMac = {}
+
 class Time:
     SECOND = 1
     MINUTE = SECOND * 60
