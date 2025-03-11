@@ -1,30 +1,28 @@
+# -*- coding: utf-8 -*-
+
 # flake8: noqa
 # pylint: disable=all
 # type: ignore
 # mypy: ignore-errors
 
-# -*- coding: utf-8 -*-
 
 '''
-Ubiquiti switch control using **Unifi-Controller API**
+Ubiquiti Switch Control Module for **Unifi-Controller API**
 
-`rev 5 2023.01.30`
+`rev 6 2025.03.11`
 
 - This is roughly written and provides read-only information for IP address information by port and by MAC.
-- It also attempts to show when devices appear and disappear on and off the network. 
-- It also provides actions to turn on/off ports and events which monitor their POE state.
+- Tracks device network connection status, detecting when devices connect to or disconnect from the network
+- Enables port management with POE control actions and state monitoring events
 
-Part of it has been written using this incomplete reference - [unifi-controller/api](https://ubntwiki.com/products/software/unifi-controller/api).
+Based on the documentation available at [unifi-controller/api](https://ubntwiki.com/products/software/unifi-controller/api), though the API reference is incomplete.
 '''
 
 '''
 changelog:
-- Specify an alternative authenticated user in the parameters.
-- Label switches with a 'label' field in the 'param_InterestingSwitches' parameter.
-- Added a 'statDeviceBasic' & 'statDevice' to list all devices on site (including switches).
-- Maintain list of all _portOverrides (e.g. { '3e:2f:b5:28:27:c2': [{"port_idx":2,"poe_mode":"auto"},{"poe_mode":"off","port_idx":3}]}}) and use to override the port details.
-- Regularly poll state of switches (every 5 minutes) to get the latest port details.
-- Provide actions to turn on/off ports.
+- Increased MAC address sanitization throughout the code
+- Fixed variable naming (global variable _lastReceive) 
+- Fixed label in network traffic display ("RX" to "TX" in second part of rates details)
 '''
 
 DEFAULT_USERNAME = 'api'
