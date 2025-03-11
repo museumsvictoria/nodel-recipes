@@ -345,7 +345,7 @@ def statSta():
       dataDiff0, dataDiff1, dataDiff2, dataDiff3 = rates[0] - prevRates[0], rates[1] - prevRates[1], rates[2] - prevRates[2], rates[3] - prevRates[3]
       
       # e.g.: <5.5 Kbps rx (20 pps), <10 Kbps (30 pps) tx
-      ratesDetails = '<%0.0f Kbps RX (%0.1f pps), <%0.0f Kbps RX (%0.1f pps)' % ((dataDiff0) * 8 / 1000 / timeDiff,
+      ratesDetails = '<%0.0f Kbps RX (%0.1f pps), <%0.0f Kbps TX (%0.1f pps)' % ((dataDiff0) * 8 / 1000 / timeDiff,
                                                                                  (dataDiff1) / timeDiff,
                                                                                  (dataDiff2) * 8 / 1000 / timeDiff,
                                                                                  (dataDiff3) / timeDiff)
