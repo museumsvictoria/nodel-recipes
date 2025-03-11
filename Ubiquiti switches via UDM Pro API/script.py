@@ -596,7 +596,7 @@ def callAPI(apiMethod, arg=None, contentType=None, leaveAsRaw=False, method=None
       log(2, 'got result: %s' % rawResult)
       
       global _lastReceive
-      lastReceive = system_clock()
+      _lastReceive = system_clock()
       
       return jResult
       
