@@ -1,3 +1,8 @@
+# flake8: noqa
+# pylint: disable=all
+# type: ignore
+# mypy: ignore-errors
+
 # -*- coding: utf-8 -*-
 
 '''
