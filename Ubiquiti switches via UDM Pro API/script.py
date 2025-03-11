@@ -110,7 +110,8 @@ def statDeviceBasic():
   
   for item in result['data']:
     if item.get('type') == 'usw': # only interested in switches
-      _activeSwitchProfilesByMac[item.get('mac')] = item
+      sanitized_mac = sanitiseMac(item.get('mac'))
+      _activeSwitchProfilesByMac[sanitized_mac] = item
 
 # List of all devices on site. Can be filtered by POSTing {"macs": ["mac1", ... ]}.
 # Returns a large amount of data, easily 100Kb, so filtering is recommended.
@@ -151,7 +152,7 @@ def populateSwitchEvents(arg = None):
   # iterate over all switches
   # example { ip=10.97.10.50, mac=70:a7:41:e5:d3:89, model=US624P, port_table=[{port_poe=true, ...}, ...], ... }
   for switch in _activeSwitchStateByMac['data']:
-    switch_mac = switch.get('mac')
+    switch_mac = sanitiseMac(switch.get('mac'))
     switch_port_table = switch.get('port_table')
     switch_id = switch.get('_id')
     switch_label = (getSwitchLabelByMAC(switch_mac) or 'Switch')
@@ -197,6 +198,8 @@ def processPortOverrideQueue():
   # iterate over all switches, pop the switch off the queue, and make the API call
   while portOverrideQueue:
     mac, switch_data = portOverrideQueue.popitem()
+    # Make sure MAC is sanitized
+    mac = sanitiseMac(mac)
     switch_id = switch_data['id']  # retrieve the switch_id (needed for API), and requested port overrides
     queued_overrides = switch_data['port_overrides']
     num_port_overrides = len(queued_overrides)
@@ -240,10 +243,14 @@ def processPortOverrideQueue():
 timer_poeQueue = Timer(processPortOverrideQueue, intervalInSeconds=Time.SECOND, firstDelayInSeconds=Time.SECOND, stopped=True)
 
 def createPoeStateLocalEvent(switch_mac, port_id, group_name):
+  # Ensure switch_mac is sanitized
+  switch_mac = sanitiseMac(switch_mac)
   event_name = "Switch%sPort%sPOEState" % (switch_mac, port_id)
   return create_local_event(event_name, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 def createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id):
+  # Ensure switch_mac is sanitized
+  switch_mac = sanitiseMac(switch_mac)
   action_name = "Switch%sPort%sPOEState" % (switch_mac, port_id)
   def action_handler(arg):
     
@@ -265,6 +272,8 @@ def createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id):
   create_local_action(action_name, handler = action_handler, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 def createPoeInfoLocalEvent(mac, port_id, group_name):
+  # Ensure mac is sanitized
+  mac = sanitiseMac(mac)
   event_name = "Switch%sPort%sPOEInfo" % (mac, port_id)
   event_schema = {'title': 'Info', 'type': 'object', 'properties': {
     'poe_enable': {'title': 'Active', 'type': 'boolean'},
@@ -297,7 +306,7 @@ def statSta():
   for item in data:
     id = item.get('_id')        
     hostname = item.get('hostname')
-    mac = item.get('mac')
+    mac = sanitiseMac(item.get('mac'))
     ip = item.get('ip')
     firstSeen = item.get('first_seen')
     if firstSeen != None:
@@ -311,7 +320,7 @@ def statSta():
     product_model = item.get('product_model')
     network = item.get('network')
     oui = item.get('oui')
-    sw_mac = item.get('sw_mac') 
+    sw_mac = sanitiseMac(item.get('sw_mac')) if item.get('sw_mac') else None
     sw_port = item.get('sw_port')
     
     wired_rx_bytes = item.get('wired-rx_bytes')
