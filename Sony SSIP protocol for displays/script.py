@@ -1,14 +1,15 @@
 '''
-_(rev 14)_
+_(rev 15)_
 
 **Sony SSIP & IRCC protocols** for displays
 
-* Tested with Sony FW-85BZ40H, FWD-55X80J
+* Tested with Sony FW-85BZ40H, FWD-55X80J, FW-100BZ40J
 
 The script contains some protocol examples, otherwise see [command-definitions](https://pro-bravia.sony.net/develop/integrate/ssip/command-definitions/) or [ip-control](https://pro-bravia.sony.net/develop/integrate/ip-control/).
  
 _changelog_
 
+ * _rev 15: longer timer intervals for sync, error response handling_
  * _rev 14: input naming, dynamic IP addressing, SendIR action to reduce binding_
  * _rev 4: exclusive IR control_
 '''
@@ -130,8 +131,10 @@ local_event_PowerOff = LocalEvent({ 'group': 'Power', 'order': next_seq(), 'sche
 def handlePowerParams(params):
   if params == '0000000000000000':   arg = 'Off'
   elif params == '0000000000000001': arg = 'On'
+  elif params == 'FFFFFFFFFFFFFFFF': arg = 'Error'
   else:
     console.warn('parse_power_params: unknown resp - %s' % params)
+    arg = 'Unknown'
     
   local_event_RawPower.emit(arg)
     
@@ -141,7 +144,7 @@ _notifyHandlers_byCmd['POWR'] = handlePowerParams
 def EnquirePower():
   sonyEnquire('POWR', handlePowerParams)
   
-timer_enquirePower = Timer(lambda: EnquirePower.call(), 6, stopped=True) # every 6s  
+timer_enquirePower = Timer(lambda: EnquirePower.call(), 10, stopped=True) # every 10s  
 
 @after_main
 def evalPower():
@@ -178,7 +181,7 @@ def Power(arg):
   _lastIRCommand = system_clock() - 600000 # safely reset (600s is arbitrary, allows for integer rollover)
   
   local_event_DesiredPower.emit('On' if state else 'Off')
-  timer_powerSync.setDelay(0.01)
+  timer_powerSync.setDelay(0.10)
   
 @local_action({ 'group': 'Power', 'order': next_seq() })
 def PowerOn(arg):
@@ -210,13 +213,13 @@ def syncPower():
   # desired different to raw
   if desired == 'On':
     log(1, 'syncPower: desired is On so will attempt to turn on...')
-    sonyControl('POWR', '0000000000000001', lambda: EnquirePower.call()) # calls EnsuirePower onsuccess only!
+    sonyControl('POWR', '0000000000000001', lambda: EnquirePower.call()) # calls EnquirePower onsuccess only!
   elif desired == 'Off':
     log(1, 'syncPower: desired is Off so will attempt to turn off...')
     sonyControl('POWR', '0000000000000000', lambda: EnquirePower.call())
     
-  log(1, 'syncPower: will check again in 5s...')    
-  timer_powerSync.setInterval(5)
+  log(1, 'syncPower: will check again in 10s...')    
+  timer_powerSync.setInterval(10)
   
 timer_powerSync = Timer(syncPower, 60, stopped=True) # every min
 
@@ -263,7 +266,7 @@ def Input(arg):
   _lastIRCommand = system_clock() - 600000 # safely reset (600s is arbitrary, allows for integer rollover)
   
   local_event_DesiredInput.emit(arg)
-  timer_inputSync.setDelay(0.01)
+  timer_inputSync.setDelay(0.10)
     
 def syncInput():
   desired = local_event_DesiredInput.getArg()
@@ -292,8 +295,8 @@ def syncInput():
   # desired different to raw
   sonyControl('INPT', str(desired).zfill(16), lambda: EnquireInput.call()) # will call EnquireInput on success only!
     
-  log(1, 'syncInput: will check again in 5s...')    
-  timer_inputSync.setInterval(5)
+  log(1, 'syncInput: will check again in 10s...')    
+  timer_inputSync.setInterval(10)
   
 timer_inputSync = Timer(syncInput, 60, stopped=True) # every min
 
@@ -310,7 +313,7 @@ def EnquireInput():
   if local_event_Power.getArg() == 'On':
     sonyEnquire('INPT', handleInputParams)
   
-timer_enquireInput = Timer(lambda: EnquireInput.call(), 6, 3, stopped=True) # every 6s  
+timer_enquireInput = Timer(lambda: EnquireInput.call(), 10, 3, stopped=True) # every 10s  
 
 # -->
   
@@ -319,7 +322,12 @@ timer_enquireInput = Timer(lambda: EnquireInput.call(), 6, 3, stopped=True) # ev
 local_event_AudioVolume = LocalEvent({ 'group': 'Audio Volume', 'order': next_seq(), 'schema': { 'type': 'integer' }})
 
 def handleAudioVolumeParams(params):
-  local_event_AudioVolume.emit(int(params))
+    if params == 'FFFFFFFFFFFFFFFF':
+        return
+    try:
+        local_event_AudioVolume.emit(int(params))
+    except ValueError:
+        console.warn('Invalid audio volume params: %s' % params)
   
 _notifyHandlers_byCmd['VOLU'] = handleAudioVolumeParams
 
@@ -328,7 +336,7 @@ def EnquireAudioVolume():
   if local_event_Power.getArg() == 'On':
     sonyEnquire('VOLU', handleAudioVolumeParams)
   
-timer_enquireAudioVoume = Timer(lambda: EnquireAudioVolume.call(), 6, 1, stopped=True) # every 6s, stagger first time
+timer_enquireAudioVoume = Timer(lambda: EnquireAudioVolume.call(), 10, 1, stopped=True) # every 10s, stagger first time
 
 @local_action({ 'group': 'Audio Volume', 'order': next_seq(), 'schema': { 'type': 'integer' }})
 def AudioVolume(arg):
@@ -344,8 +352,13 @@ def AudioVolume(arg):
 local_event_AudioMute = LocalEvent({ 'group': 'Audio Mute', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
 
 def handleAudioMuteParams(params):
-  local_event_AudioMute.emit(int(params) == 1)
-  
+    if params == 'FFFFFFFFFFFFFFFF':
+        return
+    try:
+        local_event_AudioMute.emit(int(params) == 1)
+    except ValueError:
+        console.warn('Invalid audio mute params: %s' % params)
+
 _notifyHandlers_byCmd['AMUT'] = handleAudioMuteParams  
 
 @local_action({ 'group': 'Audio Mute', 'order': next_seq() })
@@ -353,7 +366,7 @@ def EnquireAudioMute():
   if local_event_Power.getArg() == 'On':
     sonyEnquire('AMUT', handleAudioMuteParams)
   
-timer_enquireAudioMute = Timer(lambda: EnquireAudioMute.call(), 6, 5, stopped=True) # every 6s, stagger first time
+timer_enquireAudioMute = Timer(lambda: EnquireAudioMute.call(), 10, 5, stopped=True) # every 10s, stagger first time
 
 @local_action({ 'group': 'Audio Mute', 'order': next_seq(), 'schema': { 'type': 'boolean' }})
 def AudioMute(arg):
@@ -516,8 +529,13 @@ def sonyControl(cmd, params, onSuccess):
 def handleNotifyMessage(cmd, params):
   console.info('Display Notify received - cmd:%s params:%s' % (cmd, params))
   
-  handler = _notifyHandlers_byCmd.get(cmd)
+  if cmd == 'POWR':
+      if params == '0000000000000001':
+          console.info('Display is now powered on')
+      elif params == '0000000000000000':
+          console.info('Display is now powered off')
   
+  handler = _notifyHandlers_byCmd.get(cmd)
   if handler:
     handler(params)
   else:
