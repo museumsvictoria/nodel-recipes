@@ -1,6 +1,6 @@
 # Minimal Nodel recipe: poll BME280 shell script once per minute and parse JSON-like output.
 
-CMD = ['/home/nodel/read_bme280.sh']
+CMD = ['/home/nodel/read_bme280.py']
 
 local_event_LastReading = LocalEvent({
     'title': 'Last Reading',
