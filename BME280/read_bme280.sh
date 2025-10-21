@@ -12,7 +12,7 @@ i2c = busio.I2C(board.SCL, board.SDA)
 bme280 = adafruit_bme280.Adafruit_BME280_I2C(i2c, address=0x76)
 
 # Optional: set local sea level pressure (in hPa) for altitude calculations
-bme280.sea_level_pressure = 1013.25
+bme280.sea_level_pressure = 1011.0
 
 # Read sensor data once
 temperature_c = round(bme280.temperature, 1)  # Celsius, 1 decimal
