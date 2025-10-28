@@ -8,6 +8,8 @@ An agent with native Windows operations, tested with Windows 10 but might work o
 * Computer hardware information
 
 _(Revision 3)_
+
+r20251028 - add ability to lock device 
 '''
 
 DEFAULT_FREESPACEMB = 0.5
@@ -35,6 +37,15 @@ def Suspend():
 def Restart():
     console.info('Restart action')
     quick_process(['shutdown', '/r', '/f', '/t', '5' , '/c', 'Nodel_RESTART_in_5_seconds...']) # not happy with spaces in args
+
+# --->
+
+# <!--- lock
+
+@local_action({ 'group':'Lock', 'order': next_seq() })  
+def Lock(arg = None):
+    console.info('Lock action')
+    quick_process('rundll32.exe user32.dll,LockWorkStation'.split(' '))
 
 # --->
 
