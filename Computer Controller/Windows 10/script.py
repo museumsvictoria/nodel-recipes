@@ -1,15 +1,20 @@
 '''
-An agent with native Windows operations, tested with Windows 10 but might work on older or newer versions. Includes:
+**PC agent** with native Windows operations, tested with Windows 10 but might work on older or newer versions. 
 
+`REV 4.20251028`
+
+Includes:
 * reboot, shutdown
+* lock
 * periodic screenshots
 * basic volume control of primary audio device (incl. meter)
 * CPU usage
 * Computer hardware information
 
-_(Revision 3)_
+**REVISION HISTORY**
 
-r20251028 - add ability to lock device 
+* rev. 4: add ability to lock device 
+
 '''
 
 DEFAULT_FREESPACEMB = 0.5
