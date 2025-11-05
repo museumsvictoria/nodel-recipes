@@ -1,5 +1,5 @@
 '''
-**IP Power 9255 Pro PDU** using HTTP control
+**IP Power 9255 Pro** single port relay PDU using CGI HTTP commands
 
 `REV 1`
 
@@ -9,6 +9,7 @@
 
 **REVISION HISTORY**
 
+* rev. 1: Power control (with persistent syncing) and status
 
 '''
 
@@ -16,28 +17,22 @@ param_disabled = Parameter({'schema': {'type': 'boolean'}, 'desc': 'Disables thi
 
 param_ipAddress = Parameter({'schema': {'type': 'string', 'hint': '(overrides binding method)'}})
 
-param_username = Parameter({'schema': {'type': 'string', 'hint': 'user'}})
+param_username = Parameter({'schema': {'type': 'string', 'hint': 'username'}})
 
 param_password = Parameter({'schema': {'type': 'string', 'hint': 'password'}})
 
+local_event_RawStatus = LocalEvent({'group': 'Operation', 'order': next_seq(), 'schema': {'type': 'string'}}) 
 
-local_event_RawStatus = LocalEvent({'group': 'Operation', 'order': next_seq(), 'schema': {'type': 'string'}}) # e.g. opening, closing, etc.
+local_event_DesiredStatus = LocalEvent({'group': 'Operation', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
-local_event_DesiredStatus = LocalEvent({'group': 'Operation', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['Opened', 'Closed']}})
+local_event_Power = LocalEvent({'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Partially On', 'Off', 'Partially Off']}})
 
-local_event_Power = LocalEvent({'group': 'Power', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Partially On', 'Off', 'Partially Off']}}) # 'On' means Up or Closed, 'Off' means Down or Open
+LONG_POLL           = 30    # when polling
+QUICK_POLL          = 5     # when actively syncing
+SYNC_PERSISTENCE    = 90    # how long to persist for when syncing desired states
 
-local_event_Opened = LocalEvent({'group': 'Operation', 'order': next_seq(), 'schema': {'type': 'boolean'}})
-
-local_event_Closed = LocalEvent({'group': 'Operation', 'order': next_seq(), 'schema': {'type': 'boolean'}})
-
-
-LONG_POLL = 30
-QUICK_POLL = 5
-SYNC_PERSISTENCE = 90
-
-import sys
-import re
+import sys                  # for stacktrace summary
+import re                   # for stripping html tags
 
 def main():
     if param_disabled:
@@ -49,22 +44,27 @@ def main():
     
     console.info('Polling will start in %ss' % _timer_sync.getDelay())
     _timer_sync.start()
-_busy = False
 
-_lastSuccessfulOperation = system_clock() - 10000
+
+### Power
 
 @local_action({ 'group': 'Power', 'schema': { 'type': 'string', 'enum': [ 'On', 'Off'] } })
 def Power(arg):
     if arg in ['On', 'on', 'ON', 1, True]:
-        desired = 'Opened'
+        desired = 'On'
+        call('setpower+p61=1')
     elif arg in ['Off', 'off', 'OFF', 0, False]:
-        desired = 'Closed'
+        desired = 'Off'
+        call('setpower+p61=0')
     else:
         return console.warn('state: unknown arg "%s"' % arg)
     
     console.info('Power: %s (meaning "%s")' % (arg, desired))
     local_event_DesiredStatus.emit(desired)
 
+    log(1, 'nudging sync timer now')
+    _timer_sync.setDelayAndInterval(0.001, QUICK_POLL) # Sync now, and every 5 seconds
+    #SyncNow.call()
 
 @local_action({'group': 'Power', 'order': next_seq()})
 def PowerOn(arg):
@@ -74,91 +74,79 @@ def PowerOn(arg):
 def PowerOff(arg):
     Power.call('Off')
 
+# When desired or raw statuses change, update the power status accordingly (using "Partially" if theres a mismatch)
 @after_main
 def combine_feedback():
     def handler(arg):
         desiredStatus = local_event_DesiredStatus.getArg()
-        rawStatus =local_event_RawStatus.getArg()
+        rawStatus = local_event_RawStatus.getArg()
 
-        desiredAsPower = 'On' if desiredStatus == 'Opened' else ('Off' if desiredStatus == 'Closed' else 'Unknown') # Should never be Unknown but keeping for completeness
-        rawAsPower = 'On' if rawStatus == 'Opened' else ('Off' if rawStatus == 'Closed' else 'Unknown')
-
-        if desiredStatus == None:           power = rawAsPower
-        elif desiredStatus == rawStatus:    power = rawAsPower
-        else:                               power = 'Partially %s' % desiredAsPower
+        if desiredStatus == None:           power = rawStatus
+        elif desiredStatus == rawStatus:    power = rawStatus
+        else:                               power = 'Partially %s' % desiredStatus
 
         local_event_Power.emit(power)
-
-        local_event_Opened.emit(rawStatus == 'Opened')
-        local_event_Closed.emit(rawStatus == 'Closed')
     
     local_event_DesiredStatus.addEmitHandler(handler)
     local_event_RawStatus.addEmitHandler(handler)
 
+_lastSuccessfulOperation = system_clock() - 10000
+
 @local_action({'group': 'Operation'})
 def SyncNow():
-    result = call('getpower')
+    print('Syncing now...')
 
-    log(1, 'result: %s' % result)
+    # Update raw status
+    call('getpower')
 
-    raw = result[4]
-    console.log('raw is: %s' % raw)
-    raw = int(raw)
-    if raw in ['On', 'on', 'ON', 1, True]:
-        raw = 'Opened'
-    elif raw in ['Off', 'off', 'OFF', 0, False]:
-        raw = 'Closed'
-    else:
-        return console.warn('state: unknown arg "%s"' % raw)
-    
-    local_event_RawStatus.emit(raw)
-    desired = local_event_DesiredStatus.getArg()
+    desiredStatus = local_event_DesiredStatus.getArg()
+    rawStatus = local_event_RawStatus.getArg()
 
+    # Check if it's been more than 1.5mins since last action request so polling can slow down if necessary
     lastAction = (Power.getTimestamp() or date_parse('1990'))
     if (date_now().getMillis() - lastAction.getMillis()) > SYNC_PERSISTENCE * 1000:
         if _timer_sync.getInterval() != LONG_POLL:
             log(1, 'has been more than %s mins since action or just restarted, long polling now' % (SYNC_PERSISTENCE / 60.0))
             _timer_sync.setInterval(LONG_POLL)
-        return
-    
-    if desired == None:
+            return
+
+    # Compare desired and raw states, act accordingly
+    if desiredStatus == None:
         return log(1, 'desired state is blank, nothing to do')
     
-    if desired == raw:
-        return log(1, 'desired and raw are the same (%s) so nothing to do right now' % desired)
+    if desiredStatus == rawStatus:
+        return log(1, 'desired and raw are the same (%s) so nothing to do right now' % desiredStatus)
 
-    # They're different and not blank so sync
+    # Desired and raw different and not blank so sync
     global _lastSuccessfulOperation
-
     if (system_clock() - _lastSuccessfulOperation) < 10000:
-        log(1, 'want to change status to "%s", but has been less than 10 seconds since last successful operation; will stagger' % desired)
+        log(1, 'want to change status to "%s", but has been less than 10 seconds since last successful operation; will stagger' % desiredStatus)
         return
     
-    if desired == 'Opened':
-        log(1, 'opened')
-        result = call('setpower+p61=1')
-        if result == False:
+    if desiredStatus == 'On':
+        log(1, 'calling on')
+        if call('setpower+p61=1') == False:
             return
         _lastSuccessfulOperation = system_clock()
 
-    elif desired == 'Closed':
-        log(1, 'closed')
-        result = call('setpower+p61=0')
-        if result == False:
+    elif desiredStatus == 'Off':
+        log(1, 'calling off')
+        if call('setpower+p61=0') == False:
             return
         _lastSuccessfulOperation = system_clock()
 
 _timer_sync = Timer(lambda: SyncNow.call(), LONG_POLL, 5, stopped=True)
 
 
+### HTTP Communications
 
+_busy = False
 
 def call(command, query=None, forceLog=False):
+    # Avoid simultaneous calls by tracking one at a time
     global _busy
-
     if _busy:
         return False
-    
     _busy = True
 
     try:
@@ -180,7 +168,7 @@ def call(command, query=None, forceLog=False):
             return False
 
         log(1, 'resp: %s' % resp)
-        result = html_decode(resp)
+        result = decodeResult(resp)
 
         global _lastReceive
         _lastReceive = system_clock()
@@ -190,15 +178,30 @@ def call(command, query=None, forceLog=False):
     finally:
         _busy = False
 
+def decodeResult(result):
+    # Result format: '<html>p61=1</html>'
+    # State format: 'On'
 
-
-def html_decode(text):
+    # Remove html tags
     clean = re.compile('<.*?>')
-    return re.sub(clean, '', text)
+    cleaned_result = re.sub(clean, '', result)
 
-# -->
+    # Isolate power
+    port, power = cleaned_result.split("=")
+    power = int(power)
+    if power in ['On', 'on', 'ON', 1, True]:
+        state = 'On'
+    elif power in ['Off', 'off', 'OFF', 0, False]:
+        state = 'Off'
+    else:
+        return console.warn('state: unknown arg "%s"' % power)
+    
+    local_event_RawStatus.emit(state)
 
-# <--- status and error reporting
+    return state
+
+
+### Status and Error Reporting
 
 _lastReceive = 0
 
@@ -207,10 +210,10 @@ local_event_LastContactDetect = LocalEvent({'group': 'Status', 'order': 99999+ne
 local_event_Status = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), 'schema': {'type': 'object', 'properties': {
         'level': {'type': 'integer', 'order': 1},
         'message': {'type': 'string', 'order': 2}}}})
-  
+
 def statusCheck():
     diff = (system_clock() - _lastReceive)/1000.0 # in secs
-  
+
     if diff > status_check_interval:
         previous_contact_value = local_event_LastContactDetect.getArg()
     
@@ -218,7 +221,7 @@ def statusCheck():
             message = 'Never seen'
         else:
             previous_contact = date_parse(previous_contact_value)
-            message = "Missing %s" % formatPeriod(previous_contact)
+            message = 'Missing %s' % formatPeriod(previous_contact)
         local_event_Status.emit({'level': 2, 'message': message})
     
     else:
@@ -245,27 +248,24 @@ def formatPeriod(date, as_instant=False):
         return ('since %s' if not as_instant else 'at %s') % date.toString('E d-MMM h:mm:ss a')
     
 status_check_interval = 75
+
 status_timer = Timer(statusCheck, status_check_interval)
 
-# --->
 
-# <!-- logging
+### Logging
 
-local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 'desc': 'Use this to ramp up the logging (with indentation)',  
-                                   'schema': {'type': 'integer'}})
-# local_event_LogLevel.emit(2)
+local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 'desc': 'Use this to ramp up the logging (with indentation)', 'schema': {'type': 'integer'}})
 
 def warn(level, msg):
-  if (local_event_LogLevel.getArg() or 0) >= level:
-    console.warn(('  ' * level) + msg)
+    if (local_event_LogLevel.getArg() or 0) >= level:
+        console.warn(('  ' * level) + msg)
 
 def log(level, msg):
-  if (local_event_LogLevel.getArg() or 0) >= level:
-    console.log(('  ' * level) + msg)
+    if (local_event_LogLevel.getArg() or 0) >= level:
+        console.log(('  ' * level) + msg)
 
-# --!>
 
-# From User Manual
+# From User Manual 9255Pro-manual.pdf
 
 # Password in http:
 # http://login:password@ipaddrss:port/set.cmd?cmd=command
