@@ -7,6 +7,8 @@
 
 * [IP Power 9255 Pro User Manual](https://s6aae352bbf6a48e4.jimcontent.com/download/version/1698733519/module/12331169760/name/9255Pro-manual.pdf)
 
+*NOTE: Use the web interface -> Setup -> System to ensure 'CGI Command' is 'On', and 'Beeper' is 'Off' (otherwise the device beeps everytime a command is recieved!)*
+
 **REVISION HISTORY**
 
 * rev. 1: Power control (with persistent syncing) and status
