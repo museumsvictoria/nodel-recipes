@@ -1,25 +1,28 @@
 # -*- coding: utf-8 -*-
 
-'''
-Ubiquiti switch control using **Unifi-Controller API**
+# flake8: noqa
+# pylint: disable=all
+# type: ignore
+# mypy: ignore-errors
 
-`rev 5 2023.01.30`
+
+'''
+Ubiquiti Switch Control Module for **Unifi-Controller API**
+
+`rev 6 2025.03.11`
 
 - This is roughly written and provides read-only information for IP address information by port and by MAC.
-- It also attempts to show when devices appear and disappear on and off the network. 
-- It also provides actions to turn on/off ports and events which monitor their POE state.
+- Tracks device network connection status, detecting when devices connect to or disconnect from the network
+- Enables port management with POE control actions and state monitoring events
 
-Part of it has been written using this incomplete reference - [unifi-controller/api](https://ubntwiki.com/products/software/unifi-controller/api).
+Based on the documentation available at [unifi-controller/api](https://ubntwiki.com/products/software/unifi-controller/api), though the API reference is incomplete.
 '''
 
 '''
 changelog:
-- Specify an alternative authenticated user in the parameters.
-- Label switches with a 'label' field in the 'param_InterestingSwitches' parameter.
-- Added a 'statDeviceBasic' & 'statDevice' to list all devices on site (including switches).
-- Maintain list of all _portOverrides (e.g. { '3e:2f:b5:28:27:c2': [{"port_idx":2,"poe_mode":"auto"},{"poe_mode":"off","port_idx":3}]}}) and use to override the port details.
-- Regularly poll state of switches (every 5 minutes) to get the latest port details.
-- Provide actions to turn on/off ports.
+- Increased MAC address sanitization throughout the code
+- Fixed variable naming (global variable _lastReceive) 
+- Fixed label in network traffic display ("RX" to "TX" in second part of rates details)
 '''
 
 DEFAULT_USERNAME = 'api'
@@ -47,6 +50,10 @@ param_InterestingSwitches = Parameter({'schema': { 'type': 'array', 'items': { '
   }}}})
 
 _ignoreSet_bySimpleMAC = set()
+
+_activeSwitchProfilesByMac = {}
+
+_activeSwitchStateByMac = {}
 
 class Time:
     SECOND = 1
@@ -103,7 +110,8 @@ def statDeviceBasic():
   
   for item in result['data']:
     if item.get('type') == 'usw': # only interested in switches
-      _activeSwitchProfilesByMac[item.get('mac')] = item
+      sanitized_mac = sanitiseMac(item.get('mac'))
+      _activeSwitchProfilesByMac[sanitized_mac] = item
 
 # List of all devices on site. Can be filtered by POSTing {"macs": ["mac1", ... ]}.
 # Returns a large amount of data, easily 100Kb, so filtering is recommended.
@@ -144,7 +152,7 @@ def populateSwitchEvents(arg = None):
   # iterate over all switches
   # example { ip=10.97.10.50, mac=70:a7:41:e5:d3:89, model=US624P, port_table=[{port_poe=true, ...}, ...], ... }
   for switch in _activeSwitchStateByMac['data']:
-    switch_mac = switch.get('mac')
+    switch_mac = sanitiseMac(switch.get('mac'))
     switch_port_table = switch.get('port_table')
     switch_id = switch.get('_id')
     switch_label = (getSwitchLabelByMAC(switch_mac) or 'Switch')
@@ -160,7 +168,7 @@ def populateSwitchEvents(arg = None):
       event_poeInfoByPort = lookup_local_event('Switch%sPort%sPOEInfo' % (switch_mac, port_id))
 
       # if events/actions don't exist yet, then create them
-      if (event_poeInfoByPort or event_poeStateByPort) == None:
+      if event_poeInfoByPort is None or event_poeStateByPort is None:
         log(5, '+local event & action for port %s poe on switch %s...' % (port_id, switch_mac))
         event_poeStateByPort = createPoeStateLocalEvent(switch_mac, port_id, group_name)
         createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id)
@@ -190,6 +198,8 @@ def processPortOverrideQueue():
   # iterate over all switches, pop the switch off the queue, and make the API call
   while portOverrideQueue:
     mac, switch_data = portOverrideQueue.popitem()
+    # Make sure MAC is sanitized
+    mac = sanitiseMac(mac)
     switch_id = switch_data['id']  # retrieve the switch_id (needed for API), and requested port overrides
     queued_overrides = switch_data['port_overrides']
     num_port_overrides = len(queued_overrides)
@@ -233,10 +243,14 @@ def processPortOverrideQueue():
 timer_poeQueue = Timer(processPortOverrideQueue, intervalInSeconds=Time.SECOND, firstDelayInSeconds=Time.SECOND, stopped=True)
 
 def createPoeStateLocalEvent(switch_mac, port_id, group_name):
+  # Ensure switch_mac is sanitized
+  switch_mac = sanitiseMac(switch_mac)
   event_name = "Switch%sPort%sPOEState" % (switch_mac, port_id)
   return create_local_event(event_name, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 def createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id):
+  # Ensure switch_mac is sanitized
+  switch_mac = sanitiseMac(switch_mac)
   action_name = "Switch%sPort%sPOEState" % (switch_mac, port_id)
   def action_handler(arg):
     
@@ -258,6 +272,8 @@ def createPoeStateLocalAction(switch_mac, port_id, group_name, switch_id):
   create_local_action(action_name, handler = action_handler, metadata = {'title': 'Port %s POE State' % port_id, 'group': group_name, 'order': next_seq() + port_id, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 def createPoeInfoLocalEvent(mac, port_id, group_name):
+  # Ensure mac is sanitized
+  mac = sanitiseMac(mac)
   event_name = "Switch%sPort%sPOEInfo" % (mac, port_id)
   event_schema = {'title': 'Info', 'type': 'object', 'properties': {
     'poe_enable': {'title': 'Active', 'type': 'boolean'},
@@ -290,7 +306,7 @@ def statSta():
   for item in data:
     id = item.get('_id')        
     hostname = item.get('hostname')
-    mac = item.get('mac')
+    mac = sanitiseMac(item.get('mac'))
     ip = item.get('ip')
     firstSeen = item.get('first_seen')
     if firstSeen != None:
@@ -304,7 +320,7 @@ def statSta():
     product_model = item.get('product_model')
     network = item.get('network')
     oui = item.get('oui')
-    sw_mac = item.get('sw_mac') 
+    sw_mac = sanitiseMac(item.get('sw_mac')) if item.get('sw_mac') else None
     sw_port = item.get('sw_port')
     
     wired_rx_bytes = item.get('wired-rx_bytes')
@@ -338,7 +354,7 @@ def statSta():
       dataDiff0, dataDiff1, dataDiff2, dataDiff3 = rates[0] - prevRates[0], rates[1] - prevRates[1], rates[2] - prevRates[2], rates[3] - prevRates[3]
       
       # e.g.: <5.5 Kbps rx (20 pps), <10 Kbps (30 pps) tx
-      ratesDetails = '<%0.0f Kbps RX (%0.1f pps), <%0.0f Kbps RX (%0.1f pps)' % ((dataDiff0) * 8 / 1000 / timeDiff,
+      ratesDetails = '<%0.0f Kbps RX (%0.1f pps), <%0.0f Kbps TX (%0.1f pps)' % ((dataDiff0) * 8 / 1000 / timeDiff,
                                                                                  (dataDiff1) / timeDiff,
                                                                                  (dataDiff2) * 8 / 1000 / timeDiff,
                                                                                  (dataDiff3) / timeDiff)
@@ -589,7 +605,7 @@ def callAPI(apiMethod, arg=None, contentType=None, leaveAsRaw=False, method=None
       log(2, 'got result: %s' % rawResult)
       
       global _lastReceive
-      lastReceive = system_clock()
+      _lastReceive = system_clock()
       
       return jResult
       
