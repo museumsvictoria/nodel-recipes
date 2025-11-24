@@ -1,5 +1,9 @@
 #!/home/nodel/myenv/bin/python
 
+# Make sure you follow the instructions at https://github.com/adafruit/Adafruit_CircuitPython_BME280 where it shows how a Python virtual environment is created.
+#
+# See the first line of the file - in this case it is stored in ~/mydev
+
 import json
 import board
 import busio
@@ -20,7 +24,7 @@ humidity_pct = round(bme280.humidity, 1)      # %, 1 decimal
 pressure_hpa = round(bme280.pressure, 1)      # hPa, 1 decimal
 altitude_m = round(bme280.altitude, 2)        # Meters, 2 decimals
 
-# Format as JSON
+# Dump to console as formatted JSON for the 
 data = {
     "temperature_c": temperature_c,
     "humidity_pct": humidity_pct,
@@ -28,5 +32,6 @@ data = {
     "altitude_m": altitude_m
 }
 
-# Print JSON and exit
 print(json.dumps(data))
+
+# it may be more efficient to put data acquisition and feedback in a loop instead executing the process every time
