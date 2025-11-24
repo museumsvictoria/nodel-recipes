@@ -1,16 +1,17 @@
 '''
-**BlackMagic** Videohub 10x10 and likely other models.
+**Blackmagic** Videohub 10x10,  **ATEM Mini** range and likely other models.
 
 Actions and signals are dynamically created when a connection is first made. The "Route" actions and signals are simply named "Output X" where X is the output number starting from 1. The signal's value 
 is the input it's routed to, starting from 1.
 
 Protocol reference - [VideohubDeveloperInformation.pdf](https://documents.blackmagicdesign.com/DeveloperManuals/VideohubDeveloperInformation.pdf)
 
-`rev 1`
+`rev 2`
 
- * _r1.250109 created._
- * _TODO: discrete cross-point switching_
-
+ * _r2.251124 JP bugfix when using dynamic addressing_
+ * _r1.250109 created_
+ 
+ * _TODO for convenience: cross-point switching, e.g. "Output X Input Y" actions and events_
 '''
 
 TCP_PORT = 9990
@@ -20,13 +21,14 @@ param_IPAddress = Parameter({ "schema": { "type": "string", "hint": "(overrides 
 local_event_IPAddress = LocalEvent({ "schema": { "type": "string" }})
 
 def remote_event_IPAddress(arg):
-  if not is_blank(param_IPAddress):
+  if is_blank(param_IPAddress):
     prev = local_event_IPAddress.getArg()
     if prev != arg:
       local_event_IPAddress.emit(arg)
       console.info("IP address updated to %s!, was %s" % (arg, prev))
       dest = "%s:%s" % (arg, TCP_PORT)
       _tcp.setDest(dest)
+      _tcp.drop()
       
 def main():
   ipAddr = param_IPAddress
