@@ -4,6 +4,7 @@
 `REV 4.20251028`
 
 Includes:
+
 * reboot, shutdown
 * lock
 * periodic screenshots

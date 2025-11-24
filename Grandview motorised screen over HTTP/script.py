@@ -113,8 +113,8 @@ def syncNow():
       log(1, 'has been more than %s mins since action or just restarted, long polling now' % (SYNC_PERSISTENCE / 60.0))
       _timer_sync.setInterval(LONG_POLL)
       
-    # don't sync, all done for this cycle
-    return
+      # don't sync, all done for this cycle
+      return
   
   if desired == None:
     return log(1, 'desired state is blank, nothing to do')
