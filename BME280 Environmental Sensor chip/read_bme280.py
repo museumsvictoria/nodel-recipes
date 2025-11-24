@@ -1,8 +1,11 @@
 #!/home/nodel/myenv/bin/python
 
-# Make sure you follow the instructions at https://github.com/adafruit/Adafruit_CircuitPython_BME280 where it shows how a Python virtual environment is created.
+# `rev 1`
+# 
+#  * _r1.251021 MC:  added_
 #
-# See the first line of the file - in this case it is stored in ~/mydev
+# Make sure you follow the instructions at https://github.com/adafruit/Adafruit_CircuitPython_BME280 where it shows how a Python 
+# virtual environment is created. See the first line of the file - in this case it is stored in ~/mydev
 
 import json
 import board
