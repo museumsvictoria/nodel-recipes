@@ -1,5 +1,5 @@
 '''
-**Pharos API** - AZ 30/12/25
+**Pharos API** - AZ 02/01/26
 
 `REV 1`
 
@@ -57,14 +57,15 @@ import sys
 
 def main():
   console.info("Recipe has started!")
-  
-  
+
+  console.info("Using API v%s" % json_decode(call('/api/api_version', method='GET')).get('version'))
+
 
 ### HTTP Communications
 
 _busy = False
 
-def call(command, method=None, query=None, forceLog=False):
+def call(command, method=None, post=None, query=None, forceLog=False):
     # Avoid simultaneous calls by tracking one at a time
     global _busy
     if _busy:
@@ -79,7 +80,7 @@ def call(command, method=None, query=None, forceLog=False):
 
         try:
             timestamp = system_clock()
-            resp = get_url(url, connectTimeout=5, readTimeout=5, query=query, method=method)
+            resp = get_url(url, connectTimeout=5, readTimeout=5, query=query, post=post, method=method)
         except:
             e = sys.exc_info()[1]   # Tuple order is excType, value, trace
             msg = 'get_url: failed (took %0.1f) with "%s"' % ((system_clock()-timestamp)/1000.0, e)
@@ -98,6 +99,12 @@ def call(command, method=None, query=None, forceLog=False):
     
     finally:
         _busy = False
+
+@local_action({'title': 'Auth', 'group': 'Authenticate'})
+def Trigger():
+  req = {"username": "admin", "password": "password"}
+  resp = call('/authenticate', method='POST', post=json_encode(req), forceLog=True)
+  console.log(resp)
 
 @local_action({'title': 'Poll', 'group': 'Project Information'})
 def ProjectInformation():
@@ -147,9 +154,58 @@ def SceneInformation():
   result = json_decode(resp).get('scenes')
   console.log(result)
   
-  names = [item.get('name') for item in result if item.get('group_num') == 2]
+  names = [item for item in result if item.get('group_num') == 2 and '(1)' in item.get('name')]
   console.log(names)
 
+@local_action({'title': 'Scene Test', 'group': 'Scenes'})
+def Scene():
+   # actions: start, start_release_others, release, toggle
+    console.info("Calling scene POST")
+    
+    req = {
+        "action": "toggle",
+        "num": 211
+    }
+
+    resp = call('/api/scene', method='POST', post=json_encode(req), forceLog=True)
+
+    console.log(resp)
+
+@local_action({'title': 'Poll', 'group': 'Trigger'})
+def TriggerInformation():
+  console.info("Calling!")
+  resp = call('/api/trigger', method='GET', forceLog=True)
+  
+  result = json_decode(resp).get('triggers')
+  for trig in result:
+      console.log(trig)
+#   console.log(result[1].get('num'))
+#   req = {
+#     "num": result[1].get('num')
+#   }
+#   resp = call('/api/trigger', method='POST', post=json_encode(req), forceLog=True)
+#   console.log(resp)
+
+@local_action({'title': '100 manual', 'group': 'Trigger'})
+def Trigger():
+  req = {"num": 99}
+  resp = call('/api/trigger', method='POST', post=json_encode(req), forceLog=True)
+  console.log(resp)
+
+@local_action({'title': '100 from call', 'group': 'Trigger'})
+def Trigger100():
+  console.info("Calling!")
+  resp = call('/api/trigger', method='GET', forceLog=True)
+  
+  result = json_decode(resp).get('triggers')
+  req = {"num": result[-1].get('num')}
+  resp = call('/api/trigger', method='POST', post=json_encode(req), forceLog=True)
+  console.log(resp)
+
+# @local_action({'title': 'Ping'})
+# def Ping():
+#    resp = call('/api/beacon', method='POST', forceLog=True)
+#    console.log(resp)
 
 ### Logging
 
