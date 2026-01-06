@@ -1,5 +1,5 @@
 '''
-**Pharos API** - AZ 02/01/26
+**Pharos API** - AZ 06/01/26
 
 `REV 1`
 
@@ -65,7 +65,7 @@ def main():
 
 _busy = False
 
-def call(command, method=None, post=None, query=None, forceLog=False):
+def call(command, forceLog=False, method=None, query=None, contentType=None, post=None, fullResponse=False):
     # Avoid simultaneous calls by tracking one at a time
     global _busy
     if _busy:
@@ -80,7 +80,8 @@ def call(command, method=None, post=None, query=None, forceLog=False):
 
         try:
             timestamp = system_clock()
-            resp = get_url(url, connectTimeout=5, readTimeout=5, query=query, post=post, method=method)
+            # get_url(url, method=None, query=None, username=None, password=None, headers=None, contentType=None, post=None, connectTimeout=10, readTimeout=15, fullResponse=False)
+            resp = get_url(url, method=method, query=query, contentType=None, post=post, connectTimeout=5, readTimeout=5, fullResponse=fullResponse)
         except:
             e = sys.exc_info()[1]   # Tuple order is excType, value, trace
             msg = 'get_url: failed (took %0.1f) with "%s"' % ((system_clock()-timestamp)/1000.0, e)
@@ -101,16 +102,18 @@ def call(command, method=None, post=None, query=None, forceLog=False):
         _busy = False
 
 @local_action({'title': 'Auth', 'group': 'Authenticate'})
-def Trigger():
+def Authenticate():
   req = {"username": "admin", "password": "password"}
-  resp = call('/authenticate', method='POST', post=json_encode(req), forceLog=True)
+  resp = call('/authenticate', method='POST', contentType='application/json', post=json_encode(req), forceLog=True, fullResponse=True)
   console.log(resp)
 
 @local_action({'title': 'Poll', 'group': 'Project Information'})
 def ProjectInformation():
   console.info("Calling!")
+  resp = call('/api/project', method='GET', forceLog=True, fullResponse=True)
+  console.log(resp)
+
   resp = call('/api/project', method='GET', forceLog=True)
-  
   result = json_decode(resp)
   
   local_event_ProjectName.emit(result.get('name'))
@@ -167,18 +170,18 @@ def Scene():
         "num": 211
     }
 
-    resp = call('/api/scene', method='POST', post=json_encode(req), forceLog=True)
+    resp = call('/api/scene', method='POST', contentType='application/json', post=json_encode(req), forceLog=True, fullResponse=True)
 
     console.log(resp)
 
-@local_action({'title': 'Poll', 'group': 'Trigger'})
-def TriggerInformation():
-  console.info("Calling!")
-  resp = call('/api/trigger', method='GET', forceLog=True)
+# @local_action({'title': 'Poll', 'group': 'Trigger'})
+# def TriggerInformation():
+#   console.info("Calling!")
+#   resp = call('/api/trigger', method='GET', forceLog=True)
   
-  result = json_decode(resp).get('triggers')
-  for trig in result:
-      console.log(trig)
+#   result = json_decode(resp).get('triggers')
+#   for trig in result:
+#       console.log(trig)
 #   console.log(result[1].get('num'))
 #   req = {
 #     "num": result[1].get('num')
@@ -186,21 +189,21 @@ def TriggerInformation():
 #   resp = call('/api/trigger', method='POST', post=json_encode(req), forceLog=True)
 #   console.log(resp)
 
-@local_action({'title': '100 manual', 'group': 'Trigger'})
-def Trigger():
-  req = {"num": 99}
-  resp = call('/api/trigger', method='POST', post=json_encode(req), forceLog=True)
-  console.log(resp)
+# @local_action({'title': '100 manual', 'group': 'Trigger'})
+# def Trigger():
+#   req = {"num": 99}
+#   resp = call('/api/trigger', method='POST', contentType='application/json', post=json_encode(req), forceLog=True)
+#   console.log(resp)
 
-@local_action({'title': '100 from call', 'group': 'Trigger'})
-def Trigger100():
-  console.info("Calling!")
-  resp = call('/api/trigger', method='GET', forceLog=True)
+# @local_action({'title': '100 from call', 'group': 'Trigger'})
+# def Trigger100():
+#   console.info("Calling!")
+#   resp = call('/api/trigger', method='GET', forceLog=True)
   
-  result = json_decode(resp).get('triggers')
-  req = {"num": result[-1].get('num')}
-  resp = call('/api/trigger', method='POST', post=json_encode(req), forceLog=True)
-  console.log(resp)
+#   result = json_decode(resp).get('triggers')
+#   req = {"num": result[-1].get('num')}
+#   resp = call('/api/trigger', method='POST', contentType='application/json', post=json_encode(req), forceLog=True)
+#   console.log(resp)
 
 # @local_action({'title': 'Ping'})
 # def Ping():
