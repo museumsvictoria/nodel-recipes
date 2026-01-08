@@ -1,5 +1,5 @@
 '''
-**Pharos API** - AZ 06/01/26
+**Pharos API v11** - AZ 08/01/26
 
 `REV 1`
 
@@ -58,14 +58,14 @@ import sys
 def main():
   console.info("Recipe has started!")
 
-  console.info("Using API v%s" % json_decode(call('/api/api_version', method='GET')).get('version'))
+  console.info("Using API v%s" % json_decode(callURL('/api/api_version', method='GET')).get('version'))
 
 
 ### HTTP Communications
 
 _busy = False
 
-def call(command, forceLog=False, method=None, query=None, contentType=None, post=None, fullResponse=False):
+def callURL(command, forceLog=False, method=None, query=None, headers=None, contentType=None, post=None):
     # Avoid simultaneous calls by tracking one at a time
     global _busy
     if _busy:
@@ -81,39 +81,39 @@ def call(command, forceLog=False, method=None, query=None, contentType=None, pos
         try:
             timestamp = system_clock()
             # get_url(url, method=None, query=None, username=None, password=None, headers=None, contentType=None, post=None, connectTimeout=10, readTimeout=15, fullResponse=False)
-            resp = get_url(url, method=method, query=query, contentType=None, post=post, connectTimeout=5, readTimeout=5, fullResponse=fullResponse)
-        except:
-            e = sys.exc_info()[1]   # Tuple order is excType, value, trace
+            resp = get_url(url, method=method, query=query, headers=headers, contentType=contentType, post=post, connectTimeout=5, readTimeout=5, fullResponse=True)
+                                                                 
+            if not(resp.statusCode >= 200 and resp.statusCode < 300):  # 200 codes are success
+              raise Exception(str(resp.statusCode) + " Error: " + str(resp.reasonPhrase))
+
+        except Exception, e:
             msg = 'get_url: failed (took %0.1f) with "%s"' % ((system_clock()-timestamp)/1000.0, e)
 
             if forceLog: console.warn(msg)
-            else:       warn(1, msg)
+            else:        warn(1, msg)
 
             return False
 
-        log(1, 'resp: %s' % resp)
+        log(1, 'resp: %s' % resp.content)
 
         global _lastReceive
         _lastReceive = system_clock()
 
-        return resp
+        return resp.content
     
     finally:
         _busy = False
 
-@local_action({'title': 'Auth', 'group': 'Authenticate'})
-def Authenticate():
-  req = {"username": "admin", "password": "password"}
-  resp = call('/authenticate', method='POST', contentType='application/json', post=json_encode(req), forceLog=True, fullResponse=True)
-  console.log(resp)
+#@local_action({'title': 'Auth', 'group': 'Authenticate'})
+#def Authenticate():
+#  req = {"username": "admin", "password": "password"}
+#  resp = callURL('/authenticate', method='POST', contentType='application/json', post=json_encode(req), forceLog=True, fullResponse=True)
+#  console.log(resp)
 
 @local_action({'title': 'Poll', 'group': 'Project Information'})
 def ProjectInformation():
   console.info("Calling!")
-  resp = call('/api/project', method='GET', forceLog=True, fullResponse=True)
-  console.log(resp)
-
-  resp = call('/api/project', method='GET', forceLog=True)
+  resp = callURL('/api/project', method='GET', forceLog=True)
   result = json_decode(resp)
   
   local_event_ProjectName.emit(result.get('name'))
@@ -125,7 +125,7 @@ def ProjectInformation():
 @local_action({'title': 'Poll', 'group': 'Controller Information'})
 def ControllerInformation():
   console.info("Calling!")
-  resp = call('/api/system', method='GET', forceLog=True)
+  resp = callURL('/api/system', method='GET', forceLog=True)
   
   result = json_decode(resp)
   
@@ -152,7 +152,7 @@ def ControllerInformation():
 @local_action({'title': 'Poll', 'group': 'Scenes'})
 def SceneInformation():
   console.info("Calling!")
-  resp = call('/api/scene', method='GET', forceLog=True)
+  resp = callURL('/api/scene', method='GET', forceLog=True)
   
   result = json_decode(resp).get('scenes')
   console.log(result)
@@ -160,17 +160,25 @@ def SceneInformation():
   names = [item for item in result if item.get('group_num') == 2 and '(1)' in item.get('name')]
   console.log(names)
 
-@local_action({'title': 'Scene Test', 'group': 'Scenes'})
-def Scene():
+@local_action({'title': 'Scene 3001', 'group': 'Scenes'})
+def Scene3001():
    # actions: start, start_release_others, release, toggle
-    console.info("Calling scene POST")
+    console.info("Calling scene POST 3001")
     
-    req = {
-        "action": "toggle",
-        "num": 211
-    }
+    req = {"action": "toggle","num": 3001}
 
-    resp = call('/api/scene', method='POST', contentType='application/json', post=json_encode(req), forceLog=True, fullResponse=True)
+    resp = callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
+
+    console.log(resp)
+    
+@local_action({'title': 'Scene 3003', 'group': 'Scenes'})
+def Scene3003():
+   # actions: start, start_release_others, release, toggle
+    console.info("Calling scene POST 3003")
+    
+    req = {"action": "toggle","num": 3003}
+
+    resp = callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
 
     console.log(resp)
 
