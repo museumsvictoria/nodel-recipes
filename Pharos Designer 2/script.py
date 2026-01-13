@@ -1,5 +1,5 @@
 '''
-**Pharos API v11** - AZ 08/01/26
+**Pharos API v11** - AZ 12/01/26
 
 `REV 1`
 
@@ -53,7 +53,7 @@ local_event_ControllerDefaultGateway = LocalEvent({'group': 'Controller Informat
 local_event_ControllerHostName = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
 local_event_ControllerDomainName = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
 
-import sys
+import re
 
 def main():
   console.info("Recipe has started!")
@@ -82,7 +82,7 @@ def callURL(command, forceLog=False, method=None, query=None, headers=None, cont
             timestamp = system_clock()
             # get_url(url, method=None, query=None, username=None, password=None, headers=None, contentType=None, post=None, connectTimeout=10, readTimeout=15, fullResponse=False)
             resp = get_url(url, method=method, query=query, headers=headers, contentType=contentType, post=post, connectTimeout=5, readTimeout=5, fullResponse=True)
-                                                                 
+
             if not(resp.statusCode >= 200 and resp.statusCode < 300):  # 200 codes are success
               raise Exception(str(resp.statusCode) + " Error: " + str(resp.reasonPhrase))
 
@@ -156,31 +156,57 @@ def SceneInformation():
   
   result = json_decode(resp).get('scenes')
   console.log(result)
-  
-  names = [item for item in result if item.get('group_num') == 2 and '(1)' in item.get('name')]
-  console.log(names)
 
-@local_action({'title': 'Scene 3001', 'group': 'Scenes'})
-def Scene3001():
-   # actions: start, start_release_others, release, toggle
-    console.info("Calling scene POST 3001")
+  group_nums = list(set([item.get('group_num') for item in result]))
+  console.log(group_nums)
+
+  scenes_by_groupnum = {}
+  for group in group_nums:
+    scenes_by_groupnum[group] = [item for item in result if item.get('group_num') == group]
+  console.log(scenes_by_groupnum)
+
+  for group in scenes_by_groupnum.keys():
+    scenes_by_showcase = {}
+    for scene in scenes_by_groupnum[group]:
+      showcase = scene.get('name')[:-4]
+      showcase_name = re.findall(r'/\d*.\d*',scene.get('name'))
+      console.log(showcase_name)
+
+      
+    #   if showcase not in scenes_by_showcase: scenes_by_showcase[showcase] = []
+    #   scenes_by_showcase[showcase].append(scene)
+    # console.log(scenes_by_showcase)
+      
+      # scenes_by_showcase[scene] = []
+      # console.log('ok')
+
+
+  # names = [item for item in result if item.get('group_num') == 2 and '(1)' in item.get('name')]
+  # console.log(names)
+
+
+
+# @local_action({'title': 'Scene 3001', 'group': 'Scenes'})
+# def Scene3001():
+#    # actions: start, start_release_others, release, toggle
+#     console.info("Calling scene POST 3001")
     
-    req = {"action": "toggle","num": 3001}
+#     req = {"action": "toggle","num": 3001}
 
-    resp = callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
+#     resp = callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
 
-    console.log(resp)
+#     console.log(resp)
     
-@local_action({'title': 'Scene 3003', 'group': 'Scenes'})
-def Scene3003():
-   # actions: start, start_release_others, release, toggle
-    console.info("Calling scene POST 3003")
+# @local_action({'title': 'Scene 3003', 'group': 'Scenes'})
+# def Scene3003():
+#    # actions: start, start_release_others, release, toggle
+#     console.info("Calling scene POST 3003")
     
-    req = {"action": "toggle","num": 3003}
+#     req = {"action": "toggle","num": 3003}
 
-    resp = callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
+#     resp = callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
 
-    console.log(resp)
+#     console.log(resp)
 
 # @local_action({'title': 'Poll', 'group': 'Trigger'})
 # def TriggerInformation():
