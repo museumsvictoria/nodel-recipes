@@ -1,5 +1,5 @@
 '''
-**Pharos API v11** - AZ 12/01/26
+**Pharos API v11** - AZ 13/01/26
 
 `REV 1`
 
@@ -157,22 +157,54 @@ def SceneInformation():
   result = json_decode(resp).get('scenes')
   console.log(result)
 
+  # Get list of group numbers from list of scenes from Pharos
   group_nums = list(set([item.get('group_num') for item in result]))
   console.log(group_nums)
 
+  # Create dict of scenes by group number
+  # {2: [{scene}, {scene}.... }
   scenes_by_groupnum = {}
   for group in group_nums:
     scenes_by_groupnum[group] = [item for item in result if item.get('group_num') == group]
   console.log(scenes_by_groupnum)
 
-  for group in scenes_by_groupnum.keys():
-    scenes_by_showcase = {}
-    for scene in scenes_by_groupnum[group]:
-      showcase = scene.get('name')[:-4]
-      showcase_name = re.findall(r'/\d*.\d*',scene.get('name'))
-      console.log(showcase_name)
+  # Group scenes by showcase number
+  # {2: {'2.12': [{scene}, {scene}.....}}
+  for group in group_nums:
+    scenes_by_scenenum = {}
+    if group:
+      for scene in scenes_by_groupnum[group]:
+        showcase = re.findall(r'\d*.\d*',scene.get('name'))[0]
+        if showcase not in scenes_by_scenenum: scenes_by_scenenum[showcase] = []
+        scenes_by_scenenum[showcase].append(scene)
+    scenes_by_groupnum[group] = scenes_by_scenenum
+  console.log(scenes_by_groupnum)
 
-      
+  # Create action and event for each showcase
+  for group in group_nums:
+    if group:
+      for showcase in scenes_by_groupnum[group].keys():
+        for scene in scenes_by_groupnum[group][showcase]:
+          # get (1) and (3)
+          initScene
+
+
+def initScene(showcase, group):
+  e = create_local_event('Showcase%s' % showcase, {'title': 'Showcase %s' % showcase, 'group': 'Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+  def handler(arg):
+    if arg == 'On':
+      #start scene (1)
+
+    if arg == 'Off':
+      #start scene (3)
+    req = {'action': 'start', 'num': showcase.get('num')}
+    callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
+
+  a = create_local_action('Showcase%s' % showcase, handler, {'title': 'Showcase %s' % showcase, 'group': 'Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+  
+
+
     #   if showcase not in scenes_by_showcase: scenes_by_showcase[showcase] = []
     #   scenes_by_showcase[showcase].append(scene)
     # console.log(scenes_by_showcase)
