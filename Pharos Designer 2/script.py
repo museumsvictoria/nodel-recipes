@@ -1,5 +1,5 @@
 '''
-**Pharos API v11** - AZ 13/01/26
+**Pharos API v11** - AZ 14/01/26
 
 `REV 1`
 
@@ -59,6 +59,9 @@ def main():
   console.info("Recipe has started!")
 
   console.info("Using API v%s" % json_decode(callURL('/api/api_version', method='GET')).get('version'))
+
+  console.log("Creating scene actions and events!")
+  SceneInformation()
 
 
 ### HTTP Communications
@@ -149,7 +152,7 @@ def ControllerInformation():
   local_event_ControllerHostName.emit(result.get('host_name'))
   local_event_ControllerDomainName.emit(result.get('domain_name'))
   
-@local_action({'title': 'Poll', 'group': 'Scenes'})
+# @local_action({'title': 'Poll', 'group': 'Scenes'})
 def SceneInformation():
   console.info("Calling!")
   resp = callURL('/api/scene', method='GET', forceLog=True)
@@ -184,21 +187,44 @@ def SceneInformation():
   for group in group_nums:
     if group:
       for showcase in scenes_by_groupnum[group].keys():
+        #showcase_on, showcase_off = None
+        scene_on = None
+        scene_off = None
         for scene in scenes_by_groupnum[group][showcase]:
-          # get (1) and (3)
-          initScene
+          # Gets (1) (3)
+          scene_type = scene.get('name')[-3:]
+          if scene_type == '(1)': # On
+             scene_on = scene
+          if scene_type == '(3)': # Off
+             scene_off = scene
+        console.warn('initShowcase: %s %s' % (showcase, group))
+        initShowcase(showcase, group, scene_on, scene_off)
+
+        # get (1) and (3)
+        #initShowcase(showcase)
+        
+        # for scene in scenes_by_groupnum[group][showcase]:
+        #   # get (1) and (3)
+        #   initScene
 
 
-def initScene(showcase, group):
+def initShowcase(showcase, group, scene_on, scene_off):
+  console.warn('initShowcase: %s %s' % (showcase, group))
   e = create_local_event('Showcase%s' % showcase, {'title': 'Showcase %s' % showcase, 'group': 'Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
   def handler(arg):
+    req = {'action': 'start', 'num': '-1'}
     if arg == 'On':
+      req = {'action': 'start', 'num': scene_on.get('num')}
+      console.log('On. Starting %s' % req.get('num'))
       #start scene (1)
 
     if arg == 'Off':
+      req = {'action': 'start', 'num': scene_off.get('num')}
+      console.log('Off. Starting %s' % req.get('num'))
+      # console.log('ok')
       #start scene (3)
-    req = {'action': 'start', 'num': showcase.get('num')}
+    
     callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
 
   a = create_local_action('Showcase%s' % showcase, handler, {'title': 'Showcase %s' % showcase, 'group': 'Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
