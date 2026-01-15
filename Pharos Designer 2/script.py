@@ -1,12 +1,12 @@
 '''
-**Pharos API v11** - AZ 14/01/26
+**Pharos Designer** HTTP API v11
 
-`REV 1`
+---
 
-Notes:
+`REV 1` [azuell]
 
-* No authentication
-* Using HTTP (not HTTPS)
+* Includes optional authentication using username/password
+* Automatically generates actions/events from Scenes and Triggers, sorted by groups
 * API version 11.0 (latest) Pharos Designer version 2.15.3 (latest)
 
 **MANUAL**
@@ -15,17 +15,43 @@ Notes:
 
 **REVISION HISTORY**
 
-* rev. 1: initial
+* rev. 1 (15/01/2026): initial
+
+**TO DO**
+
+* Scenes/Showcase notion is unique to ASM - will make more generic for general audience before sharing
 
 '''
 
-DEFAULT_PORT = 9999
+DEFAULT_PORT = 80
 
-param_disabled = Parameter({'desc': 'Disables this node', 'schema': {'type': 'boolean'}})
+API_VERSION = 11
 
-param_ipAddress = Parameter({'title': 'IP Address', 'schema': {'type': 'string' }})
+DEFAULT_USERNAME = 'admin'
+DEFAULT_PASSWORD = 'admin'
 
-param_port = Parameter({'title': 'Port (HTTP)', 'schema': {'type': 'integer', 'hint': DEFAULT_PORT}})
+AUTH_TIMEOUT = 5 * 60 # seconds
+
+STATUS_CHECK_INTERVAL = 5 * 60  # seconds
+
+_fullAddress = None
+
+_authenticationRequired = False
+
+_lastReceive = 0
+
+param_disabled = Parameter({'title': 'Disable this node', 'schema': {'type': 'boolean'}})
+
+param_playerConfig = Parameter({'title': 'Pharos Config', 'schema': {'type': 'object', 'properties': {
+  'ipAddress': {'title': 'IP Address', 'type': 'string', 'hint': 'ip', 'order': 1},
+  'port': {'title': 'Port', 'type': 'string', 'hint': DEFAULT_PORT, 'order': 2}}}})
+
+param_login = Parameter({'title': 'Pharos Login', 'schema': {'type': 'object', 'properties': {
+  'required': {'title': 'Require authentication?', 'type': 'boolean', 'order': 1},
+  'username': {'title': 'Username', 'type': 'string', 'hint': DEFAULT_USERNAME, 'order': 2},
+  'password': {'title': 'Password', 'type': 'string', 'hint': DEFAULT_PASSWORD, 'order': 3}}}})
+
+local_event_AuthToken = LocalEvent({'group': 'Authentication', 'schema': {'type': 'string'}})
 
 local_event_ProjectName = LocalEvent({'group': 'Project Information', 'schema': {'type': 'string', 'order': next_seq()}})
 local_event_ProjectAuthor = LocalEvent({'group': 'Project Information', 'schema': {'type': 'string', 'order': next_seq()}})
@@ -53,16 +79,66 @@ local_event_ControllerDefaultGateway = LocalEvent({'group': 'Controller Informat
 local_event_ControllerHostName = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
 local_event_ControllerDomainName = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
 
+local_event_LastContactDetect = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), 'title': 'Last contact detect', 'schema': {'type': 'string'}})
+local_event_Status = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), 'schema': {'type': 'object', 'properties': {
+        'level': {'type': 'integer', 'order': 1},
+        'message': {'type': 'string', 'order': 2}}}})
+
 import re
 
 def main():
-  console.info("Recipe has started!")
+  console.info('Recipe has started!')
 
-  console.info("Using API v%s" % json_decode(callURL('/api/api_version', method='GET')).get('version'))
+  # Disable node
+  if param_disabled:
+    console.error('Node is disabled. Doing nothing.')
+    return
 
-  console.log("Creating scene actions and events!")
+  # Get ip address
+  global _fullAddress
+  if is_blank((param_playerConfig or {}).get('ipAddress')):
+    console.error('No Address has been specified, nothing to do!')
+    return
+  else:
+    ipAddress = param_playerConfig.get('ipAddress')
+    port = param_playerConfig.get('port') if not is_blank((param_playerConfig or {}).get('port')) else DEFAULT_PORT
+    _fullAddress = str(ipAddress) + ':' + str(port)
+
+  # Authenticate if required
+  global _authenticationRequired
+  if param_login.get('required'):
+    _authenticationRequired = True
+    GetAuthToken.call()
+    console.info('Authentication timer starting now')
+    _timer_auth.start()
+  else:
+    _authenticationRequired = False
+    console.warn('Authentication not required. Please add log in information if access issues arise')
+
+  # Confirm Pharos API version
+  api = json_decode(callURL('/api/api_version', method='GET')).get('version')
+  if api != API_VERSION:
+    console.error('Check the API version of your Pharos device. This node requires %s, you are currently using %s' % (API_VERSION, api))
+    return
+  else:
+    console.info('Using API v%s' % api)
+
+  # Get Basic Information
+  ProjectInformation.call()
+  ControllerInformation.call()
+
+  # Generate scene, trigger and timeline actions and events
   SceneInformation()
+  TriggerInformation()
+  TimelineInformation()
 
+  # Start status polling
+  _timer_status.start()
+  _timer_info.start()
+
+_timer_auth = Timer(lambda: GetAuthToken.call(), AUTH_TIMEOUT - 30, 10, stopped=True)
+_timer_status = Timer(lambda: StatusCheck.call(), STATUS_CHECK_INTERVAL, 10, stopped=True) 
+_timer_info = Timer(lambda: ControllerInformation.call(), 3 * 60, 10, stopped=True)
 
 ### HTTP Communications
 
@@ -76,10 +152,16 @@ def callURL(command, forceLog=False, method=None, query=None, headers=None, cont
     _busy = True
 
     try:
-        url = 'http://%s:%s%s' % (param_ipAddress, param_port, command)
+        url = 'http://%s%s' % (_fullAddress, command)
 
         if forceLog: console.info('req: url%s' % url)
         else: log(1, 'req: url%s' % url)
+
+        # No access token if not required, or when authenticating
+        if (not _authenticationRequired) or (command != '/authenticate'):
+          if not headers:
+            headers = {}
+          headers['Authorization'] = 'Bearer %s' % local_event_AuthToken.getArg()
 
         try:
             timestamp = system_clock()
@@ -90,7 +172,7 @@ def callURL(command, forceLog=False, method=None, query=None, headers=None, cont
               raise Exception(str(resp.statusCode) + " Error: " + str(resp.reasonPhrase))
 
         except Exception, e:
-            msg = 'get_url: failed (took %0.1f) with "%s"' % ((system_clock()-timestamp)/1000.0, e)
+            msg = 'get_url: failed (took %0.1f) with "%s"' % ((system_clock() - timestamp) / 1000.0, e)
 
             if forceLog: console.warn(msg)
             else:        warn(1, msg)
@@ -105,18 +187,24 @@ def callURL(command, forceLog=False, method=None, query=None, headers=None, cont
         return resp.content
     
     finally:
-        _busy = False
+      _busy = False
 
-#@local_action({'title': 'Auth', 'group': 'Authenticate'})
-#def Authenticate():
-#  req = {"username": "admin", "password": "password"}
-#  resp = callURL('/authenticate', method='POST', contentType='application/json', post=json_encode(req), forceLog=True, fullResponse=True)
-#  console.log(resp)
+### Information and Authentication
+
+@local_action({'title': 'Auth', 'group': 'Authentication'})
+def GetAuthToken():
+  # Only try to authenticate if it is required!
+  if _authenticationRequired:
+    req =  {'username': param_login.get('username') if not is_blank((param_login or {}).get('username')) else DEFAULT_USERNAME, 
+            'password': param_login.get('password') if not is_blank((param_login or {}).get('password')) else DEFAULT_PASSWORD}
+    resp = callURL('/authenticate', method='POST', contentType='application/json', post=json_encode(req))
+    result = json_decode(resp) 
+
+    local_event_AuthToken.emit(result.get('token'))
 
 @local_action({'title': 'Poll', 'group': 'Project Information'})
 def ProjectInformation():
-  console.info("Calling!")
-  resp = callURL('/api/project', method='GET', forceLog=True)
+  resp = callURL('/api/project', method='GET')
   result = json_decode(resp)
   
   local_event_ProjectName.emit(result.get('name'))
@@ -127,9 +215,7 @@ def ProjectInformation():
   
 @local_action({'title': 'Poll', 'group': 'Controller Information'})
 def ControllerInformation():
-  console.info("Calling!")
-  resp = callURL('/api/system', method='GET', forceLog=True)
-  
+  resp = callURL('/api/system', method='GET')
   result = json_decode(resp)
   
   local_event_ControllerHardwareType.emit(result.get('hardware_type'))
@@ -151,25 +237,21 @@ def ControllerInformation():
   local_event_ControllerDefaultGateway.emit(result.get('default_gateway'))
   local_event_ControllerHostName.emit(result.get('host_name'))
   local_event_ControllerDomainName.emit(result.get('domain_name'))
-  
-# @local_action({'title': 'Poll', 'group': 'Scenes'})
+
+### Scenes
+
 def SceneInformation():
-  console.info("Calling!")
-  resp = callURL('/api/scene', method='GET', forceLog=True)
-  
+  resp = callURL('/api/scene', method='GET')
   result = json_decode(resp).get('scenes')
-  console.log(result)
 
   # Get list of group numbers from list of scenes from Pharos
   group_nums = list(set([item.get('group_num') for item in result]))
-  console.log(group_nums)
 
   # Create dict of scenes by group number
   # {2: [{scene}, {scene}.... }
   scenes_by_groupnum = {}
   for group in group_nums:
     scenes_by_groupnum[group] = [item for item in result if item.get('group_num') == group]
-  console.log(scenes_by_groupnum)
 
   # Group scenes by showcase number
   # {2: {'2.12': [{scene}, {scene}.....}}
@@ -181,7 +263,6 @@ def SceneInformation():
         if showcase not in scenes_by_scenenum: scenes_by_scenenum[showcase] = []
         scenes_by_scenenum[showcase].append(scene)
     scenes_by_groupnum[group] = scenes_by_scenenum
-  console.log(scenes_by_groupnum)
 
   # Create action and event for each showcase
   for group in group_nums:
@@ -193,114 +274,132 @@ def SceneInformation():
         for scene in scenes_by_groupnum[group][showcase]:
           # Gets (1) (3)
           scene_type = scene.get('name')[-3:]
-          if scene_type == '(1)': # On
-             scene_on = scene
-          if scene_type == '(3)': # Off
-             scene_off = scene
-        console.warn('initShowcase: %s %s' % (showcase, group))
-        initShowcase(showcase, group, scene_on, scene_off)
+          if scene_type == '(1)': scene_on = scene
+          if scene_type == '(3)': scene_off = scene
+        InitShowcase(showcase, group, scene_on, scene_off)
 
-        # get (1) and (3)
-        #initShowcase(showcase)
-        
-        # for scene in scenes_by_groupnum[group][showcase]:
-        #   # get (1) and (3)
-        #   initScene
-
-
-def initShowcase(showcase, group, scene_on, scene_off):
-  console.warn('initShowcase: %s %s' % (showcase, group))
-  e = create_local_event('Showcase%s' % showcase, {'title': 'Showcase %s' % showcase, 'group': 'Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+def InitShowcase(showcase, group, scene_on, scene_off):
+  log(1, 'InitShowcase: %s %s' % (showcase, group))
+  e = create_local_event('Showcase: %s' % showcase, {'title': 'Showcase: %s' % showcase, 'group': 'Scene Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
   def handler(arg):
     req = {'action': 'start', 'num': '-1'}
     if arg == 'On':
       req = {'action': 'start', 'num': scene_on.get('num')}
-      console.log('On. Starting %s' % req.get('num'))
-      #start scene (1)
+      e.emit('On')
+      log(1, 'On. Starting %s' % req.get('num'))
 
     if arg == 'Off':
       req = {'action': 'start', 'num': scene_off.get('num')}
-      console.log('Off. Starting %s' % req.get('num'))
-      # console.log('ok')
-      #start scene (3)
+      e.emit('Off')
+      log(1, 'Off. Starting %s' % req.get('num'))
     
-    callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
+    callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req))
 
-  a = create_local_action('Showcase%s' % showcase, handler, {'title': 'Showcase %s' % showcase, 'group': 'Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+  a = create_local_action('Showcase %s' % showcase, handler, {'title': 'Showcase %s' % showcase, 'group': 'Scene Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+### Triggers
+
+def TriggerInformation():
+  resp = callURL('/api/trigger', method='GET')
+  result = json_decode(resp).get('triggers')
+
+  # Get list of group numbers from list of triggers from Pharos
+  group_nums = list(set([item.get('group') for item in result]))
+
+  # Create dict of triggers by group number
+  # {2: [{trigger}, {trigger}.... }
+  triggers_by_groupnum = {}
+  for group in group_nums:
+    triggers_by_groupnum[group] = [item for item in result if item.get('group') == group]
+    for trigger in triggers_by_groupnum[group]:
+      InitTrigger(trigger, group)
+
+def InitTrigger(trigger, group):
+  log(1, 'InitTrigger: %s %s' % (trigger, group))
   
+  def handler(arg):
+    req = {'num': trigger.get('num')}
+    callURL('/api/trigger', headers={'Content-Type': 'application/json'}, post=json_encode(req))
 
+  a = create_local_action('Trigger %s' % trigger.get('num'), handler, {'title': 'Trigger %s' % trigger.get('name'), 'group': 'Trigger Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
-    #   if showcase not in scenes_by_showcase: scenes_by_showcase[showcase] = []
-    #   scenes_by_showcase[showcase].append(scene)
-    # console.log(scenes_by_showcase)
-      
-      # scenes_by_showcase[scene] = []
-      # console.log('ok')
+### Timelines
 
+def TimelineInformation():
+  resp = callURL('/api/timeline', method='GET')
+  result = json_decode(resp).get('timelines')
 
-  # names = [item for item in result if item.get('group_num') == 2 and '(1)' in item.get('name')]
-  # console.log(names)
+  # Get list of group numbers from list of timelines from Pharos
+  group_nums = list(set([item.get('group') for item in result]))
 
+  # Create dict of timelines by group number
+  # {2: [{timeline}, {timeline}.... }
+  timelines_by_groupnum = {}
+  for group in group_nums:
+    timelines_by_groupnum[group] = [item for item in result if item.get('group') == group]
+    for timeline in timelines_by_groupnum[group]:
+      InitTimeline(timeline, group)
 
+def InitTimeline(timeline, group):
+  log(1, 'InitTimeline: %s %s' % (timeline, group))
+  e = create_local_event('Timeline: %s' % timeline.get('name'), {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
-# @local_action({'title': 'Scene 3001', 'group': 'Scenes'})
-# def Scene3001():
-#    # actions: start, start_release_others, release, toggle
-#     console.info("Calling scene POST 3001")
+  def handler(arg):
+    req = {'action': 'start', 'num': '-1'}
+    if arg == 'On':
+      req = {'action': 'start', 'num': timeline.get('num')}
+      e.emit('On')
+      log(1, 'On. Starting %s' % req.get('num'))
+
+    if arg == 'Off':
+      req = {'action': 'release', 'num': timeline.get('num')}
+      e.emit('Off')
+      log(1, 'Off. Releasing %s' % req.get('num'))
     
-#     req = {"action": "toggle","num": 3001}
+    callURL('/api/timeline', headers={'Content-Type': 'application/json'}, post=json_encode(req))
 
-#     resp = callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
+  a = create_local_action('Timeline %s' % timeline, handler, {'title': 'Timeline %s' % timeline.get('name'), 'group': 'Timeline Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
-#     console.log(resp)
+
+### Status
+
+@local_action({'title': 'Poll', 'group': 'Status'})
+def StatusCheck():
+  diff = (system_clock() - _lastReceive) / 1000.0 # in secs
+
+  if diff > STATUS_CHECK_INTERVAL:
+    previous_contact_value = local_event_LastContactDetect.getArg()
     
-# @local_action({'title': 'Scene 3003', 'group': 'Scenes'})
-# def Scene3003():
-#    # actions: start, start_release_others, release, toggle
-#     console.info("Calling scene POST 3003")
+    if previous_contact_value == None:
+      message = 'Never seen'
+    else:
+      previous_contact = date_parse(previous_contact_value)
+      message = 'Missing %s' % FormatPeriod(previous_contact)
+    local_event_Status.emit({'level': 2, 'message': message})
     
-#     req = {"action": "toggle","num": 3003}
+  else:
+    local_event_LastContactDetect.emit(str(date_now()))
+    local_event_Status.emit({'level': 0, 'message': 'OK'})
 
-#     resp = callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req), forceLog=True)
+def FormatPeriod(date, as_instant=False):
+  """Takes in a date object and returns the phrase to be displayed in the dashboard"""
 
-#     console.log(resp)
+  if date == None:
+    return 'for unknown period'
+    
+  time_difference = (date_now().getMillis() - date.getMillis()) / 1000 / 60 # in mins
 
-# @local_action({'title': 'Poll', 'group': 'Trigger'})
-# def TriggerInformation():
-#   console.info("Calling!")
-#   resp = call('/api/trigger', method='GET', forceLog=True)
-  
-#   result = json_decode(resp).get('triggers')
-#   for trig in result:
-#       console.log(trig)
-#   console.log(result[1].get('num'))
-#   req = {
-#     "num": result[1].get('num')
-#   }
-#   resp = call('/api/trigger', method='POST', post=json_encode(req), forceLog=True)
-#   console.log(resp)
-
-# @local_action({'title': '100 manual', 'group': 'Trigger'})
-# def Trigger():
-#   req = {"num": 99}
-#   resp = call('/api/trigger', method='POST', contentType='application/json', post=json_encode(req), forceLog=True)
-#   console.log(resp)
-
-# @local_action({'title': '100 from call', 'group': 'Trigger'})
-# def Trigger100():
-#   console.info("Calling!")
-#   resp = call('/api/trigger', method='GET', forceLog=True)
-  
-#   result = json_decode(resp).get('triggers')
-#   req = {"num": result[-1].get('num')}
-#   resp = call('/api/trigger', method='POST', contentType='application/json', post=json_encode(req), forceLog=True)
-#   console.log(resp)
-
-# @local_action({'title': 'Ping'})
-# def Ping():
-#    resp = call('/api/beacon', method='POST', forceLog=True)
-#    console.log(resp)
+  if time_difference < 0:
+    return 'never ever'
+  elif time_difference == 0:
+    return 'for <1 min' if not as_instant else '<1 min ago'
+  elif time_difference < 60:
+    return ('for <%s mins' if not as_instant else '<%s mins ago') % time_difference
+  elif time_difference < 60*24:
+    return ('since %s' if not as_instant else 'at %s') % date.toString('h:mm:ss a')
+  else:
+    return ('since %s' if not as_instant else 'at %s') % date.toString('E d-MMM h:mm:ss a')
 
 ### Logging
 
