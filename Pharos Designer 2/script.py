@@ -3,11 +3,12 @@
 
 ---
 
-`REV 1` [azuell]
+`REV 1 2026.01.16 azuell`
 
-* Includes optional authentication using username/password
-* Automatically generates actions/events from Scenes and Triggers, sorted by groups
 * API version 11.0 (latest) Pharos Designer version 2.15.3 (latest)
+* Includes optional authentication using username/password
+* Automatically generates actions/events from desired objects (Scenes, Triggers, Timelines) sorted by groups
+* Updates events with state from Pharos as part of status checking
 
 **MANUAL**
 
@@ -15,11 +16,11 @@
 
 **REVISION HISTORY**
 
-* rev. 1 (15/01/2026): initial
+* rev. 1: initial
 
 **TO DO**
 
-* Scenes/Showcase notion is unique to ASM - will make more generic for general audience before sharing
+* Call a group of objects at once. Currently gets a little overwhelmed with multiple API calls at once
 
 '''
 
@@ -32,7 +33,7 @@ DEFAULT_PASSWORD = 'admin'
 
 AUTH_TIMEOUT = 5 * 60 # seconds
 
-STATUS_CHECK_INTERVAL = 5 * 60  # seconds
+STATUS_CHECK_INTERVAL = 75  # seconds
 
 _fullAddress = None
 
@@ -50,6 +51,11 @@ param_login = Parameter({'title': 'Pharos Login', 'schema': {'type': 'object', '
   'required': {'title': 'Require authentication?', 'type': 'boolean', 'order': 1},
   'username': {'title': 'Username', 'type': 'string', 'hint': DEFAULT_USERNAME, 'order': 2},
   'password': {'title': 'Password', 'type': 'string', 'hint': DEFAULT_PASSWORD, 'order': 3}}}})
+
+param_objects = Parameter({'title': 'Pharos Objects', 'schema': {'type': 'object', 'properties': {
+  'scene': {'title': 'Scenes', 'type': 'boolean', 'order': 1},
+  'timeline': {'title': 'Timelines', 'type': 'boolean', 'order': 2},
+  'trigger': {'title': 'Triggers', 'type': 'boolean', 'order': 3}}}})
 
 local_event_AuthToken = LocalEvent({'group': 'Authentication', 'schema': {'type': 'string'}})
 
@@ -84,11 +90,11 @@ local_event_Status = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), '
         'level': {'type': 'integer', 'order': 1},
         'message': {'type': 'string', 'order': 2}}}})
 
-import re
-
 def main():
   console.info('Recipe has started!')
 
+@after_main
+def start():
   # Disable node
   if param_disabled:
     console.error('Node is disabled. Doing nothing.')
@@ -128,17 +134,18 @@ def main():
   ControllerInformation.call()
 
   # Generate scene, trigger and timeline actions and events
-  SceneInformation()
-  TriggerInformation()
-  TimelineInformation()
+  if (param_objects or {}).get('scene'):
+    SceneInformation()
+  if (param_objects or {}).get('trigger'):
+    TriggerInformation()
+  if (param_objects or {}).get('timeline'):
+    TimelineInformation()
 
   # Start status polling
   _timer_status.start()
-  _timer_info.start()
 
 _timer_auth = Timer(lambda: GetAuthToken.call(), AUTH_TIMEOUT - 30, 10, stopped=True)
 _timer_status = Timer(lambda: StatusCheck.call(), STATUS_CHECK_INTERVAL, 10, stopped=True) 
-_timer_info = Timer(lambda: ControllerInformation.call(), 3 * 60, 10, stopped=True)
 
 ### HTTP Communications
 
@@ -212,7 +219,7 @@ def ProjectInformation():
   local_event_ProjectFileName.emit(result.get('filename'))
   local_event_ProjectUniqueID.emit(result.get('unique_id'))
   local_event_ProjectUploadDate.emit(result.get('upload_date'))
-  
+
 @local_action({'title': 'Poll', 'group': 'Controller Information'})
 def ControllerInformation():
   resp = callURL('/api/system', method='GET')
@@ -241,131 +248,176 @@ def ControllerInformation():
 ### Scenes
 
 def SceneInformation():
+  # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
   resp = callURL('/api/scene', method='GET')
   result = json_decode(resp).get('scenes')
 
-  # Get list of group numbers from list of scenes from Pharos
-  group_nums = list(set([item.get('group_num') for item in result]))
+  for scene in sorted(result, key = lambda x: x['group_num']):
+    InitScene(scene)
+  # for group in set([scene.get('group_num') for scene in result]):
+  #   InitSceneGroup(group)
 
-  # Create dict of scenes by group number
-  # {2: [{scene}, {scene}.... }
-  scenes_by_groupnum = {}
-  for group in group_nums:
-    scenes_by_groupnum[group] = [item for item in result if item.get('group_num') == group]
-
-  # Group scenes by showcase number
-  # {2: {'2.12': [{scene}, {scene}.....}}
-  for group in group_nums:
-    scenes_by_scenenum = {}
-    if group:
-      for scene in scenes_by_groupnum[group]:
-        showcase = re.findall(r'\d*.\d*',scene.get('name'))[0]
-        if showcase not in scenes_by_scenenum: scenes_by_scenenum[showcase] = []
-        scenes_by_scenenum[showcase].append(scene)
-    scenes_by_groupnum[group] = scenes_by_scenenum
-
-  # Create action and event for each showcase
-  for group in group_nums:
-    if group:
-      for showcase in scenes_by_groupnum[group].keys():
-        #showcase_on, showcase_off = None
-        scene_on = None
-        scene_off = None
-        for scene in scenes_by_groupnum[group][showcase]:
-          # Gets (1) (3)
-          scene_type = scene.get('name')[-3:]
-          if scene_type == '(1)': scene_on = scene
-          if scene_type == '(3)': scene_off = scene
-        InitShowcase(showcase, group, scene_on, scene_off)
-
-def InitShowcase(showcase, group, scene_on, scene_off):
-  log(1, 'InitShowcase: %s %s' % (showcase, group))
-  e = create_local_event('Showcase: %s' % showcase, {'title': 'Showcase: %s' % showcase, 'group': 'Scene Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+def InitSceneGroup(group):
+  log(1, 'InitSceneGroup: %s' % group)
+  e = create_local_event('SceneGroup%s' % group, {'title': 'Scene Group: %s' % group, 'group': 'Scene Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
   def handler(arg):
-    req = {'action': 'start', 'num': '-1'}
+    SelectScenes(group, arg)
+    e.emit(arg)
+
+  a = create_local_action('SceneGroup%s' % group, handler, {'title': 'Scene Group: %s' % group, 'group': 'Scene Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+def InitScene(scene):
+  log(1, 'InitScene: %s %s' % (scene.get('name'), scene.get('group_num')))
+  e = create_local_event('Scene%s' % scene.get('num'), {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+  def handler(arg):
+    # POST /api/scene sample payload {'action': 'start', 'num': 1, 'fade': 2.0, 'group': 1, 'same_group': false}  fade/group/same_group are optional
+    req = {'num': scene.get('num')}
     if arg == 'On':
-      req = {'action': 'start', 'num': scene_on.get('num')}
+      req['action'] = 'start'
       e.emit('On')
       log(1, 'On. Starting %s' % req.get('num'))
 
     if arg == 'Off':
-      req = {'action': 'start', 'num': scene_off.get('num')}
+      req['action'] = 'release'
       e.emit('Off')
-      log(1, 'Off. Starting %s' % req.get('num'))
+      log(1, 'Off. Releasing %s' % req.get('num'))
     
     callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req))
 
-  a = create_local_action('Showcase %s' % showcase, handler, {'title': 'Showcase %s' % showcase, 'group': 'Scene Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+  a = create_local_action('Scene%s' % scene.get('num'), handler, {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
-### Triggers
+def SceneStatus():
+  # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
+  resp = callURL('/api/scene', method='GET')
+  result = json_decode(resp).get('scenes')
 
-def TriggerInformation():
-  resp = callURL('/api/trigger', method='GET')
-  result = json_decode(resp).get('triggers')
+  for scene in result:
+    state = scene.get('state')
+    if state == 'none' or state == 'released':
+      arg = 'Off'
+    elif state == 'started':
+      arg = 'On'
+    else:
+      warn(1, 'SceneStatus: unknown state %s' % state)
+      arg = 'Off'
+    lookup_local_event('Scene%s' % scene.get('num')).emit(arg)
 
-  # Get list of group numbers from list of triggers from Pharos
-  group_nums = list(set([item.get('group') for item in result]))
+def AllScenes(arg):
+  # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
+  resp = callURL('/api/scene', method='GET')
+  result = json_decode(resp).get('scenes')
 
-  # Create dict of triggers by group number
-  # {2: [{trigger}, {trigger}.... }
-  triggers_by_groupnum = {}
-  for group in group_nums:
-    triggers_by_groupnum[group] = [item for item in result if item.get('group') == group]
-    for trigger in triggers_by_groupnum[group]:
-      InitTrigger(trigger, group)
+  for scene in result:
+    lookup_local_action('Scene%s' % scene.get('num')).call(arg)
 
-def InitTrigger(trigger, group):
-  log(1, 'InitTrigger: %s %s' % (trigger, group))
-  
-  def handler(arg):
-    req = {'num': trigger.get('num')}
-    callURL('/api/trigger', headers={'Content-Type': 'application/json'}, post=json_encode(req))
+def SelectScenes(group, arg):
+  # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
+  resp = callURL('/api/scene', method='GET')
+  result = json_decode(resp).get('scenes')
 
-  a = create_local_action('Trigger %s' % trigger.get('num'), handler, {'title': 'Trigger %s' % trigger.get('name'), 'group': 'Trigger Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+  for scene in result:
+    if scene.get('group_num') == group:
+      lookup_local_action('Scene%s' % scene.get('num')).call(arg)
 
 ### Timelines
 
 def TimelineInformation():
+  # GET /api/timeline sample timeline object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'length': 10000, 'source_bus': 'internal', 'timecode_format': 'SMPTE30', 'audio_band': 0, 'audio_channel': 'combined', 'audio_peak': false, 'time_offset': 5000, 'state': 'none', 'onstage': true, 'position': 1000, 'priority': 'normal', 'custom_properties': {}}
   resp = callURL('/api/timeline', method='GET')
   result = json_decode(resp).get('timelines')
 
-  # Get list of group numbers from list of timelines from Pharos
-  group_nums = list(set([item.get('group') for item in result]))
+  for timeline in sorted(result, key = lambda x: x['group_num']):
+    InitTimeline(timeline)
+  # for group in set([timeline.get('group_num') for timeline in result]):
+  #   InitTimelineGroup(group)
 
-  # Create dict of timelines by group number
-  # {2: [{timeline}, {timeline}.... }
-  timelines_by_groupnum = {}
-  for group in group_nums:
-    timelines_by_groupnum[group] = [item for item in result if item.get('group') == group]
-    for timeline in timelines_by_groupnum[group]:
-      InitTimeline(timeline, group)
-
-def InitTimeline(timeline, group):
-  log(1, 'InitTimeline: %s %s' % (timeline, group))
-  e = create_local_event('Timeline: %s' % timeline.get('name'), {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+def InitTimelineGroup(group):
+  log(1, 'InitTimelineGroup: %s' % group)
+  e = create_local_event('TimelineGroup%s' % group, {'title': 'Timeline Group: %s' % group, 'group': 'Timeline Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
   def handler(arg):
-    req = {'action': 'start', 'num': '-1'}
+    SelectTimelines(group, arg)
+    e.emit(arg)
+
+  a = create_local_action('TimelineGroup%s' % group, handler, {'title': 'Timeline Group: %s' % group, 'group': 'Timeline Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+def InitTimeline(timeline):
+  log(1, 'InitTimeline: %s %s' % (timeline.get('name'), timeline.get('group_num')))
+  e = create_local_event('Timeline%s' % timeline.get('num'), {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+  def handler(arg):
+    # POST /api/timeline sample payload {'action': 'start', 'num': 1, 'fade': 2.0, 'group': 'Group', 'same_group': false, 'rate': '0.1'} fade/group/same_group/rate are optional
+    req = {'num': timeline.get('num')}
     if arg == 'On':
-      req = {'action': 'start', 'num': timeline.get('num')}
+      req['action'] = 'start'
       e.emit('On')
       log(1, 'On. Starting %s' % req.get('num'))
 
     if arg == 'Off':
-      req = {'action': 'release', 'num': timeline.get('num')}
+      req['action'] = 'release'
       e.emit('Off')
       log(1, 'Off. Releasing %s' % req.get('num'))
     
     callURL('/api/timeline', headers={'Content-Type': 'application/json'}, post=json_encode(req))
 
-  a = create_local_action('Timeline %s' % timeline, handler, {'title': 'Timeline %s' % timeline.get('name'), 'group': 'Timeline Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+  a = create_local_action('Timeline%s' % timeline.get('num'), handler, {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
+def TimelineStatus():
+  # GET /api/timeline sample timeline object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'length': 10000, 'source_bus': 'internal', 'timecode_format': 'SMPTE30', 'audio_band': 0, 'audio_channel': 'combined', 'audio_peak': false, 'time_offset': 5000, 'state': 'none', 'onstage': true, 'position': 1000, 'priority': 'normal', 'custom_properties': {}}
+  resp = callURL('/api/timeline', method='GET')
+  result = json_decode(resp).get('timelines')
+
+  for timeline in result:
+    state = timeline.get('state')
+    if state == 'none' or state == 'released' or state == 'holding_at_end' or state == 'paused':
+      arg = 'Off'
+    elif state == 'running':
+      arg = 'On'
+    else:
+      warn(1, 'TimelineStatus: unknown state %s' % state)
+      arg = 'Off'
+    lookup_local_event('Timeline%s' % timeline.get('num')).emit(arg)
+
+def SelectTimelines(group, arg):
+  # GET /api/timeline sample timeline object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'length': 10000, 'source_bus': 'internal', 'timecode_format': 'SMPTE30', 'audio_band': 0, 'audio_channel': 'combined', 'audio_peak': false, 'time_offset': 5000, 'state': 'none', 'onstage': true, 'position': 1000, 'priority': 'normal', 'custom_properties': {}}
+  resp = callURL('/api/timeline', method='GET')
+  result = json_decode(resp).get('timelines')
+
+  for timeline in result:
+    if timeline.get('group_num') == group:
+      lookup_local_action('Timeline%s' % timeline.get('num')).call(arg)
+
+### Triggers
+
+def TriggerInformation():
+  # GET /api/trigger sample trigger object {'type': 'Startup', 'num': 1, 'name': 'Name', 'group': '#e18383', 'description': 'This is a trigger', 'conditions': [{'text': 'condition'}], 'actions': [{'text': 'action'}]}
+  resp = callURL('/api/trigger', method='GET')
+  result = json_decode(resp).get('triggers')
+
+  for trigger in sorted(result, key=lambda x: x['group_num']):
+    InitTrigger(trigger)
+
+def InitTrigger(trigger):
+  log(1, 'InitTrigger: %s %s' % (trigger.get('name'), trigger.get('group')))
+  
+  def handler(arg):
+    # POST /api/trigger sample payload {'num': 1, 'var': 'string', 'conditions': true} var/conditions are optional
+    req = {'num': trigger.get('num')}
+    callURL('/api/trigger', headers={'Content-Type': 'application/json'}, post=json_encode(req))
+
+  a = create_local_action('Trigger%s' % trigger.get('num'), handler, {'title': 'Trigger %s' % trigger.get('name'), 'group': 'Trigger Group %s' % trigger.get('group'), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 ### Status
 
 @local_action({'title': 'Poll', 'group': 'Status'})
 def StatusCheck():
+  if param_objects.get('scene'):
+    SceneStatus()
+  if param_objects.get('timeline'):
+    TimelineStatus()
+
   diff = (system_clock() - _lastReceive) / 1000.0 # in secs
 
   if diff > STATUS_CHECK_INTERVAL:
