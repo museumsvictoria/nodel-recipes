@@ -3,11 +3,11 @@
 
 ---
 
-`REV 1 2026.01.16 azuell`
+`REV 1.1 2026.01.16 azuell`
 
 * API version 11.0 (latest) Pharos Designer version 2.15.3 (latest)
 * Includes optional authentication using username/password
-* Automatically generates actions/events from desired objects (Scenes, Triggers, Timelines) sorted by groups
+* Automatically generates actions/events from desired objects (Scenes, Timelines, Triggers) sorted by groups
 * Updates events with state from Pharos as part of status checking
 
 **MANUAL**
@@ -16,7 +16,8 @@
 
 **REVISION HISTORY**
 
-* rev. 1: initial
+* rev. 1.1: Add 'toggle' Pharos action to scenes and timeline actions without arg given
+* rev. 1: Initial upload
 
 **TO DO**
 
@@ -173,7 +174,7 @@ def callURL(command, forceLog=False, method=None, query=None, headers=None, cont
         try:
             timestamp = system_clock()
             # get_url(url, method=None, query=None, username=None, password=None, headers=None, contentType=None, post=None, connectTimeout=10, readTimeout=15, fullResponse=False)
-            resp = get_url(url, method=method, query=query, headers=headers, contentType=contentType, post=post, connectTimeout=5, readTimeout=5, fullResponse=True)
+            resp = get_url(url, method=method, query=query, headers=headers, contentType=contentType, post=post, fullResponse=True)
 
             if not(resp.statusCode >= 200 and resp.statusCode < 300):  # 200 codes are success
               raise Exception(str(resp.statusCode) + " Error: " + str(resp.reasonPhrase))
@@ -274,15 +275,22 @@ def InitScene(scene):
   def handler(arg):
     # POST /api/scene sample payload {'action': 'start', 'num': 1, 'fade': 2.0, 'group': 1, 'same_group': false}  fade/group/same_group are optional
     req = {'num': scene.get('num')}
+
     if arg == 'On':
       req['action'] = 'start'
       e.emit('On')
       log(1, 'On. Starting %s' % req.get('num'))
 
-    if arg == 'Off':
+    elif arg == 'Off':
       req['action'] = 'release'
       e.emit('Off')
       log(1, 'Off. Releasing %s' % req.get('num'))
+
+    else:
+      # None or unknown arg given, so toggle the show state
+      req['action'] = 'toggle'
+      e.emit('On' if e.getArg() == 'Off' else 'Off')
+      log(1, 'Toggling %s' % req.get('num'))
     
     callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req))
 
@@ -350,15 +358,22 @@ def InitTimeline(timeline):
   def handler(arg):
     # POST /api/timeline sample payload {'action': 'start', 'num': 1, 'fade': 2.0, 'group': 'Group', 'same_group': false, 'rate': '0.1'} fade/group/same_group/rate are optional
     req = {'num': timeline.get('num')}
+
     if arg == 'On':
       req['action'] = 'start'
       e.emit('On')
       log(1, 'On. Starting %s' % req.get('num'))
 
-    if arg == 'Off':
+    elif arg == 'Off':
       req['action'] = 'release'
       e.emit('Off')
       log(1, 'Off. Releasing %s' % req.get('num'))
+
+    else:
+      # None or unknown arg given, so toggle the show state
+      req['action'] = 'toggle'
+      e.emit('On' if e.getArg() == 'Off' else 'Off')
+      log(1, 'Toggling %s' % req.get('num'))
     
     callURL('/api/timeline', headers={'Content-Type': 'application/json'}, post=json_encode(req))
 
