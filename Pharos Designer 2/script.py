@@ -3,7 +3,7 @@
 
 ---
 
-`REV 1.1 2026.01.16 azuell`
+`REV 1.2 2026.01.26 azuell`
 
 * API version 11.0 (latest) Pharos Designer version 2.15.3 (latest)
 * Includes optional authentication using username/password
@@ -16,12 +16,10 @@
 
 **REVISION HISTORY**
 
+* rev. 1.2: Add single button group control for objects (Scenes, Timelines, Triggers)
 * rev. 1.1: Add 'toggle' Pharos action to scenes and timeline actions without arg given
 * rev. 1: Initial upload
 
-**TO DO**
-
-* Call a group of objects at once. Currently gets a little overwhelmed with multiple API calls at once
 
 '''
 
@@ -39,6 +37,8 @@ STATUS_CHECK_INTERVAL = 75  # seconds
 _fullAddress = None
 
 _authenticationRequired = False
+_username = None
+_password = None
 
 _lastReceive = 0
 
@@ -113,8 +113,11 @@ def start():
 
   # Authenticate if required
   global _authenticationRequired
+  global _username, _password
   if param_login.get('required'):
     _authenticationRequired = True
+    _username = DEFAULT_USERNAME if is_blank((param_login or {}).get('username')) else param_login.get('username')
+    _password = DEFAULT_PASSWORD if is_blank((param_login or {}).get('password')) else param_login.get('password')
     GetAuthToken.call()
     console.info('Authentication timer starting now')
     _timer_auth.start()
@@ -156,43 +159,44 @@ def callURL(command, forceLog=False, method=None, query=None, headers=None, cont
     # Avoid simultaneous calls by tracking one at a time
     global _busy
     if _busy:
-        return False
+      return False
     _busy = True
 
     try:
-        url = 'http://%s%s' % (_fullAddress, command)
+      url = 'http://%s%s' % (_fullAddress, command)
 
-        if forceLog: console.info('req: url%s' % url)
-        else: log(1, 'req: url%s' % url)
+      if forceLog: console.info('req: url%s' % url)
+      else: info(1, 'req: url%s' % url)
 
-        # No access token if not required, or when authenticating
-        if (not _authenticationRequired) or (command != '/authenticate'):
-          if not headers:
-            headers = {}
-          headers['Authorization'] = 'Bearer %s' % local_event_AuthToken.getArg()
+      # No access token if not required, or when authenticating
+      if (not _authenticationRequired) or (command != '/authenticate'):
+        if not headers:
+          headers = {}
+        headers['Authorization'] = 'Bearer %s' % local_event_AuthToken.getArg()
+        headers['Connection'] = 'close'
 
-        try:
-            timestamp = system_clock()
-            # get_url(url, method=None, query=None, username=None, password=None, headers=None, contentType=None, post=None, connectTimeout=10, readTimeout=15, fullResponse=False)
-            resp = get_url(url, method=method, query=query, headers=headers, contentType=contentType, post=post, fullResponse=True)
+      try:
+        timestamp = system_clock()
+        # get_url(url, method=None, query=None, username=None, password=None, headers=None, contentType=None, post=None, connectTimeout=10, readTimeout=15, fullResponse=False)
+        resp = get_url(url, method=method, query=query, headers=headers, contentType=contentType, post=post, fullResponse=True)
+          
+        if not(resp.statusCode >= 200 and resp.statusCode < 300):  # 200 codes are success
+          raise Exception(str(resp.statusCode) + " Error: " + str(resp.reasonPhrase))
 
-            if not(resp.statusCode >= 200 and resp.statusCode < 300):  # 200 codes are success
-              raise Exception(str(resp.statusCode) + " Error: " + str(resp.reasonPhrase))
+      except Exception, e:
+        msg = 'get_url: failed (took %0.1f) with "%s"' % ((system_clock() - timestamp) / 1000.0, e)
 
-        except Exception, e:
-            msg = 'get_url: failed (took %0.1f) with "%s"' % ((system_clock() - timestamp) / 1000.0, e)
+        if forceLog: console.warn(msg)
+        else:        warn(1, msg)
 
-            if forceLog: console.warn(msg)
-            else:        warn(1, msg)
+        return False
+      
+      log(1, 'resp: %s' % resp.content)
 
-            return False
+      global _lastReceive
+      _lastReceive = system_clock()
 
-        log(1, 'resp: %s' % resp.content)
-
-        global _lastReceive
-        _lastReceive = system_clock()
-
-        return resp.content
+      return resp.content
     
     finally:
       _busy = False
@@ -203,8 +207,7 @@ def callURL(command, forceLog=False, method=None, query=None, headers=None, cont
 def GetAuthToken():
   # Only try to authenticate if it is required!
   if _authenticationRequired:
-    req =  {'username': param_login.get('username') if not is_blank((param_login or {}).get('username')) else DEFAULT_USERNAME, 
-            'password': param_login.get('password') if not is_blank((param_login or {}).get('password')) else DEFAULT_PASSWORD}
+    req = {'username': _username, 'password': _password}
     resp = callURL('/authenticate', method='POST', contentType='application/json', post=json_encode(req))
     result = json_decode(resp) 
 
@@ -255,8 +258,8 @@ def SceneInformation():
 
   for scene in sorted(result, key = lambda x: x['group_num']):
     InitScene(scene)
-  # for group in set([scene.get('group_num') for scene in result]):
-  #   InitSceneGroup(group)
+  for group in set([scene.get('group_num') for scene in result]):
+    InitSceneGroup(group)
 
 def InitSceneGroup(group):
   log(1, 'InitSceneGroup: %s' % group)
@@ -291,8 +294,9 @@ def InitScene(scene):
       req['action'] = 'toggle'
       e.emit('On' if e.getArg() == 'Off' else 'Off')
       log(1, 'Toggling %s' % req.get('num'))
-    
-    callURL('/api/scene', headers={'Content-Type': 'application/json'}, post=json_encode(req))
+
+    callURL('/api/scene', method='POST', contentType='application/json', post=json_encode(req))
+
 
   a = create_local_action('Scene%s' % scene.get('num'), handler, {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
@@ -338,8 +342,8 @@ def TimelineInformation():
 
   for timeline in sorted(result, key = lambda x: x['group_num']):
     InitTimeline(timeline)
-  # for group in set([timeline.get('group_num') for timeline in result]):
-  #   InitTimelineGroup(group)
+  for group in set([timeline.get('group_num') for timeline in result]):
+    InitTimelineGroup(group)
 
 def InitTimelineGroup(group):
   log(1, 'InitTimelineGroup: %s' % group)
@@ -375,7 +379,7 @@ def InitTimeline(timeline):
       e.emit('On' if e.getArg() == 'Off' else 'Off')
       log(1, 'Toggling %s' % req.get('num'))
     
-    callURL('/api/timeline', headers={'Content-Type': 'application/json'}, post=json_encode(req))
+    callURL('/api/timeline', method='POST', contentType='application/json', post=json_encode(req))
 
   a = create_local_action('Timeline%s' % timeline.get('num'), handler, {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
@@ -413,6 +417,17 @@ def TriggerInformation():
 
   for trigger in sorted(result, key=lambda x: x['group_num']):
     InitTrigger(trigger)
+  for group in set([trigger.get('group') for trigger in result]):
+    InitTriggerGroup(group)
+
+def InitTriggerGroup(group):
+  log(1, 'InitTriggerGroup: %s' % group)
+
+  def handler(arg):
+    SelectTriggers(group, arg)
+    StatusCheck.call()
+
+  a = create_local_action('TriggerGroup%s' % group, handler, {'title': 'Trigger Group: %s' % group, 'group': 'Trigger Group %s' % group, 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 def InitTrigger(trigger):
   log(1, 'InitTrigger: %s %s' % (trigger.get('name'), trigger.get('group')))
@@ -420,9 +435,19 @@ def InitTrigger(trigger):
   def handler(arg):
     # POST /api/trigger sample payload {'num': 1, 'var': 'string', 'conditions': true} var/conditions are optional
     req = {'num': trigger.get('num')}
-    callURL('/api/trigger', headers={'Content-Type': 'application/json'}, post=json_encode(req))
+    callURL('/api/trigger', method='POST', contentType='application/json', post=json_encode(req))
+    StatusCheck.call()
 
   a = create_local_action('Trigger%s' % trigger.get('num'), handler, {'title': 'Trigger %s' % trigger.get('name'), 'group': 'Trigger Group %s' % trigger.get('group'), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
+def SelectTriggers(group, arg):
+  # GET /api/trigger
+  resp = callURL('/api/trigger', method='GET')
+  result = json_decode(resp).get('triggers')
+
+  for trigger in result:
+    if trigger.get('group') == group:
+      lookup_local_action('Trigger%s' % trigger.get('num')).call(arg)
 
 ### Status
 
@@ -471,6 +496,14 @@ def FormatPeriod(date, as_instant=False):
 ### Logging
 
 local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 'desc': 'Use this to ramp up the logging (with indentation)', 'schema': {'type': 'integer'}})
+
+def info(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.info(('  ' * level) + msg)
+
+def error(level, msg):
+  if local_event_LogLevel.getArg() >= level:
+    console.error(('  ' * level) + msg)
 
 def warn(level, msg):
   if local_event_LogLevel.getArg() >= level:
