@@ -20,7 +20,7 @@
     * Add (default) two second delay for status checks after an action is called
     * Replace hex codes with colour names for trigger groups
 * rev. 1.2: Add single button group control for objects (Scenes, Timelines, Triggers)
-* rev. 1.1: Add 'toggle' Pharos action to scenes and timeline actions without arg given
+* rev. 1.1: <s>Add 'toggle' Pharos action to scenes and timeline actions without arg given</s> removed rev. 1.3
 * rev. 1: Initial upload
 
 
@@ -269,8 +269,7 @@ def SceneInformation():
 
 def InitSceneGroup(group):
   log(1, 'InitSceneGroup: %s' % group)
-  e = create_local_event('SceneGroup%s' % group, {'title': 'Scene GROUP: %s' % group, 'group': 'Scene Group %s' % group, 'schema': {'type': 'string', 'enum': SCENE_STATES}})
-
+  
   def handler(arg):
     SelectScenes(group, arg)
     call(SceneStatus, delay=DELAY)
@@ -288,10 +287,8 @@ def InitScene(scene):
       if arg not in SCENE_ACTIONS:
         warn(1, 'Invalid scene argument (%s) given. Request not sent' % arg)
         return
-
     else:
-      # No arg given, toggle
-      arg = 'toggle'
+      warn(1, 'No argument given. Request not sent')
 
     req = {'num': scene.get('num'), 'action': arg}
     
@@ -343,8 +340,7 @@ def TimelineInformation():
 
 def InitTimelineGroup(group):
   log(1, 'InitTimelineGroup: %s' % group)
-  e = create_local_event('TimelineGroup%s' % group, {'title': 'Timeline GROUP: %s' % group, 'group': 'Timeline Group %s' % group, 'schema': {'type': 'string', 'enum': TIMELINE_STATES}})
-
+  
   def handler(arg):
     SelectTimelines(group, arg)
     call(TimelineStatus, delay=DELAY)
@@ -362,10 +358,8 @@ def InitTimeline(timeline):
       if arg not in TIMELINE_ACTIONS:
         warn(1, 'Invalid timeline argument (%s) given. Request not sent' % arg)
         return
-
     else:
-      # No arg given, toggle
-      arg = 'toggle'
+      warn(1, 'No argument given. Request not sent')
 
     req = {'num': timeline.get('num'), 'action': arg}
 
