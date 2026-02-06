@@ -3,7 +3,7 @@
 
 ---
 
-`REV 1.3 2026.02.05 azuell`
+`REV 1.4 2026.02.06 azuell`
 
 * API version 11.0 (latest) Pharos Designer version 2.15.3 (latest)
 * Includes optional authentication using username/password
@@ -16,6 +16,9 @@
 
 **REVISION HISTORY**
 
+* rev. 1.4: Add full suite of variables to scene and timeline local action arguments
+    * Rework group actions
+    * TO DO - Dashboard friendliness
 * rev. 1.3: For scenes and timelines, allow for local action arguments to reflect possible actions, and local event arguments to reflect possible states
     * Add (default) two second delay for status checks after an action is called
     * Replace hex codes with colour names for trigger groups
@@ -106,12 +109,12 @@ def start():
 
   # Get ip address
   global _fullAddress
-  if is_blank((param_playerConfig or {}).get('ipAddress')):
+  if 'ipAddress' not in param_playerConfig:
     console.error('No Address has been specified, nothing to do!')
     return
   else:
     ipAddress = param_playerConfig.get('ipAddress')
-    port = param_playerConfig.get('port') if not is_blank((param_playerConfig or {}).get('port')) else DEFAULT_PORT
+    port = DEFAULT_PORT if 'port' not in param_playerConfig else param_playerConfig.get('port')
     _fullAddress = str(ipAddress) + ':' + str(port)
 
   # Authenticate if required
@@ -119,8 +122,8 @@ def start():
   global _username, _password
   if param_login.get('required'):
     _authenticationRequired = True
-    _username = DEFAULT_USERNAME if is_blank((param_login or {}).get('username')) else param_login.get('username')
-    _password = DEFAULT_PASSWORD if is_blank((param_login or {}).get('password')) else param_login.get('password')
+    _username = DEFAULT_USERNAME if 'username' not in param_login else param_login.get('username')
+    _password = DEFAULT_PASSWORD if 'password' not in param_login else param_login.get('password')
     GetAuthToken.call()
     console.info('Authentication timer starting now')
     _timer_auth.start()
@@ -141,11 +144,11 @@ def start():
   ControllerInformation.call()
 
   # Generate scene, trigger and timeline actions and events
-  if (param_objects or {}).get('scene'):
+  if 'scene' in param_objects and param_objects.get('scene'):
     SceneInformation()
-  if (param_objects or {}).get('trigger'):
+  if 'trigger' in param_objects and param_objects.get('trigger'):
     TriggerInformation()
-  if (param_objects or {}).get('timeline'):
+  if 'timeline' in param_objects and param_objects.get('timeline'):
     TimelineInformation()
 
   # Start status polling
@@ -182,7 +185,7 @@ def callURL(command, forceLog=False, method=None, query=None, headers=None, cont
         timestamp = system_clock()
         # get_url(url, method=None, query=None, username=None, password=None, headers=None, contentType=None, post=None, connectTimeout=10, readTimeout=15, fullResponse=False)
         resp = get_url(url, method=method, query=query, headers=headers, contentType=contentType, post=post, fullResponse=True)
-          
+
         if not(resp.statusCode >= 200 and resp.statusCode < 300):  # 200 codes are success
           raise Exception(str(resp.statusCode) + " Error: " + str(resp.reasonPhrase))
 
@@ -271,40 +274,53 @@ def InitSceneGroup(group):
   log(1, 'InitSceneGroup: %s' % group)
   
   def handler(arg):
-    SelectScenes(group, arg)
-    call(SceneStatus, delay=DELAY)
-
-  a = create_local_action('SceneGroup%s' % group, handler, {'title': 'Scene GROUP: %s' % group, 'group': 'Scene Group %s' % group, 'schema': {'type': 'string', 'enum': SCENE_ACTIONS}})
+    if arg:
+      # In a group only need to call SceneStatus once here and not at the scene level
+      arg['status'] = False
+      SelectScenes(group, arg)
+      call(SceneStatus, delay=DELAY if 'fade' not in arg else arg.get('fade'))
+    else:
+      warn(1, 'No argument given. Doing nothing')
+      return
+    
+  a = create_local_action('SceneGroup%s' % group, handler, {'title': 'Scene GROUP: %s' % group, 'group': 'Scene Group %s' % group, 'order': next_seq(),
+    'schema': {'type': 'object', 'title': 'Scene GROUP: %s' % group, 'properties': {
+      'action': {'title': 'Action', 'type': 'string', 'enum': ['start', 'release', 'toggle'], 'order': 1},
+      'fade': {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0', 'order': 2}}}})
 
 def InitScene(scene):
   log(1, 'InitScene: %s %s' % (scene.get('name'), scene.get('group_num')))
-  e = create_local_event('Scene%s' % scene.get('num'), {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'schema': {'type': 'string', 'enum': SCENE_STATES}})
+  e = create_local_event('Scene%s' % scene.get('num'), {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': SCENE_STATES}})
 
   def handler(arg):
     # POST /api/scene sample payload {'action': 'start', 'num': 1, 'fade': 2.0, 'group': 1, 'same_group': false}  fade/group/same_group are optional
-    
+
     if arg:
-      if arg not in SCENE_ACTIONS:
-        warn(1, 'Invalid scene argument (%s) given. Request not sent' % arg)
-        return
+      arg['num'] = scene.get('num')
+
+      callURL('/api/scene', method='POST', contentType='application/json', post=json_encode(arg))
+      if 'status' not in arg or arg.get('status'): call(SceneStatus, delay=DELAY if 'fade' not in arg else arg.get('fade'))
+
     else:
-      warn(1, 'No argument given. Request not sent')
+      warn(1, 'No argument given. Doing nothing')
+      return
 
-    req = {'num': scene.get('num'), 'action': arg}
-    
-    callURL('/api/scene', method='POST', contentType='application/json', post=json_encode(req))
-    call(SceneStatus, delay=DELAY)
-
-  a = create_local_action('Scene%s' % scene.get('num'), handler, {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'schema': {'type': 'string', 'enum': SCENE_ACTIONS}})
+  a = create_local_action('Scene%s' % scene.get('num'), handler, {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(), 
+    'schema': {'type': 'object', 'title': 'Scene: %s' % scene.get('name'), 'properties': {
+      'action': {'title': 'Action', 'type': 'string', 'enum': SCENE_ACTIONS, 'order': 1},
+      'fade': {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0', 'order': 2},
+      'group': {'title': 'Group (Optional)', 'type': 'string', 'hint': 'Scene group name or number. Use ! to exclude', 'order': 3},
+      'same_group': {'title': 'Same Group (Optional)', 'type': 'boolean', 'order': 4}}}})
 
 def SceneStatus():
   # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
   resp = callURL('/api/scene', method='GET')
-  result = json_decode(resp).get('scenes')
+  if resp:
+    result = json_decode(resp).get('scenes')
 
-  for scene in result:
-    state = scene.get('state')
-    lookup_local_event('Scene%s' % scene.get('num')).emit(state)
+    for scene in result:
+      state = scene.get('state')
+      lookup_local_event('Scene%s' % scene.get('num')).emit(state)
 
 def AllScenes(arg):
   # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
@@ -342,40 +358,58 @@ def InitTimelineGroup(group):
   log(1, 'InitTimelineGroup: %s' % group)
   
   def handler(arg):
-    SelectTimelines(group, arg)
-    call(TimelineStatus, delay=DELAY)
 
-  a = create_local_action('TimelineGroup%s' % group, handler, {'title': 'Timeline GROUP: %s' % group, 'group': 'Timeline Group %s' % group, 'schema': {'type': 'string', 'enum': TIMELINE_ACTIONS}})
+    if arg:
+      # In a group only need to call TimelineStatus once here and not at the timeline level
+      arg['status'] = False
+      SelectTimelines(group, arg)
+      call(TimelineStatus, delay=DELAY if 'fade' not in arg else arg.get('fade'))
+    else:
+      warn(1, 'No argument given. Doing nothing')
+      return
 
+  a = create_local_action('TimelineGroup%s' % group, handler, {'title': 'Timeline GROUP: %s' % group, 'group': 'Timeline Group %s' % group, 'order': next_seq(),
+    'schema': {'type': 'object', 'title': 'Timeline GROUP: %s' % group, 'properties': {
+      'action': {'title': 'Action', 'type': 'string', 'enum': ['start', 'release', 'toggle', 'pause', 'resume'], 'order': 1},
+      'fade': {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0', 'order': 2}}}})
+  
 def InitTimeline(timeline):
   log(1, 'InitTimeline: %s %s' % (timeline.get('name'), timeline.get('group_num')))
-  e = create_local_event('Timeline%s' % timeline.get('num'), {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'schema': {'type': 'string', 'enum': TIMELINE_STATES}})
+  e = create_local_event('Timeline%s' % timeline.get('num'), {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': TIMELINE_STATES}})
 
   def handler(arg):
     # POST /api/timeline sample payload {'action': 'start', 'num': 1, 'fade': 2.0, 'group': 'Group', 'same_group': false, 'rate': '0.1'} fade/group/same_group/rate are optional
     
     if arg:
-      if arg not in TIMELINE_ACTIONS:
-        warn(1, 'Invalid timeline argument (%s) given. Request not sent' % arg)
-        return
+      arg['num'] = timeline.get('num')
+
+      callURL('/api/timeline', method='POST', contentType='application/json', post=json_encode(arg))
+      if 'status' not in arg or arg.get('status'): call(TimelineStatus, delay=DELAY)
+
     else:
       warn(1, 'No argument given. Request not sent')
+      return
 
-    req = {'num': timeline.get('num'), 'action': arg}
-
-    callURL('/api/timeline', method='POST', contentType='application/json', post=json_encode(req))
-    call(TimelineStatus, delay=DELAY)
-
-  a = create_local_action('Timeline%s' % timeline.get('num'), handler, {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'schema': {'type': 'string', 'enum': TIMELINE_ACTIONS}})
-
+  a = create_local_action('Timeline%s' % timeline.get('num'), handler, {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(),
+    'schema': {'type': 'object', 'title': 'Timeline: %s' % timeline.get('num'), 'properties': {
+      'action': {'title': 'Action', 'type': 'string', 'enum': TIMELINE_ACTIONS, 'order': 1},
+      'fade': {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0', 'order': 2},
+      'group': {'title': 'Group (Optional)', 'type': 'string', 'hint': 'Scene group name or number. Use ! to exclude', 'order': 3},
+      'same_group': {'title': 'Same Group (Optional)', 'type': 'boolean', 'order': 4},
+      'rate': {'title': 'Rate (set_rate)', 'type': 'string', 'hint': 'required for set_rate', 'order': 5},
+      'position': {'title': 'Position (set_position)', 'type': 'string', 'hint': 'only one required for set_position', 'order': 6},
+      'time': {'title': 'Time (set_position)', 'type': 'number', 'hint': 'only one required for set_position', 'order': 7},
+      'flag': {'title': 'Flag (set_position)', 'type': 'string', 'hint': 'only one required for set_position', 'order': 8}}}})
+  
 def TimelineStatus():
   # GET /api/timeline sample timeline object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'length': 10000, 'source_bus': 'internal', 'timecode_format': 'SMPTE30', 'audio_band': 0, 'audio_channel': 'combined', 'audio_peak': false, 'time_offset': 5000, 'state': 'none', 'onstage': true, 'position': 1000, 'priority': 'normal', 'custom_properties': {}}
   resp = callURL('/api/timeline', method='GET')
-  result = json_decode(resp).get('timelines')
+  if resp:
+    result = json_decode(resp).get('timelines')
 
-  for timeline in result:
-    state = timeline.get('state')
-    lookup_local_event('Timeline%s' % timeline.get('num')).emit(state)
+    for timeline in result:
+      state = timeline.get('state')
+      lookup_local_event('Timeline%s' % timeline.get('num')).emit(state)
 
 def SelectTimelines(group, arg):
   # GET /api/timeline sample timeline object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'length': 10000, 'source_bus': 'internal', 'timecode_format': 'SMPTE30', 'audio_band': 0, 'audio_channel': 'combined', 'audio_peak': false, 'time_offset': 5000, 'state': 'none', 'onstage': true, 'position': 1000, 'priority': 'normal', 'custom_properties': {}}
@@ -408,7 +442,7 @@ def InitTriggerGroup(group):
     call(lambda: StatusCheck.call(), delay=DELAY)
 
   group_name = TRIGGER_GROUP_COLOURS[group if group else 'none']
-  a = create_local_action('TriggerGroup%s' % group, handler, {'title': 'Trigger GROUP: %s' % group_name, 'group': 'Trigger Group %s' % group_name})
+  a = create_local_action('TriggerGroup%s' % group, handler, {'title': 'Trigger GROUP: %s' % group_name, 'group': 'Trigger Group %s' % group_name, 'order': next_seq()})
 
 def InitTrigger(trigger):
   log(1, 'InitTrigger: %s %s' % (trigger.get('name'), trigger.get('group')))
@@ -420,7 +454,7 @@ def InitTrigger(trigger):
     call(lambda: StatusCheck.call(), delay=DELAY)
 
   group_name = TRIGGER_GROUP_COLOURS[trigger.get('group') if trigger.get('group') else 'none']
-  a = create_local_action('Trigger%s' % trigger.get('num'), handler, {'title': 'Trigger %s' % trigger.get('name'), 'group': 'Trigger Group %s' % group_name})
+  a = create_local_action('Trigger%s' % trigger.get('num'), handler, {'title': 'Trigger %s' % trigger.get('name'), 'group': 'Trigger Group %s' % group_name, 'order': next_seq()})
 
 def SelectTriggers(group, arg):
   # GET /api/trigger
