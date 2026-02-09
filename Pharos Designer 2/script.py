@@ -1,9 +1,11 @@
 '''
 **Pharos Designer** HTTP API v11
 
+[Github Link](https://github.com/azuell/nodel-recipes/blob/features_pharos/Pharos%20Designer%202/script.py)
+
 ---
 
-`REV 1.4 2026.02.06 azuell`
+`REV 1.41 2026.02.09 azuell + dargs`
 
 * API version 11.0 (latest) Pharos Designer version 2.15.3 (latest)
 * Includes optional authentication using username/password
@@ -16,9 +18,9 @@
 
 **REVISION HISTORY**
 
+* rev. 1.41: dargs adding back in On/Off events for scenes and timelines (Scene%sOnOff/Timeline%sOnOff) and Debug +/- actions
 * rev. 1.4: Add full suite of variables to scene and timeline local action arguments
     * Rework group actions
-    * TO DO - Dashboard friendliness
 * rev. 1.3: For scenes and timelines, allow for local action arguments to reflect possible actions, and local event arguments to reflect possible states
     * Add (default) two second delay for status checks after an action is called
     * Replace hex codes with colour names for trigger groups
@@ -146,11 +148,11 @@ def start():
   # Generate scene, trigger and timeline actions and events
   if 'scene' in param_objects and param_objects.get('scene'):
     SceneInformation()
-  if 'trigger' in param_objects and param_objects.get('trigger'):
-    TriggerInformation()
   if 'timeline' in param_objects and param_objects.get('timeline'):
     TimelineInformation()
-
+  if 'trigger' in param_objects and param_objects.get('trigger'):
+    TriggerInformation()
+  
   # Start status polling
   _timer_status.start()
 
@@ -162,50 +164,50 @@ _timer_status = Timer(lambda: StatusCheck.call(), STATUS_CHECK_INTERVAL, 10, sto
 _busy = False
 
 def callURL(command, forceLog=False, method=None, query=None, headers=None, contentType=None, post=None):
-    # Avoid simultaneous calls by tracking one at a time
-    global _busy
-    if _busy:
-      return False
-    _busy = True
+  # Avoid simultaneous calls by tracking one at a time
+  global _busy
+  if _busy:
+    return False
+  _busy = True
+
+  try:
+    url = 'http://%s%s' % (_fullAddress, command)
+
+    if forceLog: console.info('req: url%s' % url)
+    else: info(1, 'req: url%s' % url)
+
+    # No access token if not required, or when authenticating
+    if (not _authenticationRequired) or (command != '/authenticate'):
+      if not headers:
+        headers = {}
+      headers['Authorization'] = 'Bearer %s' % local_event_AuthToken.getArg()
+      headers['Connection'] = 'close'
 
     try:
-      url = 'http://%s%s' % (_fullAddress, command)
+      timestamp = system_clock()
+      # get_url(url, method=None, query=None, username=None, password=None, headers=None, contentType=None, post=None, connectTimeout=10, readTimeout=15, fullResponse=False)
+      resp = get_url(url, method=method, query=query, headers=headers, contentType=contentType, post=post, fullResponse=True)
 
-      if forceLog: console.info('req: url%s' % url)
-      else: info(1, 'req: url%s' % url)
+      if not(resp.statusCode >= 200 and resp.statusCode < 300):  # 200 codes are success
+        raise Exception(str(resp.statusCode) + " Error: " + str(resp.reasonPhrase))
 
-      # No access token if not required, or when authenticating
-      if (not _authenticationRequired) or (command != '/authenticate'):
-        if not headers:
-          headers = {}
-        headers['Authorization'] = 'Bearer %s' % local_event_AuthToken.getArg()
-        headers['Connection'] = 'close'
+    except Exception, e:
+      msg = 'get_url: failed (took %0.1f) with "%s"' % ((system_clock() - timestamp) / 1000.0, e)
 
-      try:
-        timestamp = system_clock()
-        # get_url(url, method=None, query=None, username=None, password=None, headers=None, contentType=None, post=None, connectTimeout=10, readTimeout=15, fullResponse=False)
-        resp = get_url(url, method=method, query=query, headers=headers, contentType=contentType, post=post, fullResponse=True)
+      if forceLog: console.warn(msg)
+      else:        warn(1, msg)
 
-        if not(resp.statusCode >= 200 and resp.statusCode < 300):  # 200 codes are success
-          raise Exception(str(resp.statusCode) + " Error: " + str(resp.reasonPhrase))
-
-      except Exception, e:
-        msg = 'get_url: failed (took %0.1f) with "%s"' % ((system_clock() - timestamp) / 1000.0, e)
-
-        if forceLog: console.warn(msg)
-        else:        warn(1, msg)
-
-        return False
+      return False
       
-      log(1, 'resp: %s' % resp.content)
+    log(1, 'resp: %s' % resp.content)
 
-      global _lastReceive
-      _lastReceive = system_clock()
+    global _lastReceive
+    _lastReceive = system_clock()
 
-      return resp.content
+    return resp.content
     
-    finally:
-      _busy = False
+  finally:
+    _busy = False
 
 ### Information and Authentication
 
@@ -265,7 +267,7 @@ def SceneInformation():
   resp = callURL('/api/scene', method='GET')
   result = json_decode(resp).get('scenes')
 
-  for scene in sorted(result, key = lambda x: x['group_num']):
+  for scene in sorted(result, key = lambda x: x['num']):
     InitScene(scene)
   for group in set([scene.get('group_num') for scene in result]):
     InitSceneGroup(group)
@@ -291,6 +293,8 @@ def InitSceneGroup(group):
 def InitScene(scene):
   log(1, 'InitScene: %s %s' % (scene.get('name'), scene.get('group_num')))
   e = create_local_event('Scene%s' % scene.get('num'), {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': SCENE_STATES}})
+  e = create_local_event('Scene%sOnOff' % scene.get('num'), {'title': 'Scene: %s On Off Status' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+
 
   def handler(arg):
     # POST /api/scene sample payload {'action': 'start', 'num': 1, 'fade': 2.0, 'group': 1, 'same_group': false}  fade/group/same_group are optional
@@ -322,6 +326,16 @@ def SceneStatus():
       state = scene.get('state')
       lookup_local_event('Scene%s' % scene.get('num')).emit(state)
 
+      # Update on/off state
+      if state == 'none':
+        arg = 'Off'
+      elif state == 'started':
+        arg = 'On'
+      else:
+        warn(1, 'SceneStatus: unknown state %s' % state)
+        arg = 'Off'
+      lookup_local_event('Scene%sOnOff' % scene.get('num')).emit(arg)
+
 def AllScenes(arg):
   # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
   resp = callURL('/api/scene', method='GET')
@@ -349,7 +363,7 @@ def TimelineInformation():
   resp = callURL('/api/timeline', method='GET')
   result = json_decode(resp).get('timelines')
 
-  for timeline in sorted(result, key = lambda x: x['group_num']):
+  for timeline in sorted(result, key = lambda x: x['num']):
     InitTimeline(timeline)
   for group in set([timeline.get('group_num') for timeline in result]):
     InitTimelineGroup(group)
@@ -376,6 +390,7 @@ def InitTimelineGroup(group):
 def InitTimeline(timeline):
   log(1, 'InitTimeline: %s %s' % (timeline.get('name'), timeline.get('group_num')))
   e = create_local_event('Timeline%s' % timeline.get('num'), {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': TIMELINE_STATES}})
+  e = create_local_event('Timeline%sOnOff' % timeline.get('num'), {'title': 'Timeline: %s On Off Status' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': ["On", "Off"]}})
 
   def handler(arg):
     # POST /api/timeline sample payload {'action': 'start', 'num': 1, 'fade': 2.0, 'group': 'Group', 'same_group': false, 'rate': '0.1'} fade/group/same_group/rate are optional
@@ -410,6 +425,17 @@ def TimelineStatus():
     for timeline in result:
       state = timeline.get('state')
       lookup_local_event('Timeline%s' % timeline.get('num')).emit(state)
+      
+      # Update on/off state
+      if state == 'none' or state == 'released' or state == 'holding_at_end' or state == 'paused':
+        arg = 'Off'
+      elif state == 'running':
+        arg = 'On'
+      else:
+        warn(1, 'TimelineStatus: unknown state %s' % state)
+        arg = 'Off'
+      lookup_local_event('Timeline%sOnOff' % timeline.get('num')).emit(arg)
+    
 
 def SelectTimelines(group, arg):
   # GET /api/timeline sample timeline object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'length': 10000, 'source_bus': 'internal', 'timecode_format': 'SMPTE30', 'audio_band': 0, 'audio_channel': 'combined', 'audio_peak': false, 'time_offset': 5000, 'state': 'none', 'onstage': true, 'position': 1000, 'priority': 'normal', 'custom_properties': {}}
@@ -511,7 +537,15 @@ def FormatPeriod(date, as_instant=False):
 
 ### Logging
 
-local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 'desc': 'Use this to ramp up the logging (with indentation)', 'schema': {'type': 'integer'}})
+local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 100000 + next_seq(), 'desc': 'Use this to ramp up the logging (with indentation)', 'schema': {'type': 'integer'}})
+
+@local_action({'group': 'Debug', 'title': '+', 'order': 100000 + next_seq() })
+def increaseLogLevel():
+  local_event_LogLevel.emit((local_event_LogLevel.getArg() or 0) + 1)
+
+@local_action({'group': 'Debug', 'title': '-', 'order': 100000 + next_seq() })
+def decreaseLogLevel():
+  local_event_LogLevel.emit((local_event_LogLevel.getArg() or 0) - 1)
 
 def info(level, msg):
   if local_event_LogLevel.getArg() >= level:
