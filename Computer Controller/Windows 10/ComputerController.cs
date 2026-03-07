@@ -11,6 +11,8 @@ using System.Management;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
+// rev. 5: toggleable screenshot timestamp overlay
+//
 // rev. 4: gracefully handles missing audio hardware
 //   - if missing at start, will check every min for presence
 //   - if found but then goes missing/problematic, will gracefully shutdown avoiding
@@ -21,6 +23,7 @@ using System.Collections.Generic;
 class ComputerController
 {
     static bool s_running = true;
+    static bool s_showTimestamp = true;
 
     static void Main(string[] args)
     {
@@ -58,6 +61,7 @@ class ComputerController
         Console.WriteLine("// set-volume");
         Console.WriteLine("// get-volumescalar (0.0 - 100.0)");
         Console.WriteLine("// set-volumescalar");
+        Console.WriteLine("// set-timestamp (true or false)");
         Console.WriteLine("// q");
     }
 
@@ -120,6 +124,11 @@ class ComputerController
                     Audio.VolumeScalar = value;
                     s_volumeScalar = value;
                     EmitVolumeScalar();
+                    break;
+
+                case "set-timestamp":
+                    arg = parts[1];
+                    s_showTimestamp = arg == "true";
                     break;
 
                 case "q":
@@ -507,6 +516,20 @@ class ComputerController
                 screenshotGraphics.CopyFromScreen(screen.Bounds.X, screen.Bounds.Y, 0, 0, screen.Bounds.Size, CopyPixelOperation.SourceCopy);
 
                 Image newImage = ScaleImage(screenshot, 400, 400);
+
+                // burn timestamp into image (toggleable)
+                if (s_showTimestamp)
+                {
+                    using (var g = Graphics.FromImage(newImage))
+                    {
+                        var text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                        using (var font = new Font("Consolas", 10, FontStyle.Bold))
+                        {
+                            g.DrawString(text, font, Brushes.Black, 5, newImage.Height - 19);
+                            g.DrawString(text, font, Brushes.White, 4, newImage.Height - 20);
+                        }
+                    }
+                }
 
                 // Other types
                 // screenshot.Save("screen" + i + ".jpg", GetEncoderInfo("image/jpeg"), p);
