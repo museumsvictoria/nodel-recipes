@@ -1,7 +1,7 @@
 '''
 **PC agent** with native Windows operations, tested with Windows 10 but might work on older or newer versions. 
 
-`REV 4.20251028`
+`REV 5.20260302`
 
 Includes:
 
@@ -14,13 +14,16 @@ Includes:
 
 **REVISION HISTORY**
 
-* rev. 4: add ability to lock device 
+* rev. 5: add screenshot timestamp overlay toggle
+* rev. 4: add ability to lock device
 
 '''
 
 DEFAULT_FREESPACEMB = 0.5
 
 param_FreeSpaceThreshold = Parameter({ 'title': 'Freespace threshold (GB)', 'schema': { 'type': 'integer', 'hint': '(default %s)' % DEFAULT_FREESPACEMB }})
+
+param_ScreenshotTimestamp = Parameter({ 'title': 'Show timestamp on screenshots', 'group': 'Screenshots', 'schema': { 'type': 'boolean', 'hint': '(default true)' }})
 
 # <!-- CPU
 
@@ -228,6 +231,7 @@ def controller_started():
   _controller.send('get-mute')
   _controller.send('get-volume')
   _controller.send('get-volumescalar')
+  _controller.send('set-timestamp %s' % ('true' if param_ScreenshotTimestamp != False else 'false'))
 
 _controller = Process([ '%s\\ComputerController.exe' % _node.getRoot().getAbsolutePath() ], 
                      stdout=controller_feedback, 
