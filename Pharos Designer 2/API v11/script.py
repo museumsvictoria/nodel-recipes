@@ -1,13 +1,11 @@
 '''
 **Pharos Designer** HTTP API v11
 
-[Github Link](https://github.com/azuell/nodel-recipes/blob/features_pharos/Pharos%20Designer%202/script.py)
-
 ---
 
 `REV 1.41 2026.02.09 azuell + dargs`
 
-* API version 11.0 (latest) Pharos Designer version 2.15.3 (latest)
+* API version 11.0 Pharos Designer version 2.15.3 
 * Includes optional authentication using username/password
 * Automatically generates actions/events from desired objects (Scenes, Timelines, Triggers) sorted by groups
 * Updates events with state from Pharos as part of status checking, with default 2s delay for fade
@@ -145,7 +143,7 @@ def start():
   ProjectInformation.call()
   ControllerInformation.call()
 
-  # Generate scene, trigger and timeline actions and events
+  # Generate scene, timeline and trigger actions and events
   if 'scene' in param_objects and param_objects.get('scene'):
     SceneInformation()
   if 'timeline' in param_objects and param_objects.get('timeline'):
@@ -236,7 +234,7 @@ def ProjectInformation():
 def ControllerInformation():
   resp = callURL('/api/system', method='GET')
   result = json_decode(resp)
-  
+
   local_event_ControllerHardwareType.emit(result.get('hardware_type'))
   local_event_ControllerChannelCapacity.emit(result.get('channel_capacity'))
   local_event_ControllerSerialNumber.emit(result.get('serial_number'))
