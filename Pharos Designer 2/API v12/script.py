@@ -3,7 +3,7 @@
 
 ---
 
-`REV 1.42 2026.05.19 azuell + dargs`
+`REV 1.43 2026.05.22 azuell + dargs`
 
 * API version 12.0 (latest) Pharos Designer version 2.16.2 (latest)
 * Includes optional authentication using username/password
@@ -16,6 +16,10 @@
 
 **REVISION HISTORY**
 
+* rev. 1.43: Bug fixes - no authentication required, no status if no objects
+    * Change action/event names to include Pharos name
+    * Include all infomation in object events
+    * Condense project/controller information to single event
 * rev. 1.42: Pharos Designer update and new API - no change to script
 * rev. 1.41: dargs adding back in On/Off events for scenes and timelines (Scene%sOnOff/Timeline%sOnOff) and Debug +/- actions
 * rev. 1.4: Add full suite of variables to scene and timeline local action arguments
@@ -52,51 +56,53 @@ _lastReceive = 0
 param_disabled = Parameter({'title': 'Disable this node', 'schema': {'type': 'boolean'}})
 
 param_playerConfig = Parameter({'title': 'Pharos Config', 'schema': {'type': 'object', 'properties': {
-  'ipAddress': {'title': 'IP Address', 'type': 'string', 'hint': 'ip', 'order': 1},
-  'port': {'title': 'Port', 'type': 'string', 'hint': DEFAULT_PORT, 'order': 2}}}})
+  'ipAddress': {'title': 'IP Address', 'type': 'string',  'hint': 'ip',          'order': 1},
+  'port':      {'title': 'Port',       'type': 'string',  'hint': DEFAULT_PORT,  'order': 2}}}})
 
 param_login = Parameter({'title': 'Pharos Login', 'schema': {'type': 'object', 'properties': {
-  'required': {'title': 'Require authentication?', 'type': 'boolean', 'order': 1},
-  'username': {'title': 'Username', 'type': 'string', 'hint': DEFAULT_USERNAME, 'order': 2},
-  'password': {'title': 'Password', 'type': 'string', 'hint': DEFAULT_PASSWORD, 'order': 3}}}})
+  'required': {'title': 'Require Authentication?', 'type': 'boolean', 'order': 1},
+  'username': {'title': 'Username',                'type': 'string',  'hint': DEFAULT_USERNAME, 'order': 2},
+  'password': {'title': 'Password',                'type': 'string',  'hint': DEFAULT_PASSWORD, 'order': 3}}}})
 
 param_objects = Parameter({'title': 'Pharos Objects', 'schema': {'type': 'object', 'properties': {
-  'scene': {'title': 'Scenes', 'type': 'boolean', 'order': 1},
+  'scene':    {'title': 'Scenes',    'type': 'boolean', 'order': 1},
   'timeline': {'title': 'Timelines', 'type': 'boolean', 'order': 2},
-  'trigger': {'title': 'Triggers', 'type': 'boolean', 'order': 3}}}})
+  'trigger':  {'title': 'Triggers',  'type': 'boolean', 'order': 3}}}})
 
 local_event_AuthToken = LocalEvent({'group': 'Authentication', 'schema': {'type': 'string'}})
 
-local_event_ProjectName = LocalEvent({'group': 'Project Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ProjectAuthor = LocalEvent({'group': 'Project Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ProjectFileName = LocalEvent({'group': 'Project Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ProjectUniqueID = LocalEvent({'group': 'Project Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ProjectUploadDate = LocalEvent({'group': 'Project Information', 'schema': {'type': 'string', 'order': next_seq()}})
+local_event_ProjectInformation = LocalEvent({'group': 'Project Information', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+  'name':        {'title': 'Name',        'type': 'string', 'order': 1},
+  'author':      {'title': 'Author',      'type': 'string', 'order': 2},
+  'filename':    {'title': 'File Name',   'type': 'string', 'order': 3},
+  'unique_id':   {'title': 'Unique ID',   'type': 'string', 'order': 4},
+  'upload_date': {'title': 'Upload Date', 'type': 'string', 'order': 5}}}})
 
-local_event_ControllerHardwareType = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerChannelCapacity = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'int', 'order': next_seq()}})
-local_event_ControllerSerialNumber = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerMemoryTotal = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerMemoryUsed = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerMemoryAvailable = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerLuaMemoryUsed = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerLuaMemoryAllowed = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerStorageSize = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerBootloaderVersion = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerFirmwareVersion = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerResetReason = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerLastBootTime = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerIPAddress = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerSubnetMask = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerBroadcastAddress = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerDefaultGateway = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerHostName = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
-local_event_ControllerDomainName = LocalEvent({'group': 'Controller Information', 'schema': {'type': 'string', 'order': next_seq()}})
+local_event_ControllerInformation = LocalEvent({'group': 'Controller Information', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+  'hardware_type':       {'title': 'Hardware Type',       'type': 'string',  'order': 1},
+  'channel_capacity':    {'title': 'Channel Capacity',    'type': 'integer', 'order': 2},
+  'serial_number':       {'title': 'Serial Number',       'type': 'string',  'order': 3},
+  'memory_total':        {'title': 'Memory Total',        'type': 'string',  'order': 4},
+  'memory_used':         {'title': 'Memory Used',         'type': 'string',  'order': 5},
+  'memory_available':    {'title': 'Memory Available',    'type': 'string',  'order': 6},
+  'lua_memory_used':     {'title': 'Lua Memory Used',     'type': 'string',  'order': 7},
+  'lua_memory_allowed':  {'title': 'Lua Memory Allowed',  'type': 'string',  'order': 8},
+  'storage_size':        {'title': 'Storage Size',        'type': 'string',  'order': 9},
+  'bootloader_version':  {'title': 'Bootloader Version',  'type': 'string',  'order': 10},
+  'firmware_version':    {'title': 'Firmware Version',    'type': 'string',  'order': 11},
+  'reset_reason':        {'title': 'Reset Reason',        'type': 'string',  'order': 12},
+  'last_boot_time':      {'title': 'Last Boot Time',      'type': 'string',  'order': 13},
+  'ip_address':          {'title': 'IP Address',          'type': 'string',  'order': 14},
+  'subnet_mask':         {'title': 'Subnet Mask',         'type': 'string',  'order': 15},
+  'broadcast_address':   {'title': 'Broadcast Address',   'type': 'string',  'order': 16},
+  'default_gateway':     {'title': 'Default Gateway',     'type': 'string',  'order': 17},
+  'host_name':           {'title': 'Host Name',           'type': 'string',  'order': 18},
+  'domain_name':         {'title': 'Domain Name',         'type': 'string',  'order': 19}}}})
 
 local_event_LastContactDetect = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), 'title': 'Last contact detect', 'schema': {'type': 'string'}})
 local_event_Status = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), 'schema': {'type': 'object', 'properties': {
-        'level': {'type': 'integer', 'order': 1},
-        'message': {'type': 'string', 'order': 2}}}})
+  'level':   {'type': 'integer', 'order': 1},
+  'message': {'type': 'string',  'order': 2}}}})
 
 def main():
   console.info('Recipe has started!')
@@ -110,7 +116,7 @@ def start():
 
   # Get ip address
   global _fullAddress
-  if 'ipAddress' not in param_playerConfig:
+  if not param_playerConfig or 'ipAddress' not in param_playerConfig:
     console.error('No Address has been specified, nothing to do!')
     return
   else:
@@ -121,7 +127,7 @@ def start():
   # Authenticate if required
   global _authenticationRequired
   global _username, _password
-  if param_login.get('required'):
+  if param_login and param_login.get('required'):
     _authenticationRequired = True
     _username = DEFAULT_USERNAME if 'username' not in param_login else param_login.get('username')
     _password = DEFAULT_PASSWORD if 'password' not in param_login else param_login.get('password')
@@ -145,12 +151,13 @@ def start():
   ControllerInformation.call()
 
   # Generate scene, trigger and timeline actions and events
-  if 'scene' in param_objects and param_objects.get('scene'):
-    SceneInformation()
-  if 'timeline' in param_objects and param_objects.get('timeline'):
-    TimelineInformation()
-  if 'trigger' in param_objects and param_objects.get('trigger'):
-    TriggerInformation()
+  if param_objects:
+    if param_objects.get('scene'):
+      SceneInformation()
+    if param_objects.get('timeline'):
+      TimelineInformation()
+    if param_objects.get('trigger'):
+      TriggerInformation()
   
   # Start status polling
   _timer_status.start()
@@ -222,39 +229,37 @@ def GetAuthToken():
 
 @local_action({'title': 'Poll', 'group': 'Project Information'})
 def ProjectInformation():
-  resp = callURL('/api/project', method='GET')
-  result = json_decode(resp)
-  
-  local_event_ProjectName.emit(result.get('name'))
-  local_event_ProjectAuthor.emit(result.get('author'))
-  local_event_ProjectFileName.emit(result.get('filename'))
-  local_event_ProjectUniqueID.emit(result.get('unique_id'))
-  local_event_ProjectUploadDate.emit(result.get('upload_date'))
+  result = json_decode(callURL('/api/project', method='GET'))
+  local_event_ProjectInformation.emit({
+    'name':        result.get('name'),
+    'author':      result.get('author'),
+    'filename':    result.get('filename'),
+    'unique_id':   result.get('unique_id'),
+    'upload_date': result.get('upload_date')})
 
 @local_action({'title': 'Poll', 'group': 'Controller Information'})
 def ControllerInformation():
-  resp = callURL('/api/system', method='GET')
-  result = json_decode(resp)
-  
-  local_event_ControllerHardwareType.emit(result.get('hardware_type'))
-  local_event_ControllerChannelCapacity.emit(result.get('channel_capacity'))
-  local_event_ControllerSerialNumber.emit(result.get('serial_number'))
-  local_event_ControllerMemoryTotal.emit(result.get('memory_total'))
-  local_event_ControllerMemoryUsed.emit(result.get('memory_used'))
-  local_event_ControllerMemoryAvailable.emit(result.get('memory_available'))
-  local_event_ControllerLuaMemoryUsed.emit(result.get('lua_memory_used'))
-  local_event_ControllerLuaMemoryAllowed.emit(result.get('lua_memory_available'))
-  local_event_ControllerStorageSize.emit(result.get('storage_size'))
-  local_event_ControllerBootloaderVersion.emit(result.get('bootloader_version'))
-  local_event_ControllerFirmwareVersion.emit(result.get('firmware_version'))
-  local_event_ControllerResetReason.emit(result.get('reset_reason'))
-  local_event_ControllerLastBootTime.emit(result.get('last_boot_time'))
-  local_event_ControllerIPAddress.emit(result.get('ip_address'))
-  local_event_ControllerSubnetMask.emit(result.get('subnet_mask'))
-  local_event_ControllerBroadcastAddress.emit(result.get('broadcast_address'))
-  local_event_ControllerDefaultGateway.emit(result.get('default_gateway'))
-  local_event_ControllerHostName.emit(result.get('host_name'))
-  local_event_ControllerDomainName.emit(result.get('domain_name'))
+  result = json_decode(callURL('/api/system', method='GET'))
+  local_event_ControllerInformation.emit({
+    'hardware_type':      result.get('hardware_type'),
+    'channel_capacity':   result.get('channel_capacity'),
+    'serial_number':      result.get('serial_number'),
+    'memory_total':       result.get('memory_total'),
+    'memory_used':        result.get('memory_used'),
+    'memory_available':   result.get('memory_available'),
+    'lua_memory_used':    result.get('lua_memory_used'),
+    'lua_memory_allowed': result.get('lua_memory_available'),
+    'storage_size':       result.get('storage_size'),
+    'bootloader_version': result.get('bootloader_version'),
+    'firmware_version':   result.get('firmware_version'),
+    'reset_reason':       result.get('reset_reason'),
+    'last_boot_time':     result.get('last_boot_time'),
+    'ip_address':         result.get('ip_address'),
+    'subnet_mask':        result.get('subnet_mask'),
+    'broadcast_address':  result.get('broadcast_address'),
+    'default_gateway':    result.get('default_gateway'),
+    'host_name':          result.get('host_name'),
+    'domain_name':        result.get('domain_name')})
 
 ### Scenes
 
@@ -285,14 +290,21 @@ def InitSceneGroup(group):
       return
     
   a = create_local_action('SceneGroup%s' % group, handler, {'title': 'Scene GROUP: %s' % group, 'group': 'Scene Group %s' % group, 'order': next_seq(),
-    'schema': {'type': 'object', 'title': 'Scene GROUP: %s' % group, 'properties': {
-      'action': {'title': 'Action', 'type': 'string', 'enum': ['start', 'release', 'toggle'], 'order': 1},
-      'fade': {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0', 'order': 2}}}})
+    'schema': {'type': 'object', 'properties': {
+      'action': {'title': 'Action',                          'type': 'string', 'enum': ['start', 'release', 'toggle'], 'order': 1},
+      'fade':   {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0',                         'order': 2}}}})
 
 def InitScene(scene):
   log(1, 'InitScene: %s %s' % (scene.get('name'), scene.get('group_num')))
-  e = create_local_event('Scene%s' % scene.get('num'), {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': SCENE_STATES}})
-  e = create_local_event('Scene%sOnOff' % scene.get('num'), {'title': 'Scene: %s On Off Status' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
+  e = create_local_event('%sScene%s' % (scene.get('num'), CreateNodelSafeName(scene.get('name'))), {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(),
+    'schema': {'type': 'object', 'properties': {
+      'num':       {'title': 'Number',    'type': 'integer', 'order': 1},
+      'name':      {'title': 'Name',      'type': 'string',  'order': 2},
+      'group':     {'title': 'Group',     'type': 'string',  'order': 3},
+      'group_num': {'title': 'Group Num', 'type': 'integer', 'order': 4},
+      'state':     {'title': 'State',     'type': 'string',  'order': 5},
+      'onstage':   {'title': 'On Stage',  'type': 'boolean', 'order': 6}}}})
+  e = create_local_event('%sScene%sOnOff' % (scene.get('num'), CreateNodelSafeName(scene.get('name'))), {'title': 'Scene: %s On Off Status' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})
 
 
   def handler(arg):
@@ -308,12 +320,12 @@ def InitScene(scene):
       warn(1, 'No argument given. Doing nothing')
       return
 
-  a = create_local_action('Scene%s' % scene.get('num'), handler, {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(), 
-    'schema': {'type': 'object', 'title': 'Scene: %s' % scene.get('name'), 'properties': {
-      'action': {'title': 'Action', 'type': 'string', 'enum': SCENE_ACTIONS, 'order': 1},
-      'fade': {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0', 'order': 2},
-      'group': {'title': 'Group (Optional)', 'type': 'string', 'hint': 'Scene group name or number. Use ! to exclude', 'order': 3},
-      'same_group': {'title': 'Same Group (Optional)', 'type': 'boolean', 'order': 4}}}})
+  a = create_local_action('%sScene%s' % (scene.get('num'), CreateNodelSafeName(scene.get('name'))), handler, {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(),
+    'schema': {'type': 'object', 'properties': {
+      'action':     {'title': 'Action',                          'type': 'string',  'enum': SCENE_ACTIONS,                                 'order': 1},
+      'fade':       {'title': 'Fade Time in Seconds (Optional)', 'type': 'number',  'hint': '2.0',                                         'order': 2},
+      'group':      {'title': 'Group (Optional)',                'type': 'string',  'hint': 'Scene group name or number. Use ! to exclude', 'order': 3},
+      'same_group': {'title': 'Same Group (Optional)',           'type': 'boolean',                                                        'order': 4}}}})
 
 def SceneStatus():
   # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
@@ -323,17 +335,22 @@ def SceneStatus():
 
     for scene in result:
       state = scene.get('state')
-      lookup_local_event('Scene%s' % scene.get('num')).emit(state)
+      lookup_local_event('%sScene%s' % (scene.get('num'), CreateNodelSafeName(scene.get('name')))).emit({
+        'num':       scene.get('num'),
+        'name':      scene.get('name'),
+        'group':     scene.get('group'),
+        'group_num': scene.get('group_num'),
+        'state':     state,
+        'onstage':   scene.get('onstage')})
 
-      # Update on/off state
       if state == 'none':
-        arg = 'Off'
+        onoff = 'Off'
       elif state == 'started':
-        arg = 'On'
+        onoff = 'On'
       else:
         warn(1, 'SceneStatus: unknown state %s' % state)
-        arg = 'Off'
-      lookup_local_event('Scene%sOnOff' % scene.get('num')).emit(arg)
+        onoff = 'Off'
+      lookup_local_event('%sScene%sOnOff' % (scene.get('num'), CreateNodelSafeName(scene.get('name')))).emit(onoff)
 
 def AllScenes(arg):
   # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
@@ -341,7 +358,7 @@ def AllScenes(arg):
   result = json_decode(resp).get('scenes')
 
   for scene in result:
-    lookup_local_action('Scene%s' % scene.get('num')).call(arg)
+    lookup_local_action('%sScene%s' % (scene.get('num'), CreateNodelSafeName(scene.get('name')))).call(arg)
 
 def SelectScenes(group, arg):
   # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
@@ -350,7 +367,7 @@ def SelectScenes(group, arg):
 
   for scene in result:
     if scene.get('group_num') == group:
-      lookup_local_action('Scene%s' % scene.get('num')).call(arg)
+      lookup_local_action('%sScene%s' % (scene.get('num'), CreateNodelSafeName(scene.get('name')))).call(arg)
 
 ### Timelines
 
@@ -382,14 +399,31 @@ def InitTimelineGroup(group):
       return
 
   a = create_local_action('TimelineGroup%s' % group, handler, {'title': 'Timeline GROUP: %s' % group, 'group': 'Timeline Group %s' % group, 'order': next_seq(),
-    'schema': {'type': 'object', 'title': 'Timeline GROUP: %s' % group, 'properties': {
-      'action': {'title': 'Action', 'type': 'string', 'enum': ['start', 'release', 'toggle', 'pause', 'resume'], 'order': 1},
-      'fade': {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0', 'order': 2}}}})
-  
+    'schema': {'type': 'object', 'properties': {
+      'action': {'title': 'Action',                          'type': 'string', 'enum': ['start', 'release', 'toggle', 'pause', 'resume'], 'order': 1},
+      'fade':   {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0',                                            'order': 2}}}})
+
 def InitTimeline(timeline):
   log(1, 'InitTimeline: %s %s' % (timeline.get('name'), timeline.get('group_num')))
-  e = create_local_event('Timeline%s' % timeline.get('num'), {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': TIMELINE_STATES}})
-  e = create_local_event('Timeline%sOnOff' % timeline.get('num'), {'title': 'Timeline: %s On Off Status' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': ["On", "Off"]}})
+  e = create_local_event('%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name'))), {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(),
+    'schema': {'type': 'object', 'properties': {
+      'num':              {'title': 'Number',           'type': 'integer', 'order': 1},
+      'name':             {'title': 'Name',             'type': 'string',  'order': 2},
+      'group':            {'title': 'Group',            'type': 'string',  'order': 3},
+      'group_num':        {'title': 'Group Num',        'type': 'integer', 'order': 4},
+      'state':            {'title': 'State',            'type': 'string',  'order': 5},
+      'onstage':          {'title': 'On Stage',         'type': 'boolean', 'order': 6},
+      'position':         {'title': 'Position (ms)',    'type': 'integer', 'order': 7},
+      'length':           {'title': 'Length (ms)',      'type': 'integer', 'order': 8},
+      'priority':         {'title': 'Priority',         'type': 'string',  'order': 9},
+      'source_bus':       {'title': 'Source Bus',       'type': 'string',  'order': 10},
+      'time_offset':      {'title': 'Time Offset (ms)', 'type': 'integer', 'order': 11},
+      'timecode_format':  {'title': 'Timecode Format',  'type': 'string',  'order': 12},
+      'audio_band':       {'title': 'Audio Band',       'type': 'integer', 'order': 13},
+      'audio_channel':    {'title': 'Audio Channel',    'type': 'string',  'order': 14},
+      'audio_peak':       {'title': 'Audio Peak',       'type': 'boolean', 'order': 15},
+      'custom_properties':{'title': 'Custom Properties','type': 'object',  'order': 16}}}})
+  e = create_local_event('%sTimeline%sOnOff' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name'))), {'title': 'Timeline: %s On Off Status' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(), 'schema': {'type': 'string', 'enum': ["On", "Off"]}})
 
   def handler(arg):
     # POST /api/timeline sample payload {'action': 'start', 'num': 1, 'fade': 2.0, 'group': 'Group', 'same_group': false, 'rate': '0.1'} fade/group/same_group/rate are optional
@@ -404,17 +438,17 @@ def InitTimeline(timeline):
       warn(1, 'No argument given. Request not sent')
       return
 
-  a = create_local_action('Timeline%s' % timeline.get('num'), handler, {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(),
-    'schema': {'type': 'object', 'title': 'Timeline: %s' % timeline.get('num'), 'properties': {
-      'action': {'title': 'Action', 'type': 'string', 'enum': TIMELINE_ACTIONS, 'order': 1},
-      'fade': {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0', 'order': 2},
-      'group': {'title': 'Group (Optional)', 'type': 'string', 'hint': 'Scene group name or number. Use ! to exclude', 'order': 3},
-      'same_group': {'title': 'Same Group (Optional)', 'type': 'boolean', 'order': 4},
-      'rate': {'title': 'Rate (set_rate)', 'type': 'string', 'hint': 'required for set_rate', 'order': 5},
-      'position': {'title': 'Position (set_position)', 'type': 'string', 'hint': 'only one required for set_position', 'order': 6},
-      'time': {'title': 'Time (set_position)', 'type': 'number', 'hint': 'only one required for set_position', 'order': 7},
-      'flag': {'title': 'Flag (set_position)', 'type': 'string', 'hint': 'only one required for set_position', 'order': 8}}}})
-  
+  a = create_local_action('%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name'))), handler, {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(),
+    'schema': {'type': 'object', 'properties': {
+      'action':     {'title': 'Action',                          'type': 'string',  'enum': TIMELINE_ACTIONS,                                  'order': 1},
+      'fade':       {'title': 'Fade Time in Seconds (Optional)', 'type': 'number',  'hint': '2.0',                                             'order': 2},
+      'group':      {'title': 'Group (Optional)',                'type': 'string',  'hint': 'Timeline group name or number. Use ! to exclude', 'order': 3},
+      'same_group': {'title': 'Same Group (Optional)',           'type': 'boolean',                                                            'order': 4},
+      'rate':       {'title': 'Rate (set_rate)',                 'type': 'string',  'hint': 'required for set_rate',                           'order': 5},
+      'position':   {'title': 'Position (set_position)',         'type': 'string',  'hint': 'only one required for set_position',              'order': 6},
+      'time':       {'title': 'Time (set_position)',             'type': 'number',  'hint': 'only one required for set_position',              'order': 7},
+      'flag':       {'title': 'Flag (set_position)',             'type': 'string',  'hint': 'only one required for set_position',              'order': 8}}}})
+
 def TimelineStatus():
   # GET /api/timeline sample timeline object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'length': 10000, 'source_bus': 'internal', 'timecode_format': 'SMPTE30', 'audio_band': 0, 'audio_channel': 'combined', 'audio_peak': false, 'time_offset': 5000, 'state': 'none', 'onstage': true, 'position': 1000, 'priority': 'normal', 'custom_properties': {}}
   resp = callURL('/api/timeline', method='GET')
@@ -423,18 +457,32 @@ def TimelineStatus():
 
     for timeline in result:
       state = timeline.get('state')
-      lookup_local_event('Timeline%s' % timeline.get('num')).emit(state)
-      
-      # Update on/off state
+      lookup_local_event('%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name')))).emit({
+        'num':               timeline.get('num'),
+        'name':              timeline.get('name'),
+        'group':             timeline.get('group'),
+        'group_num':         timeline.get('group_num'),
+        'state':             state,
+        'onstage':           timeline.get('onstage'),
+        'position':          timeline.get('position'),
+        'length':            timeline.get('length'),
+        'priority':          timeline.get('priority'),
+        'source_bus':        timeline.get('source_bus'),
+        'time_offset':       timeline.get('time_offset'),
+        'timecode_format':   timeline.get('timecode_format'),
+        'audio_band':        timeline.get('audio_band'),
+        'audio_channel':     timeline.get('audio_channel'),
+        'audio_peak':        timeline.get('audio_peak'),
+        'custom_properties': timeline.get('custom_properties')})
+
       if state == 'none' or state == 'released' or state == 'holding_at_end' or state == 'paused':
-        arg = 'Off'
+        onoff = 'Off'
       elif state == 'running':
-        arg = 'On'
+        onoff = 'On'
       else:
         warn(1, 'TimelineStatus: unknown state %s' % state)
-        arg = 'Off'
-      lookup_local_event('Timeline%sOnOff' % timeline.get('num')).emit(arg)
-    
+        onoff = 'Off'
+      lookup_local_event('%sTimeline%sOnOff' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name')))).emit(onoff)
 
 def SelectTimelines(group, arg):
   # GET /api/timeline sample timeline object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'length': 10000, 'source_bus': 'internal', 'timecode_format': 'SMPTE30', 'audio_band': 0, 'audio_channel': 'combined', 'audio_peak': false, 'time_offset': 5000, 'state': 'none', 'onstage': true, 'position': 1000, 'priority': 'normal', 'custom_properties': {}}
@@ -443,7 +491,7 @@ def SelectTimelines(group, arg):
 
   for timeline in result:
     if timeline.get('group_num') == group:
-      lookup_local_action('Timeline%s' % timeline.get('num')).call(arg)
+      lookup_local_action('%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name')))).call(arg)
 
 ### Triggers
 
@@ -467,19 +515,37 @@ def InitTriggerGroup(group):
     call(lambda: StatusCheck.call(), delay=DELAY)
 
   group_name = TRIGGER_GROUP_COLOURS[group if group else 'none']
-  a = create_local_action('TriggerGroup%s' % group, handler, {'title': 'Trigger GROUP: %s' % group_name, 'group': 'Trigger Group %s' % group_name, 'order': next_seq()})
+  a = create_local_action('TriggerGroup%s' % group_name, handler, {'title': 'Trigger GROUP: %s' % group_name, 'group': 'Trigger Group %s' % group_name, 'order': next_seq()})
 
 def InitTrigger(trigger):
   log(1, 'InitTrigger: %s %s' % (trigger.get('name'), trigger.get('group')))
-  
+
+  group_name = TRIGGER_GROUP_COLOURS[trigger.get('group') if trigger.get('group') else 'none']
+
+  e = create_local_event('%sTrigger%s' % (trigger.get('num'), CreateNodelSafeName(trigger.get('name'))), {
+    'title': 'Trigger: %s' % trigger.get('name'), 'group': 'Trigger Group %s' % group_name, 'order': next_seq(),
+    'schema': {'type': 'object', 'properties': {
+      'num':         {'title': 'Number',      'type': 'integer', 'order': 1},
+      'name':        {'title': 'Name',        'type': 'string',  'order': 2},
+      'type':        {'title': 'Type',        'type': 'string',  'order': 3},
+      'description': {'title': 'Description', 'type': 'string',  'order': 4},
+      'conditions':  {'title': 'Conditions',  'type': 'string',  'order': 5},
+      'actions':     {'title': 'Actions',     'type': 'string',  'order': 6}}}})
+  e.emit({
+    'num':         trigger.get('num'),
+    'name':        trigger.get('name'),
+    'type':        trigger.get('type'),
+    'description': trigger.get('description'),
+    'conditions':  ', '.join([(c.get('text') or '') for c in (trigger.get('conditions') or [])]),
+    'actions':     ', '.join([(a.get('text') or '') for a in (trigger.get('actions') or [])])})
+
   def handler(arg):
     # POST /api/trigger sample payload {'num': 1, 'var': 'string', 'conditions': true} var/conditions are optional
     req = {'num': trigger.get('num')}
     callURL('/api/trigger', method='POST', contentType='application/json', post=json_encode(req))
     call(lambda: StatusCheck.call(), delay=DELAY)
 
-  group_name = TRIGGER_GROUP_COLOURS[trigger.get('group') if trigger.get('group') else 'none']
-  a = create_local_action('Trigger%s' % trigger.get('num'), handler, {'title': 'Trigger %s' % trigger.get('name'), 'group': 'Trigger Group %s' % group_name, 'order': next_seq()})
+  a = create_local_action('%sTrigger%s' % (trigger.get('num'), CreateNodelSafeName(trigger.get('name'))), handler, {'title': 'Trigger: %s' % trigger.get('name'), 'group': 'Trigger Group %s' % group_name, 'order': next_seq()})
 
 def SelectTriggers(group, arg):
   # GET /api/trigger
@@ -488,15 +554,18 @@ def SelectTriggers(group, arg):
 
   for trigger in result:
     if trigger.get('group') == group:
-      lookup_local_action('Trigger%s' % trigger.get('num')).call(arg)
+      lookup_local_action('%sTrigger%s' % (trigger.get('num'), CreateNodelSafeName(trigger.get('name')))).call(arg)
 
 ### Status
 
 @local_action({'title': 'Poll', 'group': 'Status'})
 def StatusCheck():
-  if param_objects.get('scene'):
+  # Check project generally
+  callURL('/api/project', method='GET')
+  # Update status of specific objects as required
+  if param_objects and param_objects.get('scene'):
     SceneStatus()
-  if param_objects.get('timeline'):
+  if param_objects and param_objects.get('timeline'):
     TimelineStatus()
 
   diff = (system_clock() - _lastReceive) / 1000.0 # in secs
@@ -561,3 +630,9 @@ def warn(level, msg):
 def log(level, msg):
   if local_event_LogLevel.getArg() >= level:
     console.log(('  ' * level) + msg)
+
+### Helper
+
+def CreateNodelSafeName(name):
+  # Strips names of punctuaion without looing content within brackets
+  return ''.join(c for c in (name or '') if c.isalnum())
