@@ -3,7 +3,7 @@
 
 ---
 
-`REV 1.43 2026.05.22 azuell + dargs`
+`REV 1.44 2026.05.26 azuell + dargs`
 
 * API version 12.0 (latest) Pharos Designer version 2.16.2 (latest)
 * Includes optional authentication using username/password
@@ -16,11 +16,20 @@
 
 **REVISION HISTORY**
 
+* rev. 1.44: Additional action/event for objects for use with frontend dynamic select, sorted by Object Groups
+    * eg *<dynamicselect class='btn-default' data='ObjectGroupNameSelect' action='ObjectGroupNameSelect'/>*
 * rev. 1.43: Bug fixes - no authentication required, no status if no objects
     * Change action/event names to include Pharos name
     * Include all infomation in object events
     * Condense project/controller information to single event
 * rev. 1.42: Pharos Designer update and new API - no change to script
+* *full revision history available in multiline string literal below to keep Nodel summary short*
+
+'''
+
+'''
+**FULL REVISION HISTORY**
+
 * rev. 1.41: dargs adding back in On/Off events for scenes and timelines (Scene%sOnOff/Timeline%sOnOff) and Debug +/- actions
 * rev. 1.4: Add full suite of variables to scene and timeline local action arguments
     * Rework group actions
@@ -30,8 +39,6 @@
 * rev. 1.2: Add single button group control for objects (Scenes, Timelines, Triggers)
 * rev. 1.1: <s>Add 'toggle' Pharos action to scenes and timeline actions without arg given</s> removed rev. 1.3
 * rev. 1: Initial upload
-
-
 '''
 
 DEFAULT_PORT = 80
@@ -294,6 +301,27 @@ def InitSceneGroup(group):
       'action': {'title': 'Action',                          'type': 'string', 'enum': ['start', 'release', 'toggle'], 'order': 1},
       'fade':   {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0',                         'order': 2}}}})
 
+  ### Dynamic select action/event for frontend
+  all_scenes    = json_decode(callURL('/api/scene', method='GET')).get('scenes')
+  select_scenes = sorted([scene for scene in all_scenes if scene.get('group_num') == group], key=lambda x: x['num'])
+  select_items  = [{'key': '%sScene%s' % (scene.get('num'), CreateNodelSafeName(scene.get('name'))),
+                    'value': '%s: %s' % (scene.get('num'), scene.get('name')) if scene.get('name') else str(scene.get('num'))}
+                      for scene in select_scenes]
+
+  e_select = create_local_event('SceneGroup%sSelect' % group, {
+    'title': 'Scene GROUP %s: Select' % group, 'group': 'Scene Group %s' % group, 'order': next_seq(),
+    'schema': {'type': 'array', 'items': {'type': 'object', 'properties': {
+      'key':   {'title': 'Action', 'type': 'string', 'order': 1},
+      'value': {'title': 'Label',  'type': 'string', 'order': 2}}}}})
+  e_select.emit(select_items)
+
+  def select_handler(arg):
+    lookup_local_action(arg).call({'action': 'toggle'})
+
+  a_select = create_local_action('SceneGroup%sSelect' % group, select_handler, {
+    'title': 'Scene GROUP %s: Select' % group, 'group': 'Scene Group %s' % group, 'order': next_seq(),
+    'schema': {'type': 'string', 'enum': [item['key'] for item in select_items]}})
+
 def InitScene(scene):
   log(1, 'InitScene: %s %s' % (scene.get('name'), scene.get('group_num')))
   e = create_local_event('%sScene%s' % (scene.get('num'), CreateNodelSafeName(scene.get('name'))), {'title': 'Scene: %s' % scene.get('name'), 'group': 'Scene Group %s' % scene.get('group_num'), 'order': next_seq(),
@@ -403,6 +431,27 @@ def InitTimelineGroup(group):
       'action': {'title': 'Action',                          'type': 'string', 'enum': ['start', 'release', 'toggle', 'pause', 'resume'], 'order': 1},
       'fade':   {'title': 'Fade Time in Seconds (Optional)', 'type': 'number', 'hint': '2.0',                                            'order': 2}}}})
 
+  ### Dynamic select action/event for frontend
+  all_timelines = json_decode(callURL('/api/timeline', method='GET')).get('timelines')
+  select_timelines = sorted([timeline for timeline in all_timelines if timeline.get('group_num') == group], key=lambda x: x['num'])
+  select_items = [{'key':   '%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name'))),
+                  'value': '%s: %s' % (timeline.get('num'), timeline.get('name')) if timeline.get('name') else str(timeline.get('num'))}
+                    for timeline in select_timelines]
+  
+  e_select = create_local_event('TimelineGroup%sSelect' % group, {
+    'title': 'Timeline GROUP %s: Select' % group, 'group': 'Timeline Group %s' % group, 'order': next_seq(),
+    'schema': {'type': 'array', 'items': {'type': 'object', 'properties': {
+      'key':   {'title': 'Action', 'type': 'string', 'order': 1},
+      'value': {'title': 'Label',  'type': 'string', 'order': 2}}}}})
+  e_select.emit(select_items)
+  
+  def select_handler(arg):
+    lookup_local_action(arg).call({'action': 'toggle'})
+  
+  a_select = create_local_action('TimelineGroup%sSelect' % group, select_handler, {
+    'title': 'Timeline GROUP %s: Select' % group, 'group': 'Timeline Group %s' % group, 'order': next_seq(),
+    'schema': {'type': 'string', 'enum': [item['key'] for item in select_items]}})
+
 def InitTimeline(timeline):
   log(1, 'InitTimeline: %s %s' % (timeline.get('name'), timeline.get('group_num')))
   e = create_local_event('%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name'))), {'title': 'Timeline: %s' % timeline.get('name'), 'group': 'Timeline Group %s' % timeline.get('group_num'), 'order': next_seq(),
@@ -510,12 +559,35 @@ def TriggerInformation():
 def InitTriggerGroup(group):
   log(1, 'InitTriggerGroup: %s' % group)
 
+  ### Normal group action/event
+  group_name = TRIGGER_GROUP_COLOURS[group if group else 'none']
+
   def handler(arg):
     SelectTriggers(group, arg)
     call(lambda: StatusCheck.call(), delay=DELAY)
 
-  group_name = TRIGGER_GROUP_COLOURS[group if group else 'none']
   a = create_local_action('TriggerGroup%s' % group_name, handler, {'title': 'Trigger GROUP: %s' % group_name, 'group': 'Trigger Group %s' % group_name, 'order': next_seq()})
+
+  ### Dynamic select action/event for frontend
+  all_triggers = json_decode(callURL('/api/trigger', method='GET')).get('triggers')
+  select_triggers = sorted([trigger for trigger in all_triggers if trigger.get('group') == group], key=lambda x: x['num'])
+  select_items = [{'key':   '%sTrigger%s' % (trigger.get('num'), CreateNodelSafeName(trigger.get('name'))),
+                  'value': '%s: %s' % (trigger.get('num'), trigger.get('name')) if trigger.get('name') else str(trigger.get('num'))}
+                    for trigger in select_triggers]
+
+  e_select = create_local_event('TriggerGroup%sSelect' % group_name, {
+    'title': 'Trigger GROUP %s: Select' % group_name, 'group': 'Trigger Group %s' % group_name, 'order': next_seq(),
+    'schema': {'type': 'array', 'items': {'type': 'object', 'properties': {
+      'key':   {'title': 'Action', 'type': 'string', 'order': 1},
+      'value': {'title': 'Label',  'type': 'string', 'order': 2}}}}})
+  e_select.emit(select_items)
+
+  def select_handler(arg):
+    lookup_local_action(arg).call()
+
+  a_select = create_local_action('TriggerGroup%sSelect' % group_name, select_handler, {
+    'title': 'Trigger GROUP %s: Select' % group_name, 'group': 'Trigger Group %s' % group_name, 'order': next_seq(),
+    'schema': {'type': 'string', 'enum': [item['key'] for item in select_items]}})
 
 def InitTrigger(trigger):
   log(1, 'InitTrigger: %s %s' % (trigger.get('name'), trigger.get('group')))
