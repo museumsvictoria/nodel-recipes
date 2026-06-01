@@ -3,7 +3,7 @@
 
 ---
 
-`REV 1.44 2026.05.26 azuell + dargs`
+`REV 1.45 2026.06.01 azuell + dargs`
 
 * API version 12.0 (latest) Pharos Designer version 2.16.2 (latest)
 * Includes optional authentication using username/password
@@ -16,13 +16,13 @@
 
 **REVISION HISTORY**
 
+* rev. 1.45: Bug fix - Errors if project objects changed since Nodel startup
 * rev. 1.44: Additional action/event for objects for use with frontend dynamic select, sorted by Object Groups
     * eg *<dynamicselect class='btn-default' data='ObjectGroupNameSelect' action='ObjectGroupNameSelect'/>*
 * rev. 1.43: Bug fixes - no authentication required, no status if no objects
     * Change action/event names to include Pharos name
     * Include all infomation in object events
     * Condense project/controller information to single event
-* rev. 1.42: Pharos Designer update and new API - no change to script
 * *full revision history available in multiline string literal below to keep Nodel summary short*
 
 '''
@@ -30,6 +30,7 @@
 '''
 **FULL REVISION HISTORY**
 
+* rev. 1.42: Pharos Designer update and new API - no change to script
 * rev. 1.41: dargs adding back in On/Off events for scenes and timelines (Scene%sOnOff/Timeline%sOnOff) and Debug +/- actions
 * rev. 1.4: Add full suite of variables to scene and timeline local action arguments
     * Rework group actions
@@ -362,8 +363,14 @@ def SceneStatus():
     result = json_decode(resp).get('scenes')
 
     for scene in result:
+      key = '%sScene%s' % (scene.get('num'), CreateNodelSafeName(scene.get('name')))
       state = scene.get('state')
-      lookup_local_event('%sScene%s' % (scene.get('num'), CreateNodelSafeName(scene.get('name')))).emit({
+
+      e = lookup_local_event(key)
+      if e is None:
+        warn(1, 'SceneStatus: no event for scene %s "%s" - project may have changed since startup' % (scene.get('num'), scene.get('name')))
+        continue
+      e.emit({
         'num':       scene.get('num'),
         'name':      scene.get('name'),
         'group':     scene.get('group'),
@@ -378,7 +385,9 @@ def SceneStatus():
       else:
         warn(1, 'SceneStatus: unknown state %s' % state)
         onoff = 'Off'
-      lookup_local_event('%sScene%sOnOff' % (scene.get('num'), CreateNodelSafeName(scene.get('name')))).emit(onoff)
+      e_onoff = lookup_local_event('%sOnOff' % key)
+      if e_onoff is not None:
+        e_onoff.emit(onoff)
 
 def AllScenes(arg):
   # GET /api/scene sample scene object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'state': 'none', 'onstage': true}
@@ -505,8 +514,14 @@ def TimelineStatus():
     result = json_decode(resp).get('timelines')
 
     for timeline in result:
+      key = '%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name')))
       state = timeline.get('state')
-      lookup_local_event('%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name')))).emit({
+
+      e = lookup_local_event(key)
+      if e is None:
+        warn(1, 'TimelineStatus: no event for timeline %s "%s" - project may have changed since startup' % (timeline.get('num'), timeline.get('name')))
+        continue
+      e.emit({
         'num':               timeline.get('num'),
         'name':              timeline.get('name'),
         'group':             timeline.get('group'),
@@ -531,7 +546,9 @@ def TimelineStatus():
       else:
         warn(1, 'TimelineStatus: unknown state %s' % state)
         onoff = 'Off'
-      lookup_local_event('%sTimeline%sOnOff' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name')))).emit(onoff)
+      e_onoff = lookup_local_event('%sOnOff' % key)
+      if e_onoff is not None:
+        e_onoff.emit(onoff)
 
 def SelectTimelines(group, arg):
   # GET /api/timeline sample timeline object {'num': 1, 'name': 'Name', 'group': 'Group', 'group_num': 1, 'length': 10000, 'source_bus': 'internal', 'timecode_format': 'SMPTE30', 'audio_band': 0, 'audio_channel': 'combined', 'audio_peak': false, 'time_offset': 5000, 'state': 'none', 'onstage': true, 'position': 1000, 'priority': 'normal', 'custom_properties': {}}
@@ -540,7 +557,11 @@ def SelectTimelines(group, arg):
 
   for timeline in result:
     if timeline.get('group_num') == group:
-      lookup_local_action('%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name')))).call(arg)
+      a = lookup_local_action('%sTimeline%s' % (timeline.get('num'), CreateNodelSafeName(timeline.get('name'))))
+      if a is None:
+        warn(1, 'SelectTimelines: no action for timeline %s "%s" - project may have changed since startup' % (timeline.get('num'), timeline.get('name')))
+        continue
+      a.call(arg)
 
 ### Triggers
 
@@ -626,7 +647,11 @@ def SelectTriggers(group, arg):
 
   for trigger in result:
     if trigger.get('group') == group:
-      lookup_local_action('%sTrigger%s' % (trigger.get('num'), CreateNodelSafeName(trigger.get('name')))).call(arg)
+      a = lookup_local_action('%sTrigger%s' % (trigger.get('num'), CreateNodelSafeName(trigger.get('name'))))
+      if a is None:
+        warn(1, 'SelectTriggers: no action for trigger %s "%s" - project may have changed since startup' % (trigger.get('num'), trigger.get('name')))
+        continue
+      a.call(arg)
 
 ### Status
 
