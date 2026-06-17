@@ -11,7 +11,7 @@ Protocol reference - [VideohubDeveloperInformation.pdf](https://documents.blackm
  * _r2.251124 JP bugfix when using dynamic addressing_
  * _r1.250109 created_
  
- * _TODO for convenience: cross-point switching, e.g. "Output X Input Y" actions and events_
+ * **TODO** _for convenience: cross-point switching, e.g. "Output X Input Y" actions and events_
 '''
 
 TCP_PORT = 9990
