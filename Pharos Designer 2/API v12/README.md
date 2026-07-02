@@ -1,6 +1,10 @@
 ## Pharos Designer 2 API v12
 
+<<<<<<< Updated upstream
 Nodel integration for Pharos lighting/media show controllers via the Pharos Designer HTTP API.
+=======
+Nodel integration for Pharos lighting controllers via the Pharos Designer HTTP API.
+>>>>>>> Stashed changes
 
 - API version 12.0 (Pharos Designer 2.16.2)
 - Optional authentication using username/password
@@ -16,7 +20,11 @@ For each enabled object type, creates an action/event per object (e.g. `1SceneNa
 
 ### Ingredients
 
+<<<<<<< Updated upstream
 Optional scripts that add extra (mostly frontend) conveniences on top of the normal script. They can be used independently.
+=======
+Optional scripts that add extra (mostly frontend) conveniences on top of the normal script. They can be used independently. To use, remove the underscore from the start of the filename.
+>>>>>>> Stashed changes
 
 #### `ingredient_Pharos_ObjectsOnOff.py`
 - Adds an **On/Off** action and event for every Scene and Timeline (e.g. `1SceneNameOnOff`).
