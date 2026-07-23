@@ -1,10 +1,11 @@
 '''
 **Samsung display** recipe, serial or TCP.
 
-`REV 12.240326`
+`REV 13.2607`
 
 Remember to adjust **Network Standby Control** to **On**.
 
+  * r13: can suppress warnings, always log warning changes in console
   * r12: "Treat no signal as fault?" parameter
   * r11: BUGFIX random faults sometimes incorrectly generated on old displays when Powered Off (e.g. Lamp Fault)
   * IP address config via remote binding (see AMX Beacon, SSDP address, or custom address provider recipes)
@@ -16,13 +17,18 @@ Remember to adjust **Network Standby Control** to **On**.
 DEFAULT_TCP_PORT = 1515 # Samsung's default port
 DEFAULT_SETID = 0
 
-param_port = Parameter({"title": "TCP port", "order":0, "schema": {"type": "integer", 'hint': DEFAULT_TCP_PORT}})
-param_id = Parameter({"title": "Set ID", "order": 0, "schema": {"type":"integer", 'hint': 0}})
+param_port = Parameter({"title": "TCP port", "order": next_seq(), "schema": {"type": "integer", 'hint': DEFAULT_TCP_PORT}})
+param_id = Parameter({"title": "Set ID", "order": next_seq(), "schema": {"type":"integer", 'hint': 0}})
 
-param_mainInputCode = Parameter({'title': 'Main Input Code', 'desc': 'The input (source) for the "ensure" actions and events', 'schema': {'type': 'string'}})
+param_mainInputCode = Parameter({'title': 'Main Input Code', 'order': next_seq(), 'desc': 'The input (source) for the "ensure" actions and events', 'schema': {'type': 'string'}})
 
-param_treatNoSignalAsFault = Parameter({ 'title': 'Treat "No Signal" as fault?', 'desc': 'Raise a fault/error instead of warning if the display is On and it detects "No Signal"', 
+param_treatNoSignalAsFault = Parameter({ 'title': 'Treat "No Signal/Sync" as fault?', 'order': next_seq(), 'desc': 'Raise a fault/error instead of warning if the display is On and it detects "No Signal"', 
                                          'schema': { 'type': 'boolean' }})
+
+param_suppressBrightSensorWarning = Parameter({ 'title': 'Suppress "Brightness Sensor" warning?', 'order': next_seq(), 'desc': 'Do not treat as a warning, but will still log to console', 'schema': { 'type': 'boolean' }})
+param_suppressFanWarning = Parameter({ 'title': 'Suppress "Fan" warning?', 'order': next_seq(), 'desc': 'Do not treat as a warning, but will still log to console', 'schema': { 'type': 'boolean' }})
+param_suppressLampWarning = Parameter({ 'title': 'Suppress "Lamp" (or backlight) warning?', 'order': next_seq(), 'desc': 'Do not treat as a warning, but will still log to console', 'schema': { 'type': 'boolean' }})
+param_suppressTempWarning = Parameter({ 'title': 'Suppress "Temp" warning?', 'order': next_seq(), 'desc': 'Do not treat as a warning, but will still log to console', 'schema': { 'type': 'boolean' }})
 
 # general device status
 local_event_Status = LocalEvent({'order': -100, 'group': 'Status', 'schema': {'type': 'object', 'properties': {
@@ -67,7 +73,7 @@ timer_errorStatus = Timer(lambda: getExtendedDisplayStatusAction.call(), 45, 15)
 
 # <!-- IP addressing
 
-param_ipAddress = Parameter({ 'order': 0, 'schema': { 'type': 'string', 'hint': '(overrides remote binding)' }})
+param_ipAddress = Parameter({ 'title': 'IP address', 'order': 0, 'schema': { 'type': 'string', 'hint': '(overrides remote binding)' }})
 
 local_event_IPAddress = LocalEvent( { 'group': 'Addressing', 'order': next_seq(), 'schema': { 'type': 'string' }})
 
@@ -441,16 +447,23 @@ def getExtendedDisplayStatus():
   def handleResp(arg):
     if not checkHeader(arg):
       return
-    
-    local_event_ErrorStatusLamp.emit(arg[6] == '\x01')
-    local_event_ErrorStatusTemp.emit(arg[7] == '\x01')
-    local_event_ErrorStatusBrightSensor.emit(arg[8] == '\x01')
-    local_event_ErrorStatusNoSync.emit(arg[9] == '\x01')
+
+    # show warning changes to the console, continue to always emit
+    emitAndLogIfDifferent("lamp", local_event_ErrorStatusLamp, arg[6] == '\x01')
+    emitAndLogIfDifferent("temp", local_event_ErrorStatusTemp, arg[7] == '\x01')
+    emitAndLogIfDifferent("bright sensor", local_event_ErrorStatusBrightSensor, arg[8] == '\x01')
+    emitAndLogIfDifferent("no sync", local_event_ErrorStatusNoSync, arg[9] == '\x01')
     local_event_CurrentTemp.emit(ord(arg[10]))
-    local_event_ErrorStatusFan.emit(arg[11] == '\x01')
+    emitAndLogIfDifferent("fan", local_event_ErrorStatusFan, arg[11] == '\x01')
   
   queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), handleResp)
-  
+
+def emitAndLogIfDifferent(name, signal, state):
+  prev = signal.getArg()
+  if state != prev:
+    console.warn('"%s" warning detected!') if state else console.info('%s" warning cleared')
+  signal.emit(state)
+
 getExtendedDisplayStatusAction = Action('GetExtendedDisplayStatus', lambda arg: getExtendedDisplayStatus(), {'group': 'General', 'order': next_seq()})
 
 # extended status ---!>
@@ -732,10 +745,10 @@ def statusCheck():
 
   # use a different warning for any of the other error status flags
   errorFlags = list()
-  if local_event_ErrorStatusBrightSensor.getArg(): errorFlags.append('bright-sensor')
-  if local_event_ErrorStatusFan.getArg(): errorFlags.append('fan')
-  if local_event_ErrorStatusLamp.getArg(): errorFlags.append('lamp')
-  if local_event_ErrorStatusTemp.getArg(): errorFlags.append('temperature')
+  if not param_suppressBrightSensorWarning and local_event_ErrorStatusBrightSensor.getArg(): errorFlags.append('bright-sensor')
+  if not param_suppressFanWarning and local_event_ErrorStatusFan.getArg(): errorFlags.append('fan')
+  if not param_suppressLampWarning and local_event_ErrorStatusLamp.getArg(): errorFlags.append('lamp')
+  if not param_suppressTempWarning and local_event_ErrorStatusTemp.getArg(): errorFlags.append('temperature')
 
   if len(errorFlags) > 0:
     if len(errorFlags) == 1:
@@ -779,4 +792,4 @@ def log(level, msg):
   if (local_event_LogLevel.getArg() or 0) >= level:
     console.log(('  ' * level) + msg)
 
-# --!>    
+# --!>
