@@ -1,10 +1,11 @@
 '''
 **Samsung display** recipe, serial or TCP.
 
-`REV 13.2607`
+`REV 14.3007`
 
 Remember to adjust **Network Standby Control** to **On**.
 
+  * r14: pull model name
   * r13: can suppress warnings, always log warning changes in console
   * r12: "Treat no signal as fault?" parameter
   * r11: BUGFIX random faults sometimes incorrectly generated on old displays when Powered Off (e.g. Lamp Fault)
@@ -461,7 +462,7 @@ def getExtendedDisplayStatus():
 def emitAndLogIfDifferent(name, signal, state):
   prev = signal.getArg()
   if state != prev:
-    console.warn('"%s" warning detected!') if state else console.info('%s" warning cleared')
+    console.warn('"%s" warning detected!' % name) if state else console.info('"%s" warning cleared' % name)
   signal.emit(state)
 
 getExtendedDisplayStatusAction = Action('GetExtendedDisplayStatus', lambda arg: getExtendedDisplayStatus(), {'group': 'General', 'order': next_seq()})
@@ -618,6 +619,20 @@ def getSerialNumber(arg):
   queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: serialNumberEvent.emit(resp[6:-4])))
   
 Action('GetSerialNumber', getSerialNumber, {'title': 'Get', 'group': 'Serial Number'})
+
+# <!-- get Model Name
+
+@local_action({'group': 'Model Name', 'title': 'Get', 'order': next_seq()})
+def getModelName():
+  log(1, 'getModelName')
+  
+  msg = '\x8a%s\x00' % chr(int(param_id))
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: local_event_ModelName.emit(resp[6:-1])))
+  
+local_event_ModelName = LocalEvent({'group': 'Model Name', 'schema': {'type': 'string'}, 'order': next_seq()})
+
+# get Model Name -->
 
 softwareVersionEvent = Event('Software Version', {'group': 'Software Version', 'schema': {'type': 'string'}})
 
