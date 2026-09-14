@@ -4,13 +4,13 @@
 '''
 A stateful **Multi-Calendar / Scheduling node** that takes in event streams from sources (e.g. see *Microsoft Exchange Schedule Retriever* recipe).
 
-`REV 8 2026.07.27 azuell`
+`REV 8 2026.09.15 azuell`
 
 * NOTE: by design, when this calendar (re)starts after config changes, it will automatically propagate remote actions. To avoid this behaviour, use the **Supress next propagation?** action.
 
 **REVISION HISTORY**
 
-  * _rev 8.260727_ bugfix: momentary event not appearing on agenda if it is the first instant being processed
+  * _rev 8.260915_ bugfix: momentary event not appearing on agenda if it is the first instant being processed
   * _rev 7.241206_ "Suppress next propagation?" action
   * _rev 6_ bugfix: momentary events some times do not fire (interference with actual scheduler and agenda generation)
   * _rev 3_ support for "momentary" events (not stateful) when "start time" strictly equals "end time" e.g. `{ start: "... 02:45:00", end: "... 02:45:00", title: "{ Power: Off }" }`
@@ -549,13 +549,15 @@ def processAllActiveItems(instant, warnings, fromInstant=None):
       endMillis = date_parse(end).getMillis()
       
       momentary = False
-      
+
       if startMillis == endMillis: # check if it's a momentary event
         # check if active
-        if not ((fromInstantMillis == None or startMillis > fromInstantMillis) 
-                              and startMillis <= instantMillis):
+        if fromInstantMillis == None: # first momentary event
+          if startMillis != instantMillis: # not occurring now
+            continue
+        elif not (startMillis > fromInstantMillis
+                  and startMillis <= instantMillis):
           # is not within poll period i.e. start is not between current instant and end of last instant
-          # including first momentary event with no fromInstantMillis
           continue
 
         # is an active momentary event
